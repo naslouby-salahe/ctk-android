@@ -1,6 +1,6 @@
 # Audit Matrix
 
-Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/architecture checkpoint.
+Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated after Stage D and the de-duplication sensitivity.
 
 ## Tooling and architecture
 
@@ -35,7 +35,7 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Run provenance granularity | PASS | fingerprints only data, resolved training config, budget, operating, novelty and the experiment spec (`test_run_fingerprint.py`); stale runs are excluded from analysis and logged |
 | Calibration-set discrimination and hidden-row validation on evaluated rows | PASS | `test_evaluation.py` |
 | Permutation-control null definition | PASS | frozen: 95% BCa interval within +/-ctk_min_gain (0.03); development control -0.0075 (CI -0.013 to -0.001) is equivalent; tests in `test_gates.py` |
-| Graphify before/after reachability | MISSING | not yet run |
+| Graphify before/after reachability | PARTIAL | one final graph produced (no earlier baseline graph existed); architecture reachability is enforced by `test_wiring` instead |
 
 ## Scientific pipeline
 
@@ -45,11 +45,10 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Identity components, clients, deterministic support-constrained partitions | PASS | unit tests + real run |
 | Family sets, controlled and natural pairs, deterministic target assignment | PASS | |
 | Controlled exposure, no-family, full exposure, dose, sample-size matching | PASS | `test_exposure.py` |
-| Local, central, FedAvg, FedProx, fine-tune, blend, MLP/linear/trees | PARTIAL | implemented; only local/central/FedAvg exercised end to end so far |
+| Local, central, FedAvg, FedProx, fine-tune, blend, MLP/linear/trees | PASS | all exercised end to end in development (baseline-fairness grid runs all learners; linear/trees via replication experiments' smoke tests) |
 | Thresholds, own-domain / federation-wide / known-family metrics | PASS | `test_thresholds.py`, `test_metrics.py` |
-| Feature-novelty descriptors | PARTIAL | computed per run; association analysis not written |
-| Development baseline-fairness grids | MISSING | |
+| Feature-novelty descriptors | PASS | computed per run; Spearman association in `analysis/novelty.py`, tested |
+| Development baseline-fairness grids | PASS | frozen in Roadmap 16.3; see Stage D row |
 | Doctor / preprocess / plan / smoke / run / status | PASS | e2e smoke idempotency test |
-
 | Clean-clone verification | PASS | fresh clone + `uv sync`: Ruff, Pyright strict, Semgrep (8 rules, 0 findings) clean; 164 passed, 10 skipped (tests needing local data/dev runs skip explicitly) |
 | Graphify | PASS (code only) | AST graph of `src/`: 829 nodes, 3830 edges, 24 communities, no import cycles; docs not semantically extracted |
