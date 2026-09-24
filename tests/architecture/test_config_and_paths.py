@@ -142,7 +142,7 @@ def test_results_are_referenced_only_by_the_promotion_module() -> None:
         for path in source_files(PATHS_MODULE)
         for node in ast.walk(parse(path))
         if isinstance(node, ast.Attribute)
-        and node.attr in {"results", "results_root"}
+        and node.attr.startswith("results")
         and path.name != "promotion.py"
     ]
     assert not offenders, offenders

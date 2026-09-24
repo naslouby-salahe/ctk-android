@@ -22,6 +22,7 @@ from ctk_android.enums import (
     LibraryOption,
     LogLevel,
     ModelFamily,
+    NoveltyDescriptor,
     SourceFamilyLabel,
     TextEncoding,
     Tolerance,
@@ -31,6 +32,7 @@ from ctk_android.types import (
     Alpha,
     BatchSize,
     BlendWeight,
+    Confidence,
     DropoutRate,
     Epochs,
     ExceedanceCount,
@@ -39,6 +41,7 @@ from ctk_android.types import (
     LabelPrefix,
     LearningRate,
     ProximalStrength,
+    ResampleCount,
     Rounds,
     RowCount,
     Salt,
@@ -165,6 +168,7 @@ class OperatingConfig(Frozen):
 class NoveltyConfig(Frozen):
     min_active_prevalence: Fraction
     min_known_family_rows: SupportCount
+    primary_descriptor: NoveltyDescriptor
 
 
 class ExperimentSpec(Frozen):
@@ -190,14 +194,45 @@ class ExperimentsConfig(Frozen):
     novelty: NoveltyConfig
     dose_levels: tuple[SupportCount, ...]
     dose_include_all_available: bool
+    top_family_removal_count: SupportCount
     permutation_seed_offset: Seed
     experiments: dict[ExperimentName, ExperimentSpec]
+
+
+class GateConfig(Frozen):
+    local_deficit_min_seeds: SupportCount
+    local_deficit_min_gap: Fraction
+    collaboration_min_gain: Fraction
+    ctk_min_gain: Fraction
+    ctk_min_positive_seeds: SupportCount
+    pooling_majority_share: Fraction
+    dose_min_peers: SupportCount
+    dose_min_gain: Fraction
+    dose_monotone_tolerance: Fraction
+    known_family_tolerance: Fraction
+    fpr_tolerance: Fraction
+    poor_full_recall: Fraction
+    novelty_min_abs_spearman: Fraction
+    heterogeneity_min: Fraction
+    mechanism_mean_gap: Fraction
+    mechanism_worst_gap: Fraction
+    permutation_null_max: Fraction
+
+
+class StatisticsConfig(Frozen):
+    bootstrap_resamples: ResampleCount
+    cluster_bootstrap_resamples: ResampleCount
+    confidence_level: Confidence
+    statistics_seed: Seed
+    share_min_total_gain: Fraction
+    gates: GateConfig
 
 
 class Config(Frozen):
     project: ProjectConfig
     data: DataConfig
     experiments: ExperimentsConfig
+    statistics: StatisticsConfig
 
     def fingerprint(self) -> Fingerprint:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()
@@ -211,4 +246,5 @@ def load_config(paths: Paths) -> Config:
         project=ProjectConfig.model_validate(read(ConfigFile.PROJECT)),
         data=DataConfig.model_validate(read(ConfigFile.DATA)),
         experiments=ExperimentsConfig.model_validate(read(ConfigFile.EXPERIMENTS)),
+        statistics=StatisticsConfig.model_validate(read(ConfigFile.STATISTICS)),
     )

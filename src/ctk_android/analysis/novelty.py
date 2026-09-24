@@ -1,16 +1,26 @@
 import numpy as np
 import polars as pl
+from scipy import stats
 
-from ctk_android.config import NoveltyConfig
+from ctk_android.config import NoveltyConfig, StatisticsConfig
 from ctk_android.data.cache import records_to_frame
-from ctk_android.enums import Column, EligibilityReason, NoveltyDescriptor, SplitRole
+from ctk_android.enums import (
+    Column,
+    EligibilityReason,
+    NoveltyDescriptor,
+    SplitRole,
+    StatisticsLimit,
+)
 from ctk_android.types import (
     BoolArray,
+    Correlation,
     DescriptorRow,
     FamilyName,
     FloatArray,
     Fraction,
     IntArray,
+    Interval,
+    NoveltyAssociation,
     Rate,
     Score,
     StudyData,
@@ -94,3 +104,43 @@ def family_descriptors(
             for descriptor, value in values.items()
         )
     return records_to_frame(rows)
+
+
+def descriptor_by_family(novelty: pl.DataFrame, descriptor: NoveltyDescriptor) -> pl.DataFrame:
+    return (
+        novelty.filter(pl.col(Column.DESCRIPTOR) == descriptor)
+        .group_by(Column.FAMILY)
+        .agg(pl.col(Column.VALUE).mean().alias(Column.NOVELTY))
+    )
+
+
+def _rank_correlation(first: FloatArray, second: FloatArray) -> Correlation:
+    return np.corrcoef(stats.rankdata(first), stats.rankdata(second))[0, 1].item()
+
+
+def novelty_association(
+    gains: FloatArray, scores: FloatArray, config: StatisticsConfig
+) -> NoveltyAssociation | None:
+    if gains.size < StatisticsLimit.ASSOCIATION_FAMILIES:
+        return None
+    result = stats.spearmanr(scores, gains)
+    rng = np.random.default_rng(config.statistics_seed)
+    picks = rng.integers(0, gains.size, size=(config.bootstrap_resamples, gains.size))
+    resampled = np.array(
+        [_rank_correlation(scores[pick], gains[pick]) for pick in picks], dtype=np.float64
+    )
+    resampled = resampled[np.isfinite(resampled)]
+    tail = (1.0 - config.confidence_level) / 2.0
+    interval = (
+        Interval(
+            low=np.quantile(resampled, tail).item(), high=np.quantile(resampled, 1.0 - tail).item()
+        )
+        if resampled.size
+        else None
+    )
+    return NoveltyAssociation(
+        rho=result.statistic.item(),
+        p_value=result.pvalue.item(),
+        interval=interval,
+        families=gains.size,
+    )

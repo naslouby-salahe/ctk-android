@@ -16,7 +16,7 @@ from ctk_android.paths import Paths
 from ctk_android.types import DoctorResult
 
 
-def _git_revision(paths: Paths) -> DoctorResult:
+def git_revision(paths: Paths) -> DoctorResult:
     completed = subprocess.run(
         [
             GitArgument.GIT,
@@ -73,5 +73,5 @@ def run_doctor(paths: Paths, config: Config) -> list[DoctorResult]:
             passed=device is config.project.device or device is Device.CPU,
             detail=DetailMessage.DEVICE.format(available=device, configured=config.project.device),
         ),
-        _git_revision(paths),
+        git_revision(paths),
     ]

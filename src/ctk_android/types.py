@@ -9,12 +9,17 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapte
 from sklearn.ensemble import HistGradientBoostingClassifier
 
 from ctk_android.enums import (
+    AllowedWording,
+    ClaimName,
+    ClaimStatus,
     ClientId,
     Column,
+    ContrastFamily,
     DatasetName,
     Device,
     DoctorCheck,
     EligibilityProfile,
+    Estimand,
     EvaluationPopulation,
     ExecutionMode,
     ExperimentName,
@@ -24,12 +29,16 @@ from ctk_android.enums import (
     LamdaRelease,
     Learner,
     LibraryOption,
+    Metric,
     ModelFamily,
     NameFragment,
     NoveltyDescriptor,
     OperatingPointStatus,
     Pattern,
+    PromotionBlock,
+    PromotionState,
     RunStatus,
+    Sensitivity,
     Stage,
     ValidationCheck,
 )
@@ -60,6 +69,7 @@ TreeIterations = PositiveInt
 TreeDepth = PositiveInt
 VtCount = NonNegativeInt
 Rank = NonNegativeInt
+Axis = NonNegativeInt
 ExceedanceCount = PositiveInt
 
 seed_adapter: TypeAdapter[Seed] = TypeAdapter(Seed)
@@ -401,3 +411,175 @@ class RunManifest(FrozenRecord):
 class ProximalAnchor(FrozenRecord):
     state: StateDict
     strength: ProximalStrength
+
+
+class Interval(FrozenRecord):
+    low: FiniteFloat
+    high: FiniteFloat
+
+
+class PairedEffect(FrozenRecord):
+    mean: Effect
+    median: Effect
+    positive_seeds: RowCount
+    seeds: RowCount
+    effect_size: Effect | None
+    interval: Interval | None
+    p_value: PValue
+
+
+class RunEvidence(FrozenRecord):
+    index: pl.DataFrame
+    summary: pl.DataFrame
+    clients: pl.DataFrame
+    families: pl.DataFrame
+    exposure: pl.DataFrame
+    novelty: pl.DataFrame
+
+
+class EffectRow(FrozenRecord):
+    experiment: ExperimentName
+    salt: Salt
+    alpha: Alpha
+    metric: Metric
+    learner: Learner
+    estimand: Estimand
+    contrast_family: ContrastFamily
+    mean_difference: Effect
+    median_difference: Effect | None
+    positive_seeds: RowCount | None
+    seed_count: RowCount
+    effect_size: Effect | None
+    ci_low: Effect | None
+    ci_high: Effect | None
+    p_value: PValue | None
+    p_holm: PValue | None
+
+
+class NoveltyAssociation(FrozenRecord):
+    rho: Correlation
+    p_value: PValue
+    interval: Interval | None
+    families: RowCount
+
+
+class ClaimResult(FrozenRecord):
+    claim: ClaimName
+    claim_status: ClaimStatus
+    scopes_passed: RowCount
+    scopes_total: RowCount
+    wording: AllowedWording
+
+
+class GateEvidence(FrozenRecord):
+    effects: pl.DataFrame
+    summary: pl.DataFrame
+    family_seed: pl.DataFrame
+    family_effects: pl.DataFrame
+    dose: pl.DataFrame
+    associations: dict[ExperimentName, NoveltyAssociation | None]
+    failed_validation_runs: RowCount
+
+
+class RobustnessRow(FrozenRecord):
+    experiment: ExperimentName
+    sensitivity: Sensitivity
+    mean_difference: Effect
+    ci_low: Effect | None
+    ci_high: Effect | None
+    seed_count: RowCount
+
+
+class AssociationRow(FrozenRecord):
+    experiment: ExperimentName
+    rho: Correlation
+    p_value: PValue
+    ci_low: Effect | None
+    ci_high: Effect | None
+    families: RowCount
+
+
+class ClusterRow(FrozenRecord):
+    experiment: ExperimentName
+    seed: Seed
+    salt: Salt
+    ci_low: Effect
+    ci_high: Effect
+
+
+class PlotAxes(Protocol):
+    """Typed facade over matplotlib axes; matplotlib's own stubs leave **kwargs unknown."""
+
+    def bar(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def plot(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def scatter(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def errorbar(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def imshow(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def annotate(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def axhline(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_xticks(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_yticks(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_xlabel(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_ylabel(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_title(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_xscale(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def legend(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class PlotFigure(Protocol):
+    def add_subplot(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def suptitle(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def colorbar(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def savefig(self, *args: Any, **kwargs: Any) -> Any: ...
+
+
+class PlotBand(FrozenRecord):
+    mean: Effect | None
+    lower: Effect | None
+    upper: Effect | None
+
+
+class ManifestEntry(FrozenRecord):
+    name: FileName
+    digest: Fingerprint
+
+
+class ResultsManifest(FrozenRecord):
+    mode: ExecutionMode
+    files: tuple[ManifestEntry, ...]
+
+
+class SourceProvenance(FrozenRecord):
+    lamda: Fingerprint
+    androzoo: Fingerprint
+
+
+class CodeProvenance(FrozenRecord):
+    revision: Message
+    fingerprint: Fingerprint
+
+
+class ProtocolProvenance(FrozenRecord):
+    config: Fingerprint
+    roadmap: Fingerprint
+
+
+class PromotionDecision(FrozenRecord):
+    state: PromotionState
+    blocks: tuple[PromotionBlock, ...]

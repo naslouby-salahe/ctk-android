@@ -14,6 +14,10 @@ from ctk_android.enums import (
     Grouping,
     LamdaRelease,
     NameFragment,
+    ReportFigure,
+    ReportTable,
+    ResultsDirectory,
+    ResultsFile,
     SourceFile,
     Stage,
     WorkspaceDirectory,
@@ -60,6 +64,10 @@ class Paths:
     @property
     def core_modules(self) -> list[File]:
         return [self.source_root / module for module in CoreModule]
+
+    @property
+    def roadmap_file(self) -> File:
+        return self.root / WorkspaceDirectory.DOCS / SourceFile.ROADMAP
 
     def config_file(self, name: ConfigFile) -> File:
         return self.root / WorkspaceDirectory.CONFIGS / name
@@ -132,6 +140,26 @@ class Paths:
 
     def plan_file(self, mode: ExecutionMode, artifact: Artifact) -> File:
         return self.plan_dir(mode) / artifact
+
+    def results_file(self, directory: ResultsDirectory, name: EntryName) -> File:
+        return self.root / WorkspaceDirectory.RESULTS / directory / name
+
+    def results_root_file(self, name: ResultsFile) -> File:
+        return self.root / WorkspaceDirectory.RESULTS / name
+
+    def analysis_file(self, mode: ExecutionMode, artifact: Artifact) -> File:
+        return self.outputs / WorkspaceDirectory.ANALYSIS / mode / artifact
+
+    def statistics_file(self, mode: ExecutionMode, artifact: Artifact) -> File:
+        return self.outputs / WorkspaceDirectory.STATISTICS / mode / artifact
+
+    def report_table_file(self, name: ReportTable) -> File:
+        directory = self.outputs / WorkspaceDirectory.REPORT / WorkspaceDirectory.TABLES
+        return directory / f"{name}{FileSuffix.CSV}"
+
+    def report_figure_file(self, name: ReportFigure, suffix: FileSuffix) -> File:
+        directory = self.outputs / WorkspaceDirectory.REPORT / WorkspaceDirectory.FIGURES
+        return directory / f"{name}{suffix}"
 
     def run_dir(self, key: RunKey) -> Directory:
         return self.outputs / Stage.RUNS / key.mode / key.experiment / _run_name(key.seed, key.salt)

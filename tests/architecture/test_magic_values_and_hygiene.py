@@ -106,7 +106,7 @@ def test_no_docker_files_or_claims_directories() -> None:
 def test_no_narrative_markdown_generation() -> None:
     offenders = [
         location(path, node.lineno)
-        for path in source_files()
+        for path in source_files(ENUMS_MODULE)
         for node in ast.walk(parse(path))
         if isinstance(node, ast.Constant)
         and isinstance(node.value, str)

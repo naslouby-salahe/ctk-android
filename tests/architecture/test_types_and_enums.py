@@ -173,6 +173,12 @@ def _iterated(name: str) -> bool:
             ):
                 return True
             if (
+                isinstance(node, ast.Subscript)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == name
+            ):
+                return True
+            if (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Name)
                 and node.func.id in {"list", "set", "tuple", "sorted"}

@@ -130,6 +130,7 @@ class FailureReason(StrEnum):
     NO_ELIGIBLE_TARGETS = "no-eligible-targets"
     INSUFFICIENT_CALIBRATION = "insufficient-calibration"
     NOT_APPLICABLE_MODEL_FAMILY = "not-applicable-model-family"
+    NO_COMPLETED_RUNS = "no-completed-runs"
 
 
 class ValidationCheck(StrEnum):
@@ -176,10 +177,8 @@ class Metric(StrEnum):
 
 class ContrastFamily(StrEnum):
     PRIMARY = "primary"
-
-
-class ClaimName(StrEnum):
-    DOSE_RESPONSE = "dose-response"
+    REFERENCE = "reference"
+    EXPLORATORY = "exploratory"
 
 
 class NoveltyDescriptor(StrEnum):
@@ -204,6 +203,7 @@ class ConfigFile(StrEnum):
     PROJECT = "project.yaml"
     DATA = "data.yaml"
     EXPERIMENTS = "experiments.yaml"
+    STATISTICS = "statistics.yaml"
 
 
 class LamdaColumn(StrEnum):
@@ -256,6 +256,16 @@ class Artifact(StrEnum):
     FAMILY_METRICS = "families.parquet"
     OPERATING_POINTS = "operating-points.parquet"
     DISCRIMINATION = "discrimination.parquet"
+    RUN_INDEX = "run-index.parquet"
+    ARM_METRICS = "arm-metrics.parquet"
+    COLLABORATION_DECOMPOSITION = "collaboration-decomposition.parquet"
+    FAMILY_RESCUE = "family-rescue.parquet"
+    PEER_DOSE_RESPONSE = "peer-dose-response.parquet"
+    FEATURE_NOVELTY = "feature-novelty.parquet"
+    ROBUSTNESS = "robustness.parquet"
+    PAIRED_EFFECTS = "paired-effects.parquet"
+    CLUSTER_BOOTSTRAP = "cluster-bootstrap.parquet"
+    CLAIM_GATES = "claim-gates.parquet"
 
 
 class Device(StrEnum):
@@ -318,6 +328,29 @@ class Column(StrEnum):
     LOW = "low"
     HIGH = "high"
     LINKED_VT = "linked_vt_detection"
+    MEDIAN_DIFFERENCE = "median_difference"
+    CI_HIGH = "ci_high"
+    RECALL_STD = "recall_std"
+    CLAIM = "claim"
+    CLAIM_STATUS = "claim_status"
+    CLASSIFICATION = "classification"
+    EFFECT_SIZE = "effect_size"
+    THRESHOLD = "threshold"
+    DESCRIPTOR = "descriptor"
+    EFFECTIVE_DOSE = "effective_dose"
+    CTK_GAIN = "ctk_gain"
+    SEED_COUNT = "seed_count"
+    CI_LOW = "ci_low"
+    CONTRAST_FAMILY = "contrast_family"
+    MEAN_DIFFERENCE = "mean_difference"
+    POSITIVE_SEEDS = "positive_seeds"
+    P_HOLM = "p_holm"
+    P_VALUE = "p_value"
+    ABSENT_RECALL = "absent_recall"
+    ESTIMAND = "estimand"
+    FULL_RECALL = "full_recall"
+    LOCAL_RECALL = "local_recall"
+    PEER_RECALL = "peer_recall"
 
 
 class LogEvent(StrEnum):
@@ -328,6 +361,7 @@ class LogEvent(StrEnum):
     RUN_REUSED = "run-reused"
     RUN_FINISHED = "run-finished"
     ARM_TRAINED = "arm-trained"
+    REPORT_WRITTEN = "report-written"
 
 
 class CliCommand(StrEnum):
@@ -337,6 +371,7 @@ class CliCommand(StrEnum):
     SMOKE = "smoke"
     RUN = "run"
     STATUS = "status"
+    REPORT = "report"
 
 
 class DoctorCheck(StrEnum):
@@ -354,11 +389,18 @@ class WorkspaceDirectory(StrEnum):
     SOURCE = "src"
     PACKAGE = "ctk_android"
     CONFIGS = "configs"
+    DOCS = "docs"
     OUTPUTS = "outputs"
     PREPROCESSING = "preprocessing"
     LINKAGE = "linkage"
     CACHE = "cache"
     PLANS = "plans"
+    ANALYSIS = "analysis"
+    STATISTICS = "statistics"
+    REPORT = "report"
+    RESULTS = "results"
+    TABLES = "tables"
+    FIGURES = "figures"
     METRICS = "metrics"
     SCORES = "scores"
     MODELS = "models"
@@ -370,6 +412,7 @@ class SourceFile(StrEnum):
     LAMDA_PARQUET_GLOB = "*/*.parquet"
     ANDROZOO_ARCHIVE = "latest.csv.gz"
     PYTHON_GLOB = "*.py"
+    ROADMAP = "Roadmap.md"
 
 
 class CoreModule(StrEnum):
@@ -381,6 +424,9 @@ class CoreModule(StrEnum):
 
 class FileSuffix(StrEnum):
     PARQUET = ".parquet"
+    CSV = ".csv"
+    PDF = ".pdf"
+    PNG = ".png"
     TORCH = ".pt"
     FAMILY_SET = "-family-set.json"
 
@@ -480,6 +526,7 @@ class ErrorMessage(StrEnum):
     EXPERIMENT_MODE = "{experiment} is not defined for {mode}"
     NEEDS_FEDERATED = "{learner} needs a federated model"
     NEEDS_LOCAL = "blend needs local models"
+    NO_EVIDENCE = "no completed {mode} runs to analyse; run the planned experiments first"
     PARAMETRIC_ONLY = "federated averaging needs parametric models"
     FINETUNE_NETWORK = "fine-tuning needs a network"
     CLASS_COUNTS = "training rows have class counts {counts}"
@@ -522,6 +569,7 @@ class CliMessage(StrEnum):
     SMOKE_LINE = "smoke {status} {directory}"
     RUN_LINE = "{experiment} seed={seed} {status}"
     FAILURE_LINE = "{reason}: {error}"
+    PROMOTION_LINE = "promotion {state} {blocks}"
 
 
 class LibraryOption:
@@ -537,6 +585,13 @@ class LibraryOption:
     FORBID_EXTRA: Final = "forbid"
     VALIDATE_AFTER: Final = "after"
     MMAP_READ: Final = "r"
+    BCA: Final = "BCa"
+    BBOX_TIGHT: Final = "tight"
+    LINE_DASHED: Final = "--"
+    MARKER_CIRCLE: Final = "o"
+    SCALE_SYMLOG: Final = "symlog"
+    ASPECT_AUTO: Final = "auto"
+    WILCOXON_EXACT: Final = "exact"
 
 
 class Pattern(StrEnum):
@@ -551,3 +606,153 @@ class FeatureNaming(StrEnum):
 
 class MarketCount(IntEnum):
     SINGLE = 1
+
+
+class Estimand(StrEnum):
+    TOTAL_GAIN = "total-gain"
+    POOLING_GAIN = "pooling-gain"
+    CTK_GAIN = "ctk-gain"
+    CTK_SHARE = "ctk-share"
+    ORACLE_GAP_RECOVERY = "oracle-gap-recovery"
+    LOCAL_DEFICIT = "local-deficit"
+    POOLING_SHARE = "pooling-share"
+
+
+class StatisticsLimit(IntEnum):
+    BCA_SEEDS = 3
+    ASSOCIATION_FAMILIES = 4
+    CLUSTER_CHUNK = 100
+    DOSE_CRITERIA = 3
+
+
+class ClaimName(StrEnum):
+    LOCAL_DEFICIT = "local-deficit"
+    COLLABORATION_BENEFIT = "collaboration-benefit"
+    COMPLEMENTARY_KNOWLEDGE = "complementary-knowledge"
+    GENERIC_POOLING_MAJORITY = "generic-pooling-majority"
+    DOSE_RESPONSE = "dose-response"
+    OWN_DOMAIN_BENEFIT = "own-domain-benefit"
+    WORST_CLIENT_BENEFIT = "worst-client-benefit"
+    KNOWN_FAMILY_SAFETY = "known-family-safety"
+    FAMILY_DEPENDENCE = "family-dependence"
+    REPRESENTATION_LIMITED_FAMILY = "representation-limited-family"
+    FEATURE_NOVELTY_EXPLANATION = "feature-novelty-explanation"
+    NEW_MECHANISM_TRIGGER = "new-mechanism-trigger"
+
+
+class ClaimStatus(StrEnum):
+    PROMOTED = "promoted"
+    NARROWED = "narrowed"
+    INSUFFICIENT_EVIDENCE = "insufficient-evidence"
+    REJECTED = "rejected"
+
+
+class AllowedWording(StrEnum):
+    PROMOTED = "supported in every evaluated scope"
+    NARROWED = "supported only in the scopes that passed; state the restriction"
+    INSUFFICIENT_EVIDENCE = "not resolved by the confirmatory evidence; report descriptively"
+    REJECTED = "not supported; report the measured components without the claim"
+
+
+class Sensitivity(StrEnum):
+    ALL_FAMILIES = "all-families"
+    TOP_FAMILY_REMOVAL = "top-family-removal"
+
+
+class ReportTable(StrEnum):
+    DATASET_CLIENT_AUDIT = "dataset-client-audit"
+    PRIMARY_ARM_COMPARISON = "primary-arm-comparison"
+    COLLABORATION_DECOMPOSITION = "collaboration-decomposition"
+    PEER_DOSE_RESPONSE = "peer-dose-response"
+    FAMILY_LEVEL = "family-level"
+    CLAIM_GATES = "claim-gates"
+
+
+class ReportFigure(StrEnum):
+    COLLABORATION_DECOMPOSITION = "collaboration-decomposition"
+    MEAN_VERSUS_WORST_CLIENT = "mean-versus-worst-client"
+    OWN_DOMAIN_VERSUS_FEDERATION_WIDE = "own-domain-versus-federation-wide"
+    PEER_DOSE_RESPONSE = "peer-dose-response"
+    FAMILY_RESCUE_MAP = "family-rescue-map"
+    FEATURE_NOVELTY_VERSUS_CTK_GAIN = "feature-novelty-versus-ctk-gain"
+    KNOWN_VERSUS_UNSEEN_TRADEOFF = "known-versus-unseen-tradeoff"
+    ROBUSTNESS_SUMMARY = "robustness-summary"
+
+
+class FamilyOutcome(StrEnum):
+    RESCUED = "rescued"
+    POORLY_RESCUED = "poorly-rescued-under-full-exposure"
+
+
+class PlotGeometry(float, Enum):
+    WIDTH = 8.0
+    HEIGHT = 4.5
+    BAR_WIDTH = 0.35
+    DPI = 200.0
+    MARKER_SIZE = 60.0
+    TICK_ROTATION = 45.0
+    PAIR_ROWS = 1.0
+    PAIR_COLUMNS = 2.0
+
+
+class PlotText(StrEnum):
+    DECOMPOSITION_TITLE = "Collaboration decomposition (federation-wide unseen-family recall)"
+    RECALL = "Recall"
+    FNR = "False-negative rate"
+    LOCAL = "Local baseline"
+    POOLING = "Generic pooling gain"
+    CTK = "Complementary threat-knowledge gain"
+    FULL_CEILING = "Full-exposure ceiling"
+    MEAN_VERSUS_WORST_TITLE = "Mean versus worst client"
+    MEAN_CLIENT = "Mean client"
+    WORST_CLIENT = "Worst client"
+    DOMAIN_TITLE = "Complementary gain: own-domain versus federation-wide"
+    OWN_DOMAIN = "Own-domain"
+    FEDERATION_WIDE = "Federation-wide"
+    GAIN = "Gain in recall"
+    DOSE_TITLE = "Peer-exposure dose response"
+    EFFECTIVE_DOSE = "Effective peer samples of the family"
+    RESCUE_TITLE = "Family rescue map (FedAvg)"
+    ABSENT = "No-family"
+    PEER = "Peer-family"
+    FULL = "Full exposure"
+    NOVELTY_TITLE = "Training-only feature novelty versus complementary gain"
+    NOVELTY = "Novelty score"
+    TRADEOFF_TITLE = "Known-family recall versus unseen-family recall"
+    KNOWN_RECALL = "Known-family recall"
+    UNSEEN_RECALL = "Unseen-family recall"
+    ROBUSTNESS_TITLE = "Robustness of the complementary gain (FedAvg)"
+    ROBUSTNESS_ROW = "{experiment} @{alpha}"
+
+
+class ResultsDirectory(StrEnum):
+    EVIDENCE = "evidence"
+    STATISTICS = "statistics"
+    GATES = "gates"
+    TABLES = "tables"
+    FIGURES = "figures"
+    PROVENANCE = "provenance"
+
+
+class ResultsFile(StrEnum):
+    MANIFEST = "manifest.json"
+    SOURCE_DATA = "source-data.json"
+    CODE = "code.json"
+    ENVIRONMENT = "environment.json"
+    PROTOCOL = "protocol.json"
+    SEED_STATUS = "seed-status.csv"
+    CLAIMS = "claims.csv"
+
+
+class PromotionBlock(StrEnum):
+    NOT_CONFIRMATORY = "not-confirmatory"
+    RUNS_INCOMPLETE = "runs-incomplete"
+    VALIDATION_FAILED = "validation-failed"
+    CLAIMS_INCOMPLETE = "claims-incomplete"
+    PROVENANCE_STALE = "provenance-stale"
+    ROW_LEVEL_DATA = "row-level-data"
+
+
+class PromotionState(StrEnum):
+    PROMOTED = "promoted"
+    BLOCKED = "blocked"

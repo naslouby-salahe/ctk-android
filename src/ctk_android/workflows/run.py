@@ -13,9 +13,8 @@ from ctk_android.config import Config, ExperimentSpec, TrainingConfig
 from ctk_android.data import partitions
 from ctk_android.data.cache import (
     fingerprint_model,
-    fingerprint_source_tree,
     is_reusable,
-    read_record,
+    run_provenance,
     write_provenance,
     write_record,
     write_table,
@@ -38,7 +37,6 @@ from ctk_android.enums import (
     OperatingPointStatus,
     RunStatus,
     SplitRole,
-    Stage,
     TrackedPackage,
     ValidationCheck,
 )
@@ -54,8 +52,6 @@ from ctk_android.types import (
     File,
     IntArray,
     PartitionKey,
-    Provenance,
-    RunInputs,
     RunKey,
     RunManifest,
     RunReport,
@@ -106,28 +102,6 @@ def settings_for(
             doses.append(None)
         return [(ExposureCondition.PEER_PRESENT, dose) for dose in doses]
     return [(condition, None) for condition in spec.conditions]
-
-
-def run_provenance(
-    paths: Paths, config: Config, key: RunKey, targets: tuple[TargetPair, ...]
-) -> Provenance:
-    spec = config.experiments.experiments[key.experiment]
-    partition_key = PartitionKey(
-        seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
-    )
-    inputs = RunInputs(
-        key=key,
-        partition=read_record(
-            paths.provenance_file(paths.partition_dir(partition_key)), Provenance
-        ),
-        config=config.fingerprint(),
-        targets=targets,
-    )
-    return Provenance(
-        stage=Stage.RUNS,
-        inputs=fingerprint_model(inputs),
-        code=fingerprint_source_tree(paths.source_root),
-    )
 
 
 def _train_learner(

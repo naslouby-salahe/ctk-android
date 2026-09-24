@@ -5,14 +5,20 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel
 
-from ctk_android.enums import ByteBlock, LibraryOption, Separator, SourceFile, TextEncoding
+from ctk_android.config import Config
+from ctk_android.enums import ByteBlock, LibraryOption, Separator, SourceFile, Stage, TextEncoding
+from ctk_android.paths import Paths
 from ctk_android.types import (
     ByteMatrix,
     Directory,
     File,
     Fingerprint,
     FrozenRecord,
+    PartitionKey,
     Provenance,
+    RunInputs,
+    RunKey,
+    TargetPair,
 )
 
 
@@ -77,3 +83,25 @@ def write_table(frame: pl.DataFrame, path: File) -> None:
 
 def records_to_frame(rows: Sequence[FrozenRecord]) -> pl.DataFrame:
     return pl.DataFrame([row.model_dump() for row in rows]) if rows else pl.DataFrame()
+
+
+def run_provenance(
+    paths: Paths, config: Config, key: RunKey, targets: tuple[TargetPair, ...]
+) -> Provenance:
+    spec = config.experiments.experiments[key.experiment]
+    partition_key = PartitionKey(
+        seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
+    )
+    inputs = RunInputs(
+        key=key,
+        partition=read_record(
+            paths.provenance_file(paths.partition_dir(partition_key)), Provenance
+        ),
+        config=config.fingerprint(),
+        targets=targets,
+    )
+    return Provenance(
+        stage=Stage.RUNS,
+        inputs=fingerprint_model(inputs),
+        code=fingerprint_source_tree(paths.source_root),
+    )

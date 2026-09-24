@@ -25,8 +25,10 @@ operating:
 novelty:
   min_active_prevalence: 0.1
   min_known_family_rows: 20
+  primary_descriptor: nearest-known-family-distance
 dose_levels: [0, 1, 10, 50, 100, 500, 1000]
 dose_include_all_available: true
+top_family_removal_count: 3
 permutation_seed_offset: 7919
 smoke_training:
   batch_size: 128

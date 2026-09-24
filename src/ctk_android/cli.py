@@ -12,6 +12,7 @@ from ctk_android.types import CtkError, Seed, seed_adapter
 from ctk_android.workflows import doctor as doctor_workflow
 from ctk_android.workflows import plan as plan_workflow
 from ctk_android.workflows import preprocess as preprocess_workflow
+from ctk_android.workflows import report as report_workflow
 from ctk_android.workflows import run as run_workflow
 from ctk_android.workflows import smoke as smoke_workflow
 from ctk_android.workflows import status as status_workflow
@@ -94,3 +95,18 @@ def run(
 def status(mode: ExecutionMode = ExecutionMode.CONFIRMATORY) -> None:
     paths, _ = _context()
     typer.echo(status_workflow.run_status(paths, mode))
+
+
+@app.command(name=CliCommand.REPORT)
+def report(
+    mode: ExecutionMode = ExecutionMode.CONFIRMATORY,
+    promote: Annotated[bool, typer.Option()] = False,
+) -> None:
+    paths, config = _context()
+    try:
+        decision = report_workflow.run_report(paths, config, mode, promote)
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))

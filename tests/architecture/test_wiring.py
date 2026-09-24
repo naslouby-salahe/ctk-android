@@ -15,6 +15,7 @@ COMMAND_WORKFLOW = {
     CliCommand.SMOKE: "smoke_workflow",
     CliCommand.RUN: "run_workflow",
     CliCommand.STATUS: "status_workflow",
+    CliCommand.REPORT: "report_workflow",
 }
 
 
@@ -47,8 +48,8 @@ def _workflow_targets(function: ast.FunctionDef) -> set[str]:
     }
 
 
-def test_registered_commands_are_within_the_public_cli() -> None:
-    assert _registered() <= {member.value for member in CliCommand}
+def test_registered_commands_are_exactly_the_public_cli() -> None:
+    assert _registered() == {member.value for member in CliCommand}
 
 
 def test_each_cli_command_delegates_to_its_single_workflow() -> None:
