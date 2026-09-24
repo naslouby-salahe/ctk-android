@@ -51,6 +51,7 @@ from ctk_android.types import (
     FidelityTable,
     HeadroomRow,
     HeadroomTable,
+    Interval,
     Passed,
     PatternTable,
     PermutationAuditRow,
@@ -663,7 +664,8 @@ def _client_change(
     learner: Learner,
     population: EvaluationPopulation,
     alpha: Alpha,
-    names: tuple[Column, Column],
+    local_name: Column,
+    peer_name: Column,
 ) -> ArmSeries:
     local = _arm_series(
         clients,
@@ -672,7 +674,7 @@ def _client_change(
         population,
         alpha,
         1,
-        names[0],
+        local_name,
     ).drop(Column.TRIALS)
     peer = _arm_series(
         clients,
@@ -681,7 +683,7 @@ def _client_change(
         population,
         alpha,
         1,
-        names[1],
+        peer_name,
     ).drop(Column.TRIALS)
     return local.join(peer, on=Column.SEED)
 
@@ -749,8 +751,18 @@ def _column_mean(frame: ArmSeries, column: Column) -> Effect | None:
     return present.mean().item() if present.size else None
 
 
-def _interval(summary: SeedSummary, formal: Passed) -> tuple[Effect | None, Effect | None]:
-    return (summary.ci_low, summary.ci_high) if formal else (None, None)
+def _interval(summary: SeedSummary, formal: Passed) -> Interval | None:
+    if not formal or summary.ci_low is None or summary.ci_high is None:
+        return None
+    return Interval(low=summary.ci_low, high=summary.ci_high)
+
+
+def _low(interval: Interval | None) -> Effect | None:
+    return None if interval is None else interval.low
+
+
+def _high(interval: Interval | None) -> Effect | None:
+    return None if interval is None else interval.high
 
 
 def client_ctk_analysis(
@@ -768,7 +780,8 @@ def client_ctk_analysis(
                 learner,
                 EvaluationPopulation.KNOWN_FAMILY,
                 alpha,
-                (Column.KNOWN_LOCAL_RECALL, Column.KNOWN_PEER_RECALL),
+                Column.KNOWN_LOCAL_RECALL,
+                Column.KNOWN_PEER_RECALL,
             )
             benign = _arm_series(
                 clients,
@@ -805,9 +818,9 @@ def client_ctk_analysis(
                     _interval(ctk, formal),
                 )
                 known_ci = (
-                    _interval(known_change, known.height >= formal_seeds)
-                    if known_change is not None
-                    else (None, None)
+                    None
+                    if known_change is None
+                    else _interval(known_change, known.height >= formal_seeds)
                 )
                 rows.append(
                     ClientCtkRow(
@@ -821,14 +834,14 @@ def client_ctk_analysis(
                         peer_recall=peer.mean().item(),
                         full_recall=_column_mean(wide, Column.FULL_RECALL),
                         total_gain=total.mean_difference,
-                        total_ci_low=total_ci[0],
-                        total_ci_high=total_ci[1],
+                        total_ci_low=_low(total_ci),
+                        total_ci_high=_high(total_ci),
                         pooling_gain=pooling.mean_difference,
-                        pooling_ci_low=pooling_ci[0],
-                        pooling_ci_high=pooling_ci[1],
+                        pooling_ci_low=_low(pooling_ci),
+                        pooling_ci_high=_high(pooling_ci),
                         ctk_gain=ctk.mean_difference,
-                        ctk_ci_low=ctk_ci[0],
-                        ctk_ci_high=ctk_ci[1],
+                        ctk_ci_low=_low(ctk_ci),
+                        ctk_ci_high=_high(ctk_ci),
                         ctk_positive_seeds=ctk.positive_seeds,
                         known_family_recall_local=_column_mean(known, Column.KNOWN_LOCAL_RECALL),
                         known_family_recall_collaborative=_column_mean(
@@ -837,8 +850,8 @@ def client_ctk_analysis(
                         known_family_change=None
                         if known_change is None
                         else known_change.mean_difference,
-                        known_family_change_ci_low=known_ci[0],
-                        known_family_change_ci_high=known_ci[1],
+                        known_family_change_ci_low=_low(known_ci),
+                        known_family_change_ci_high=_high(known_ci),
                         realised_fpr=_column_mean(benign, Column.BENIGN_FPR),
                         hidden_family_trials_per_seed=_column_mean(wide, Column.TRIALS) or 0.0,
                         contributing_seeds=wide.height,

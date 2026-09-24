@@ -155,7 +155,8 @@ def _client_clients() -> pl.DataFrame:
     frame = _clients()
     known = frame.with_columns(pl.lit(EvaluationPopulation.KNOWN_FAMILY).alias(Column.POPULATION))
     benign = frame.with_columns(
-        pl.lit(EvaluationPopulation.BENIGN).alias(Column.POPULATION), pl.lit(5, dtype=pl.Int64).alias(Column.HITS)
+        pl.lit(EvaluationPopulation.BENIGN).alias(Column.POPULATION),
+        pl.lit(5, dtype=pl.Int64).alias(Column.HITS),
     )
     return pl.concat([frame, known, benign])
 
