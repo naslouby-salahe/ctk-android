@@ -359,7 +359,7 @@ Before any model is trained, automated checks must establish:
 - no package component crosses partitions;
 - no identical feature vector crosses partitions;
 - all hidden-family removal happens **after** the base split is fixed;
-- no test row influences family eligibility, model hyperparameters, thresholds, family grouping, or arm selection;
+- no test row influences family eligibility, model hyperparameters, thresholds, family grouping, or arm selection; eligibility is decided before the split from corpus-wide support and component structure only (Section 12.2);
 - client-specific thresholds use only that client's benign calibration data;
 - all experimental arms for one seed use matched underlying partitions.
 
@@ -382,10 +382,12 @@ Only named AVClass2 families with sufficient support are eligible. Singleton-per
 For client \(c\) and family \(f\), controlled hiding is eligible only when:
 
 - peers collectively contain at least 150 training samples of \(f\) after the base split;
-- the relevant test population contains at least 50 samples of \(f\) for federation-wide evaluation;
+- the relevant test population contains at least 50 samples of \(f\) for federation-wide evaluation, guaranteed by the partitioner rather than checked afterwards (see the pre-split rule below);
 - the hidden family can be removed from the target client's training data without making the target training population invalid.
 
 Support thresholds of 100 and 300 peer samples and 30 and 100 test samples are sensitivity analyses.
+
+**Pre-split eligibility rule.** Family eligibility is determined before the fit/calibration/test split, using corpus-wide support and identity-safe component structure only. The deterministic partitioner then constructs the 60/20/20 split so that every predeclared eligible client-family combination meets its minimum fit and test support. Only combinations for which such a valid identity-safe partition is feasible are materialized into the experiment plan. Final-test rows never add, remove, or replace eligible families after the split, so executed experiments contain only valid, fully supported combinations.
 
 ### 12.3 Family sets
 
