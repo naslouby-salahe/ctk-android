@@ -104,7 +104,9 @@ def _cluster_intervals(
         roles, labels = table[Column.ROLE].to_numpy(), table[Column.LABEL].to_numpy()
         names, components = table[Column.FAMILY].to_numpy(), table[Column.COMPONENT].to_numpy()
         thresholds = pl.read_parquet(paths.run_file(key, Artifact.THRESHOLDS)).filter(
-            (pl.col(Column.LEARNER) == Learner.FEDAVG) & (pl.col(Column.ALPHA) == alpha)
+            (pl.col(Column.LEARNER) == Learner.FEDAVG)
+            & (pl.col(Column.ALPHA) == alpha)
+            & pl.col(Column.DOSE).is_null()
         )
         hits: HitVectors = {
             ExposureCondition.PEER_PRESENT: [],
@@ -123,9 +125,9 @@ def _cluster_intervals(
                     & (labels[pool] == 1)
                     & np.isin(names[pool], families)
                 )
-                threshold = thresholds.filter(pl.col(Column.CLIENT) == client)[
-                    Column.THRESHOLD
-                ].item()
+                threshold = thresholds.filter(
+                    (pl.col(Column.CLIENT) == client) & (pl.col(Column.CONDITION) == condition)
+                )[Column.THRESHOLD].item()
                 collected.append(
                     (own[Column.SCORE].to_numpy()[unseen] > threshold).astype(np.int64)
                 )

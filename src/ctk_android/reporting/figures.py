@@ -17,6 +17,7 @@ from ctk_android.enums import (
     PlotGeometry,
     PlotText,
     ReportFigure,
+    SubplotGrid,
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
@@ -152,8 +153,8 @@ def collaboration_decomposition(paths: Paths, config: Config, mode: ExecutionMod
 def mean_versus_worst_client(paths: Paths, config: Config, mode: ExecutionMode) -> None:
     summary = _summary(paths, config, mode)
     figure = _blank()
-    recall_axes = figure.add_subplot(PlotGeometry.PAIR_ROWS, PlotGeometry.PAIR_COLUMNS, 1)
-    fnr_axes = figure.add_subplot(PlotGeometry.PAIR_ROWS, PlotGeometry.PAIR_COLUMNS, 2)
+    recall_axes = figure.add_subplot(SubplotGrid.ROWS, SubplotGrid.COLUMNS, 1)
+    fnr_axes = figure.add_subplot(SubplotGrid.ROWS, SubplotGrid.COLUMNS, 2)
     learners = list(Learner)
     positions = np.arange(len(learners))
     for axes, title, mean_metric, worst_metric in (
@@ -206,14 +207,14 @@ def own_domain_versus_federation_wide(paths: Paths, config: Config, mode: Execut
         (-PlotGeometry.BAR_WIDTH / 2, Metric.OWN_DOMAIN_UNSEEN_RECALL, PlotText.OWN_DOMAIN),
         (PlotGeometry.BAR_WIDTH / 2, Metric.FEDERATION_UNSEEN_RECALL, PlotText.FEDERATION_WIDE),
     ):
-        stats = np.array(
-            [_effect(effects, learner, Estimand.CTK_GAIN, metric) for learner in learners]
-        )
+        bands = [_effect(effects, learner, Estimand.CTK_GAIN, metric) for learner in learners]
         axes.bar(
             positions + offset,
-            stats[:, 0],
+            _values([band.mean for band in bands]),
             PlotGeometry.BAR_WIDTH,
-            yerr=stats[:, 1:].T,
+            yerr=np.vstack(
+                [_values([band.lower for band in bands]), _values([band.upper for band in bands])]
+            ),
             label=label,
         )
     axes.set_xticks(positions, learners)

@@ -43,6 +43,8 @@ def test_configured_logging_writes_json_lines_with_timestamp_and_level(tmp_path:
         for handler in root.handlers:
             handler.flush()
     finally:
+        for handler in root.handlers:
+            handler.close()
         root.handlers, root.level = saved[0], saved[1]
     lines = [
         json.loads(line)
@@ -64,6 +66,8 @@ def test_debug_events_are_emitted_when_the_level_is_debug(tmp_path: Path) -> Non
         for handler in root.handlers:
             handler.flush()
     finally:
+        for handler in root.handlers:
+            handler.close()
         root.handlers, root.level = saved[0], saved[1]
     text = paths.log_file(CliCommand.PLAN).read_text(encoding="utf-8")
     assert LogEvent.FEDERATED_ROUND in text

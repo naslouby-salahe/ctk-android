@@ -2,6 +2,7 @@ import numpy as np
 import polars as pl
 
 from ctk_android.config import DataConfig
+from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
     ClientId,
     Column,
@@ -39,7 +40,7 @@ def classify_labels(assignments: AssignmentsTable, config: DataConfig) -> Labell
         .then(pl.lit(EligibilityReason.NOT_IN_FAMILY_SET))
         .when(family.str.strip_chars() == SourceFamilyLabel.EMPTY)
         .then(pl.lit(EligibilityReason.EMPTY_LABEL))
-        .when(family.is_in(pl.Series(config.unknown_labels, dtype=pl.String)))
+        .when(family.is_in(pl.Series(config.unknown_labels, dtype=pl.String).implode()))
         .then(pl.lit(EligibilityReason.UNKNOWN_LABEL))
         .when(family.str.starts_with(config.singleton_prefix))
         .then(pl.lit(EligibilityReason.SINGLETON_LABEL))
@@ -96,7 +97,7 @@ def role_counts(
         labelled.with_columns(roles.alias(Column.ROLE))
         .filter(
             (pl.col(Column.REASON) == EligibilityReason.ELIGIBLE)
-            & pl.col(Column.FAMILY).is_in(list(families))
+            & is_one_of(Column.FAMILY, families)
         )
         .group_by(Column.CLIENT, Column.FAMILY, Column.ROLE)
         .agg(pl.len().alias(Column.ROWS))

@@ -75,7 +75,7 @@ def fit_epochs(
             loss = loss_fn(network(inputs[batch]).squeeze(-1), targets[batch])
             if proximal is not None:
                 penalty = sum(
-                    ((param - proximal.state[name]) ** 2).sum()
+                    ((param - proximal.state[name].to(device)) ** 2).sum()
                     for name, param in network.named_parameters()
                 )
                 loss = loss + 0.5 * proximal.strength * penalty

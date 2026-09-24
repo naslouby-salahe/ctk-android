@@ -1,7 +1,7 @@
 import polars as pl
 
 from ctk_android.config import Config
-from ctk_android.data.cache import read_record
+from ctk_android.data.cache import normalise_dose, read_record
 from ctk_android.enums import Artifact, Column, ExecutionMode, RunStatus
 from ctk_android.paths import Paths
 from ctk_android.types import (
@@ -16,7 +16,7 @@ from ctk_android.workflows.plan import experiments_for
 
 
 def _tagged(frame: Table, key: RunKey) -> Table:
-    return frame.with_columns(
+    return normalise_dose(frame).with_columns(
         pl.lit(key.experiment).alias(Column.EXPERIMENT),
         pl.lit(key.seed).alias(Column.SEED),
         pl.lit(key.salt).alias(Column.SALT),

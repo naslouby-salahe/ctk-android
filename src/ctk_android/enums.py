@@ -771,8 +771,11 @@ class PlotGeometry(float, Enum):
     DPI = 200.0
     MARKER_SIZE = 60.0
     TICK_ROTATION = 45.0
-    PAIR_ROWS = 1.0
-    PAIR_COLUMNS = 2.0
+
+
+class SubplotGrid(IntEnum):
+    ROWS = 1
+    COLUMNS = 2
 
 
 class PlotText(StrEnum):

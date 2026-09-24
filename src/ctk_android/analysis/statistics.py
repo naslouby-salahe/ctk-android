@@ -3,7 +3,7 @@ import polars as pl
 from scipy import stats
 
 from ctk_android.config import Config, StatisticsConfig
-from ctk_android.data.cache import records_to_frame
+from ctk_android.data.cache import is_one_of, records_to_frame
 from ctk_android.enums import (
     Column,
     ContrastFamily,
@@ -244,8 +244,8 @@ def paired_effect_table(decomposition: DecompositionTable, config: Config) -> Ef
     rows = [_effect_row(group, config) for group in resolved.partition_by(keys)]
     shares = _share_rows(
         resolved.filter(
-            pl.col(Column.ESTIMAND).is_in(
-                [Estimand.TOTAL_GAIN, Estimand.CTK_GAIN, Estimand.POOLING_GAIN]
+            is_one_of(
+                Column.ESTIMAND, [Estimand.TOTAL_GAIN, Estimand.CTK_GAIN, Estimand.POOLING_GAIN]
             )
         ),
         config,

@@ -1,6 +1,7 @@
 import polars as pl
 
 from ctk_android.config import Config
+from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
     Artifact,
     ClaimName,
@@ -54,7 +55,7 @@ def primary_arm_comparison(paths: Paths, config: Config, mode: ExecutionMode) ->
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
         & pl.col(Column.DOSE).is_null()
-        & pl.col(Column.METRIC).is_in(_primary_metrics())
+        & is_one_of(Column.METRIC, _primary_metrics())
     )
     return (
         summary.group_by(Column.LEARNER, Column.CONDITION, Column.METRIC)
@@ -70,8 +71,9 @@ def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> Decomposit
     return (
         effects.filter(
             (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
-            & pl.col(Column.ESTIMAND).is_in(
-                [Estimand.TOTAL_GAIN, Estimand.POOLING_GAIN, Estimand.CTK_GAIN, Estimand.CTK_SHARE]
+            & is_one_of(
+                Column.ESTIMAND,
+                [Estimand.TOTAL_GAIN, Estimand.POOLING_GAIN, Estimand.CTK_GAIN, Estimand.CTK_SHARE],
             )
         )
         .join(
@@ -81,6 +83,8 @@ def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> Decomposit
             how=LibraryOption.JOIN_CROSS,
         )
         .select(
+            Column.EXPERIMENT,
+            Column.ALPHA,
             Column.LEARNER,
             Column.METRIC,
             Column.ESTIMAND,
@@ -96,7 +100,7 @@ def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> Decomposit
             Column.EFFECT_SIZE,
             Column.CLAIM_STATUS,
         )
-        .sort(Column.LEARNER, Column.METRIC, Column.ESTIMAND)
+        .sort(Column.ALPHA, Column.LEARNER, Column.METRIC, Column.ESTIMAND)
     )
 
 

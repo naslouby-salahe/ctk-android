@@ -2,7 +2,7 @@ import polars as pl
 
 from ctk_android.analysis.statistics import paired_effect
 from ctk_android.config import Config
-from ctk_android.data.cache import records_to_frame
+from ctk_android.data.cache import is_one_of, records_to_frame
 from ctk_android.enums import (
     Column,
     EvaluationPopulation,
@@ -43,7 +43,7 @@ def micro_ctk_by_seed(
                 & pl.col(Column.DOSE).is_null()
                 & (pl.col(Column.ALPHA) == alpha)
                 & (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
-                & ~pl.col(Column.FAMILY).is_in(excluded)
+                & ~is_one_of(Column.FAMILY, excluded)
             )
             .group_by(Column.EXPERIMENT, Column.SEED, Column.SALT)
             .agg((pl.col(Column.HITS).sum() / pl.col(Column.TRIALS).sum()).alias(name))

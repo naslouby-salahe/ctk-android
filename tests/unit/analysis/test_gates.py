@@ -4,8 +4,12 @@ from ctk_android.analysis.gates import (
     collaboration_benefit,
     complementary_knowledge,
     dose_response,
+    family_dependence,
+    feature_novelty_explanation,
     generic_pooling_majority,
+    known_family_safety,
     local_deficit,
+    new_mechanism_trigger,
     representation_limited_family,
 )
 from ctk_android.config import load_config
@@ -16,11 +20,12 @@ from ctk_android.enums import (
     ContrastFamily,
     Estimand,
     ExperimentName,
+    ExposureCondition,
     Learner,
     Metric,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import EffectRow, GateEvidence
+from ctk_android.types import EffectRow, GateEvidence, Interval, NoveltyAssociation
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT))
@@ -247,3 +252,137 @@ def test_representation_limited_family_needs_a_second_model_to_agree() -> None:
     result = representation_limited_family(evidence, CONFIG)
     assert result.claim_status is ClaimStatus.PROMOTED
     assert result.scopes_passed == 1
+
+
+def _summary_rows(values: dict[tuple[Learner, ExposureCondition, Metric], float]) -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {
+                Column.EXPERIMENT: ExperimentName.CONTROLLED_EXPOSURE,
+                Column.SEED: seed,
+                Column.LEARNER: learner,
+                Column.CONDITION: condition,
+                Column.DOSE: None,
+                Column.METRIC: metric,
+                Column.ALPHA: ALPHA,
+                Column.VALUE: value,
+            }
+            for (learner, condition, metric), value in values.items()
+            for seed in range(5)
+        ],
+        schema_overrides={Column.DOSE: pl.Int64},
+    )
+
+
+PEER = ExposureCondition.PEER_PRESENT
+KNOWN = Metric.KNOWN_FAMILY_RECALL
+FPR = Metric.REALISED_FPR
+
+
+def test_known_family_safety_is_promoted_when_the_strongest_arm_barely_moves_known_recall() -> None:
+    summary = _summary_rows(
+        {
+            (Learner.LOCAL, PEER, KNOWN): 0.72,
+            (Learner.LOCAL, PEER, FPR): 0.050,
+            (Learner.FEDAVG, PEER, FED): 0.60,
+            (Learner.FEDAVG, PEER, KNOWN): 0.73,
+            (Learner.FEDAVG, PEER, FPR): 0.052,
+        }
+    )
+    evidence = _evidence([]).model_copy(update={"summary": summary})
+    assert known_family_safety(evidence, CONFIG).claim_status is ClaimStatus.PROMOTED
+
+
+def test_known_family_safety_is_rejected_for_a_material_known_family_cost() -> None:
+    summary = _summary_rows(
+        {
+            (Learner.LOCAL, PEER, KNOWN): 0.72,
+            (Learner.LOCAL, PEER, FPR): 0.050,
+            (Learner.FEDAVG, PEER, FED): 0.60,
+            (Learner.FEDAVG, PEER, KNOWN): 0.60,
+            (Learner.FEDAVG, PEER, FPR): 0.050,
+        }
+    )
+    evidence = _evidence([]).model_copy(update={"summary": summary})
+    assert known_family_safety(evidence, CONFIG).claim_status is ClaimStatus.REJECTED
+
+
+def _family_seed(gains: dict[str, float]) -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {Column.LEARNER: Learner.FEDAVG, Column.FAMILY: family, Column.CTK_GAIN: gain}
+            for family, gain in gains.items()
+        ]
+    )
+
+
+def test_family_dependence_needs_a_material_spread_across_families() -> None:
+    wide = _evidence([]).model_copy(update={"family_seed": _family_seed({"a": 0.02, "b": 0.25})})
+    flat = _evidence([]).model_copy(update={"family_seed": _family_seed({"a": 0.10, "b": 0.11})})
+    assert family_dependence(wide, CONFIG).claim_status is ClaimStatus.PROMOTED
+    assert family_dependence(flat, CONFIG).claim_status is ClaimStatus.REJECTED
+
+
+def _association(rho: float, low: float, high: float) -> NoveltyAssociation:
+    return NoveltyAssociation(
+        rho=rho, p_value=0.01, interval=Interval(low=low, high=high), families=8
+    )
+
+
+def test_feature_novelty_needs_a_strong_consistent_association_in_both_family_sets() -> None:
+    both = {
+        ExperimentName.CONTROLLED_EXPOSURE: _association(0.6, 0.2, 0.9),
+        ExperimentName.REPLICATION_FAMILY_SET: _association(0.5, 0.1, 0.8),
+    }
+    opposite = {
+        ExperimentName.CONTROLLED_EXPOSURE: _association(0.6, 0.2, 0.9),
+        ExperimentName.REPLICATION_FAMILY_SET: _association(-0.6, -0.9, -0.2),
+    }
+    weak = {
+        ExperimentName.CONTROLLED_EXPOSURE: _association(0.1, -0.4, 0.5),
+        ExperimentName.REPLICATION_FAMILY_SET: _association(0.1, -0.4, 0.5),
+    }
+    promoted = feature_novelty_explanation(
+        _evidence([]).model_copy(update={"associations": both}), CONFIG
+    )
+    contradicted = feature_novelty_explanation(
+        _evidence([]).model_copy(update={"associations": opposite}), CONFIG
+    )
+    inconclusive = feature_novelty_explanation(
+        _evidence([]).model_copy(update={"associations": weak}), CONFIG
+    )
+    assert promoted.claim_status is ClaimStatus.PROMOTED
+    assert contradicted.claim_status is not ClaimStatus.PROMOTED
+    assert inconclusive.claim_status is not ClaimStatus.PROMOTED
+
+
+def test_the_mechanism_trigger_closes_when_baselines_recover_most_of_the_gap() -> None:
+    full = ExposureCondition.FULL_EXPOSURE
+    closed = _summary_rows(
+        {
+            (Learner.CENTRAL, full, FED): 0.70,
+            (Learner.CENTRAL, full, Metric.WORST_CLIENT_UNSEEN_RECALL): 0.50,
+            (Learner.FEDAVG, PEER, FED): 0.66,
+            (Learner.FEDAVG, PEER, Metric.WORST_CLIENT_UNSEEN_RECALL): 0.45,
+        }
+    )
+    open_gap = _summary_rows(
+        {
+            (Learner.CENTRAL, full, FED): 0.90,
+            (Learner.CENTRAL, full, Metric.WORST_CLIENT_UNSEEN_RECALL): 0.80,
+            (Learner.FEDAVG, PEER, FED): 0.60,
+            (Learner.FEDAVG, PEER, Metric.WORST_CLIENT_UNSEEN_RECALL): 0.40,
+        }
+    )
+    assert (
+        new_mechanism_trigger(
+            _evidence([]).model_copy(update={"summary": closed}), CONFIG
+        ).claim_status
+        is ClaimStatus.REJECTED
+    )
+    assert (
+        new_mechanism_trigger(
+            _evidence([]).model_copy(update={"summary": open_gap}), CONFIG
+        ).claim_status
+        is ClaimStatus.INSUFFICIENT_EVIDENCE
+    )

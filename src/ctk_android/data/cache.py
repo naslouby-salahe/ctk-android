@@ -7,6 +7,7 @@ from pydantic import BaseModel, ValidationError
 from ctk_android.config import Config
 from ctk_android.enums import (
     ByteBlock,
+    Column,
     ErrorMessage,
     FailureReason,
     LibraryOption,
@@ -20,7 +21,9 @@ from ctk_android.types import (
     FeatureMatrix,
     File,
     Fingerprint,
+    LabelValues,
     PartitionKey,
+    Predicate,
     Provenance,
     Records,
     Reusable,
@@ -85,8 +88,14 @@ def write_table(frame: Table, path: File) -> None:
     frame.write_parquet(path)
 
 
+def normalise_dose(frame: Table) -> Table:
+    return frame.cast({Column.DOSE: pl.Int64}) if Column.DOSE in frame.columns else frame
+
+
 def records_to_frame(rows: Records) -> Table:
-    return pl.DataFrame([row.model_dump() for row in rows]) if rows else pl.DataFrame()
+    if not rows:
+        return pl.DataFrame()
+    return normalise_dose(pl.DataFrame([row.model_dump() for row in rows]))
 
 
 def run_provenance(
@@ -111,3 +120,7 @@ def run_provenance(
         targets=targets,
     )
     return Provenance(stage=Stage.RUNS, inputs=fingerprint_model(inputs))
+
+
+def is_one_of(column: Column, values: LabelValues) -> Predicate:
+    return pl.col(column).is_in(pl.Series(values, dtype=pl.String).implode())

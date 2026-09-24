@@ -27,7 +27,12 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Semantic aliases only: no bool, inline dict, ndarray, anonymous tuple, raw DataFrame/Series, or generic array alias in signatures/fields | PASS | `test_no_primitive_leaks.py` (14 tests); Semgrep rule also flags `bool` |
 | Structured logging: enum events and keys, single logging module, console + JSONL sink, every CLI entry point and preprocessing stage logs | PASS | `test_logging.py`, `tests/unit/test_logging.py`, smoke-run lifecycle test, CLI log-file test |
 | Source-code fingerprint / dirty-tree checks | REMOVED | user decision, see implementation-decisions.md |
-| Statistics, decomposition, dose response, novelty association, robustness (top-family removal), claim gates, tables, figures, promotion, `report` command | PARTIAL | implemented and unit-tested on synthetic evidence; not yet run on real development seeds; deduplication sensitivity not implemented |
+| Development runs: controlled-exposure, peer-dose-response, natural-scarcity, family-permutation-control, baseline-fairness x 5 development seeds (25 runs) | PASS | all completed, all structural validations passed; FedProx, fine-tune and blend exercised on real data |
+| Statistics, decomposition, dose response, novelty association, robustness (top-family removal), claim gates, tables, figures, `report` command | PASS | run on real development evidence (`test_report_workflow.py`: outputs regenerate, claims deterministic, all 12 claims get an outcome) |
+| Promotion to `results/` | PASS | blocked outside confirmatory mode and writes nothing (tested); confirmatory path untested by design |
+| Deduplication sensitivity (Roadmap 28) | MISSING | not implemented |
+| Baseline-fairness grids (Roadmap 16.3, Stage D) | MISSING | `baseline-fairness` currently runs one setting; local-epoch, fine-tune-epoch and FedProx-mu grids not implemented, hyperparameters not frozen |
+| Permutation-control null definition (Roadmap 31.2 gives no number) | BLOCKED | needs a user decision; development control gives FedAvg complementary gain -0.010 (CI -0.016 to -0.004) vs +0.162 real, just outside the placeholder 0.01 |
 | Graphify before/after reachability | MISSING | not yet run |
 
 ## Scientific pipeline

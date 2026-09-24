@@ -3,7 +3,7 @@ import polars as pl
 from ctk_android import logs
 from ctk_android.config import Config
 from ctk_android.data import families, partitions
-from ctk_android.data.cache import write_record, write_table
+from ctk_android.data.cache import is_one_of, write_record, write_table
 from ctk_android.enums import (
     Artifact,
     Column,
@@ -80,7 +80,7 @@ def plan_run(
     pair_tables = _pair_tables(paths, config, spec, key)
     if spec.exposure_mode is ExposureMode.HIDE_FROM_TARGET:
         chosen = families.assign_targets(
-            pair_tables.controlled.filter(pl.col(Column.FAMILY).is_in(list(members))),
+            pair_tables.controlled.filter(is_one_of(Column.FAMILY, members)),
             seed,
             members,
             config.data.eligibility[spec.eligibility],
@@ -88,7 +88,7 @@ def plan_run(
         targets = tuple(chosen)
     else:
         eligible = pair_tables.natural.filter(
-            pl.col(Column.ELIGIBLE) & pl.col(Column.FAMILY).is_in(list(members))
+            pl.col(Column.ELIGIBLE) & is_one_of(Column.FAMILY, members)
         )
         targets = tuple(
             TargetPair(client=row[Column.CLIENT], family=row[Column.FAMILY])

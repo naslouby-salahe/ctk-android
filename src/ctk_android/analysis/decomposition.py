@@ -1,5 +1,6 @@
 import polars as pl
 
+from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
     Column,
     Estimand,
@@ -42,7 +43,7 @@ def _arm(summary: SummaryTable, learner: Learner, condition: ExposureCondition) 
         (pl.col(Column.LEARNER) == learner)
         & (pl.col(Column.CONDITION) == condition)
         & pl.col(Column.DOSE).is_null()
-        & pl.col(Column.METRIC).is_in(decomposed_metrics())
+        & is_one_of(Column.METRIC, decomposed_metrics())
     ).select(*_keys(), Column.VALUE)
 
 
