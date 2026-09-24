@@ -421,6 +421,8 @@ def ctk_robustness_synthesis(
         Column.SALT,
         Column.LEARNER,
         Column.METRIC,
+        Column.SENSITIVITY,
+        Column.EXPERIMENT,
     )
 
 

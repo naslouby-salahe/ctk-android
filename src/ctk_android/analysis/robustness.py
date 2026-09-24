@@ -98,4 +98,4 @@ def robustness_table(families: FamilyCountsTable, config: Config) -> RobustnessT
                     seed_count=effect.seeds,
                 )
             )
-    return records_to_frame(rows)
+    return records_to_frame(rows).sort(Column.EXPERIMENT, Column.SALT, Column.SENSITIVITY)
