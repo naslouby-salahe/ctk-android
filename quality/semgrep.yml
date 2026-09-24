@@ -1,0 +1,61 @@
+rules:
+  - id: no-primitive-function-boundary
+    languages: [python]
+    message: Use a semantic type from types.py instead of a primitive function input or output.
+    severity: ERROR
+    paths:
+      exclude:
+        - types.py
+    pattern-regex: '(?m)^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*?\b(?:int|float|str|object|Any)\b(?:[^)]|\n)*?\)\s*(?:->[^:\n]*)?:|^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*\)\s*->\s*[^:\n]*\b(?:int|float|str|object|Any)\b'
+  - id: no-raw-dict-domain-io
+    languages: [python]
+    message: Raw dict values must not cross function boundaries; use a typed record or a semantic alias.
+    severity: ERROR
+    paths:
+      exclude:
+        - types.py
+    pattern-regex: '(?m)^\s*def\s+\w+\((?:[^)]|\n)*\bdict\[str\b|->\s*dict\[str\b'
+  - id: no-broad-cast
+    languages: [python]
+    message: Fix the underlying type instead of using typing.cast.
+    severity: ERROR
+    pattern: cast(...)
+  - id: no-type-suppression
+    languages: [python]
+    message: Fix the type model instead of suppressing diagnostics.
+    severity: ERROR
+    pattern-regex: '#\s*(type|pyright):\s*ignore\b|#\s*noqa\b'
+  - id: no-generic-constrained-alias-outside-types
+    languages: [python]
+    message: Generic constrained aliases may only be defined and used in types.py.
+    severity: ERROR
+    paths:
+      exclude:
+        - types.py
+    pattern-regex: '\b(NonNegativeInt|PositiveInt|SignedInt|NonNegativeFloat|PositiveFloat|FiniteFloat|UnitInterval|OpenUnitInterval)\b'
+  - id: no-yaml-parsing-outside-config
+    languages: [python]
+    message: Only config.py may parse YAML.
+    severity: ERROR
+    paths:
+      exclude:
+        - config.py
+    pattern-either:
+      - pattern: yaml.safe_load(...)
+      - pattern: yaml.load(...)
+  - id: no-enum-value-escape
+    languages: [python]
+    message: Enums are StrEnum members; do not escape the type system with .value.
+    severity: ERROR
+    pattern-regex: '\.value\b'
+    paths:
+      exclude:
+        - enums.py
+  - id: no-type-hiding-scalar-call
+    languages: [python]
+    message: float()/int()/str() must not hide a type problem; fix the source type.
+    severity: ERROR
+    pattern-either:
+      - pattern: float(...)
+      - pattern: int(...)
+      - pattern: str(...)

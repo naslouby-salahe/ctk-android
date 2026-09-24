@@ -3,8 +3,9 @@ import structlog
 
 from ctk_android.config import Config, ExperimentSpec
 from ctk_android.data import families, partitions
-from ctk_android.data.cache import write_json, write_table
+from ctk_android.data.cache import write_record, write_table
 from ctk_android.enums import (
+    Artifact,
     Column,
     ExecutionMode,
     ExperimentName,
@@ -20,6 +21,7 @@ from ctk_android.types import (
     FamilyName,
     PartitionKey,
     PlannedRun,
+    PlanSummary,
     RunKey,
     Seed,
     TargetPair,
@@ -45,11 +47,10 @@ def set_members(
 def _pair_tables(
     paths: Paths, config: Config, spec: ExperimentSpec, key: PartitionKey
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    directory = paths.partition(key)
     if spec.family_labels is FamilyLabelSource.OBSERVED:
         return (
-            pl.read_parquet(directory / "controlled-pairs.parquet"),
-            pl.read_parquet(directory / "natural-pairs.parquet"),
+            pl.read_parquet(paths.partition_file(key, Artifact.CONTROLLED_PAIRS)),
+            pl.read_parquet(paths.partition_file(key, Artifact.NATURAL_PAIRS)),
         )
     study = partitions.load_study(
         paths, key, config.data, spec.family_labels, config.experiments.permutation_seed_offset
@@ -80,7 +81,9 @@ def plan_run(
         )
         targets = tuple(TargetPair(client=client, family=family) for client, family in chosen)
     else:
-        eligible = natural.filter(pl.col(Column.ELIGIBLE) & pl.col(Column.FAMILY).is_in(list(members)))
+        eligible = natural.filter(
+            pl.col(Column.ELIGIBLE) & pl.col(Column.FAMILY).is_in(list(members))
+        )
         targets = tuple(
             TargetPair(client=row[Column.CLIENT], family=row[Column.FAMILY])
             for row in eligible.iter_rows(named=True)
@@ -101,7 +104,6 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
         for seed in config.project.seeds.for_mode(mode)
         for salt in config.experiments.experiments[name].salts
     ]
-    directory = paths.plan(mode)
     write_table(
         pl.DataFrame(
             [
@@ -116,7 +118,7 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
                 for run in planned
             ]
         ),
-        directory / "run-matrix.parquet",
+        paths.plan_file(mode, Artifact.RUN_MATRIX),
     )
     write_table(
         pl.DataFrame(
@@ -139,34 +141,37 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
                 Column.FAMILY: pl.String,
             },
         ),
-        directory / "family-assignments.parquet",
+        paths.plan_file(mode, Artifact.FAMILY_ASSIGNMENTS),
     )
-    write_json(
-        directory / "plan.json",
-        {
-            "mode": mode,
-            "config_fingerprint": config.fingerprint(),
-            "runs": len(planned),
-            RunStatus.INFEASIBLE: sum(run.status is RunStatus.INFEASIBLE for run in planned),
-            "seeds": list(config.project.seeds.for_mode(mode)),
-        },
+    write_record(
+        paths.plan_file(mode, Artifact.PLAN),
+        PlanSummary(
+            mode=mode,
+            config_fingerprint=config.fingerprint(),
+            runs=len(planned),
+            infeasible=sum(run.status is RunStatus.INFEASIBLE for run in planned),
+            seeds=config.project.seeds.for_mode(mode),
+        ),
     )
     return planned
 
 
 def planned_targets(paths: Paths, key: RunKey) -> tuple[RunStatus, tuple[TargetPair, ...]]:
-    directory = paths.plan(key.mode)
-    matrix_path = directory / "run-matrix.parquet"
+    matrix_path = paths.plan_file(key.mode, Artifact.RUN_MATRIX)
     if not matrix_path.is_file():
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, f"no plan for mode {key.mode}; run plan first")
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS, f"no plan for mode {key.mode}; run plan first"
+        )
     matrix = pl.read_parquet(matrix_path).filter(
         (pl.col(Column.EXPERIMENT) == key.experiment)
         & (pl.col(Column.SEED) == key.seed)
         & (pl.col(Column.SALT) == key.salt)
     )
     if matrix.height != 1:
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, f"run {key} is not in the {key.mode} plan")
-    assignments = pl.read_parquet(directory / "family-assignments.parquet").filter(
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS, f"run {key} is not in the {key.mode} plan"
+        )
+    assignments = pl.read_parquet(paths.plan_file(key.mode, Artifact.FAMILY_ASSIGNMENTS)).filter(
         (pl.col(Column.EXPERIMENT) == key.experiment)
         & (pl.col(Column.SEED) == key.seed)
         & (pl.col(Column.SALT) == key.salt)

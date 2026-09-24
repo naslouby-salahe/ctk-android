@@ -176,11 +176,6 @@ class OperatingPointStatus(StrEnum):
     INSUFFICIENT_EVIDENCE = "insufficient-evidence"
 
 
-class FamilyPopulation(StrEnum):
-    OWN_DOMAIN = "own-domain"
-    FEDERATION_WIDE = "federation-wide"
-
-
 class Metric(StrEnum):
     OWN_DOMAIN_UNSEEN_RECALL = "own-domain-unseen-recall"
     FEDERATION_UNSEEN_RECALL = "federation-unseen-recall"
@@ -265,12 +260,70 @@ class Sensitivity(StrEnum):
 
 class Stage(StrEnum):
     SOURCE_AUDIT = "source-audit"
-    JOIN = "join"
+    JOINED = "joined"
     IDENTITY = "identity"
     CLIENTS = "clients"
     FAMILIES = "families"
-    PARTITION = "partition"
-    RUN = "run"
+    PARTITIONS = "partitions"
+    RUNS = "runs"
+
+
+class ConfigFile(StrEnum):
+    PROJECT = "project.yaml"
+    DATA = "data.yaml"
+    EXPERIMENTS = "experiments.yaml"
+
+
+class LamdaColumn(StrEnum):
+    HASH = "hash"
+    LABEL = "label"
+    FAMILY = "family"
+    VT_COUNT = "vt_count"
+    YEAR_MONTH = "year_month"
+
+
+class AndroZooColumn(StrEnum):
+    SHA256 = "sha256"
+    PACKAGE = "pkg_name"
+    MARKETS = "markets"
+    VT_DETECTION = "vt_detection"
+
+
+class Artifact(StrEnum):
+    PROVENANCE = "provenance.json"
+    AUDIT = "audit.json"
+    MANIFEST = "manifest.json"
+    FINGERPRINT = "fingerprint.json"
+    INVENTORY = "inventory.json"
+    SCHEMA = "schema.json"
+    COUNTS = "counts.json"
+    METADATA = "metadata.parquet"
+    HASH_LINKAGE = "hash-linkage.parquet"
+    UNMATCHED = "unmatched.parquet"
+    DATASET = "dataset.parquet"
+    ASSIGNMENTS = "assignments.parquet"
+    SUPPORT = "support.parquet"
+    COMPONENTS = "components.parquet"
+    FEATURE_IDENTITIES = "feature-identities.parquet"
+    PACKAGE_IDENTITIES = "package-identities.parquet"
+    COMPONENT_SUMMARY = "component-summary.parquet"
+    ELIGIBILITY = "eligibility.parquet"
+    FEATURES = "features.npy"
+    CONTROLLED_PAIRS = "controlled-pairs.parquet"
+    NATURAL_PAIRS = "natural-pairs.parquet"
+    RUN_MATRIX = "run-matrix.parquet"
+    FAMILY_ASSIGNMENTS = "family-assignments.parquet"
+    PLAN = "plan.json"
+    STATUS = "status.json"
+    VALIDATION = "validation.json"
+    EXPOSURE = "exposure.parquet"
+    THRESHOLDS = "thresholds.parquet"
+    NOVELTY = "novelty.parquet"
+    SUMMARY = "summary.parquet"
+    CLIENT_METRICS = "clients.parquet"
+    FAMILY_METRICS = "families.parquet"
+    OPERATING_POINTS = "operating-points.parquet"
+    DISCRIMINATION = "discrimination.parquet"
 
 
 class Device(StrEnum):
@@ -367,6 +420,8 @@ class Column(StrEnum):
     NOVELTY = "novelty"
     CLASSIFICATION = "classification"
     RECALL = "recall"
+    AUROC = "auroc"
+    AUPRC = "auprc"
     LOW = "low"
     HIGH = "high"
     RESAMPLES = "resamples"
@@ -382,3 +437,23 @@ class LogEvent(StrEnum):
     RUN_FINISHED = "run-finished"
     ARM_TRAINED = "arm-trained"
     REPORT_WRITTEN = "report-written"
+
+
+class CliCommand(StrEnum):
+    DOCTOR = "doctor"
+    PREPROCESS = "preprocess"
+    PLAN = "plan"
+    SMOKE = "smoke"
+    RUN = "run"
+    STATUS = "status"
+    REPORT = "report"
+
+
+class DoctorCheck(StrEnum):
+    PYTHON_VERSION = "python-version"
+    CONFIG_VALID = "config-valid"
+    RAW_LAMDA = "raw-lamda"
+    RAW_ANDROZOO = "raw-androzoo"
+    COMPUTE_DEVICE = "compute-device"
+    GIT_REVISION = "git-revision"
+    OUTPUTS_WRITABLE = "outputs-writable"

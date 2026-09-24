@@ -5,12 +5,11 @@ import polars as pl
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from ctk_android.config import OperatingConfig
+from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import (
     ClientId,
     Column,
     EvaluationPopulation,
-    FamilyPopulation,
-    Learner,
     SplitRole,
 )
 from ctk_android.experiment.models import scorer_logits
@@ -20,10 +19,13 @@ from ctk_android.types import (
     ArmScores,
     BlendWeight,
     BoolArray,
+    ClientCountRow,
+    DiscriminationRow,
+    FamilyCountRow,
     FamilyName,
     FloatArray,
     IntArray,
-    OperatingPoint,
+    OperatingRow,
     Scorer,
     StudyData,
     TargetPair,
@@ -74,9 +76,7 @@ def build_pools(
     test = attributes.roles == SplitRole.TEST
     for client in ClientId:
         own = attributes.clients == client
-        calibration = (
-            own & (attributes.roles == SplitRole.CALIBRATION) & (attributes.labels == 0)
-        )
+        calibration = own & (attributes.roles == SplitRole.CALIBRATION) & (attributes.labels == 0)
         unseen = _unseen_mask(attributes, target_families(targets, client)) & test
         pools[client] = np.flatnonzero(calibration | (own & test) | unseen)
     return pools
@@ -92,7 +92,8 @@ def score_per_client(
     scorers: dict[ClientId, Scorer], study: StudyData, pools: dict[ClientId, IntArray]
 ) -> ArmScores:
     return {
-        client: scorer_logits(scorers[client], study.features, rows) for client, rows in pools.items()
+        client: scorer_logits(scorers[client], study.features, rows)
+        for client, rows in pools.items()
     }
 
 
@@ -106,14 +107,6 @@ def blend_scores(local: ArmScores, shared: ArmScores, weight: BlendWeight) -> Ar
     }
 
 
-def _arm_columns(arm: ArmKey) -> dict[Column, object]:
-    return {
-        Column.LEARNER: arm.learner,
-        Column.CONDITION: arm.condition,
-        Column.DOSE: -1 if arm.dose is None else arm.dose,
-    }
-
-
 def evaluate_arm(
     arm: ArmKey,
     scores: ArmScores,
@@ -122,11 +115,10 @@ def evaluate_arm(
     targets: tuple[TargetPair, ...],
     operating: OperatingConfig,
 ) -> ArmEvaluation:
-    prefix = _arm_columns(arm)
-    operating_rows: list[dict[Column, object]] = []
-    client_rows: list[dict[Column, object]] = []
-    family_rows: list[dict[Column, object]] = []
-    discrimination_rows: list[dict[Column, object]] = []
+    operating_rows: list[OperatingRow] = []
+    client_rows: list[ClientCountRow] = []
+    family_rows: list[FamilyCountRow] = []
+    discrimination_rows: list[DiscriminationRow] = []
     for client in ClientId:
         rows = pools[client]
         score = scores[client]
@@ -146,63 +138,68 @@ def evaluate_arm(
         }
         if own_test.any() and len(np.unique(labels[own_test])) == 2:
             discrimination_rows.append(
-                {
-                    **prefix,
-                    Column.CLIENT: client,
-                    Column.POPULATION: EvaluationPopulation.DISCRIMINATION,
-                    Column.RECALL: roc_auc_score(labels[own_test], score[own_test]),
-                    Column.VALUE: average_precision_score(labels[own_test], score[own_test]),
-                }
+                DiscriminationRow(
+                    learner=arm.learner,
+                    condition=arm.condition,
+                    dose=arm.dose,
+                    client=client,
+                    auroc=np.asarray(roc_auc_score(labels[own_test], score[own_test])).item(),
+                    auprc=np.asarray(
+                        average_precision_score(labels[own_test], score[own_test])
+                    ).item(),
+                )
             )
         for alpha in operating.alphas:
-            point: OperatingPoint = calibrate(score[benign_cal], alpha, operating.min_expected_exceedances)
+            point = calibrate(score[benign_cal], alpha, operating.min_expected_exceedances)
             operating_rows.append(
-                {
-                    **prefix,
-                    Column.CLIENT: client,
-                    Column.ALPHA: alpha,
-                    Column.THRESHOLD: point.threshold,
-                    Column.CALIBRATION_BENIGN: point.calibration_benign,
-                    Column.OPERATING_STATUS: point.status,
-                }
+                OperatingRow(
+                    learner=arm.learner,
+                    condition=arm.condition,
+                    dose=arm.dose,
+                    client=client,
+                    alpha=alpha,
+                    threshold=point.threshold,
+                    calibration_benign=point.calibration_benign,
+                    operating_status=point.status,
+                )
             )
             flagged = score > point.threshold
-            for population, mask in populations.items():
-                client_rows.append(
-                    {
-                        **prefix,
-                        Column.CLIENT: client,
-                        Column.ALPHA: alpha,
-                        Column.POPULATION: population,
-                        Column.HITS: int((flagged & mask).sum()),
-                        Column.TRIALS: int(mask.sum()),
-                    }
+            client_rows.extend(
+                ClientCountRow(
+                    learner=arm.learner,
+                    condition=arm.condition,
+                    dose=arm.dose,
+                    client=client,
+                    alpha=alpha,
+                    population=population,
+                    hits=(flagged & mask).sum().item(),
+                    trials=mask.sum().item(),
                 )
+                for population, mask in populations.items()
+            )
             for family in families:
                 member = attributes.masks[family][rows]
                 for population, base in (
-                    (FamilyPopulation.OWN_DOMAIN, own_test),
-                    (FamilyPopulation.FEDERATION_WIDE, test),
+                    (EvaluationPopulation.OWN_DOMAIN, own_test),
+                    (EvaluationPopulation.FEDERATION_WIDE, test),
                 ):
                     mask = base & member
                     family_rows.append(
-                        {
-                            **prefix,
-                            Column.CLIENT: client,
-                            Column.FAMILY: family,
-                            Column.ALPHA: alpha,
-                            Column.POPULATION: population,
-                            Column.HITS: int((flagged & mask).sum()),
-                            Column.TRIALS: int(mask.sum()),
-                        }
+                        FamilyCountRow(
+                            learner=arm.learner,
+                            condition=arm.condition,
+                            dose=arm.dose,
+                            client=client,
+                            alpha=alpha,
+                            population=population,
+                            family=family,
+                            hits=(flagged & mask).sum().item(),
+                            trials=mask.sum().item(),
+                        )
                     )
     return ArmEvaluation(
-        operating=pl.DataFrame(operating_rows),
-        clients=pl.DataFrame(client_rows),
-        families=pl.DataFrame(family_rows) if family_rows else pl.DataFrame(),
-        discrimination=pl.DataFrame(discrimination_rows) if discrimination_rows else pl.DataFrame(),
+        operating=records_to_frame(operating_rows),
+        clients=records_to_frame(client_rows),
+        families=records_to_frame(family_rows),
+        discrimination=records_to_frame(discrimination_rows),
     )
-
-
-def learner_needs_local(learner: Learner) -> bool:
-    return learner in (Learner.LOCAL, Learner.BLEND)

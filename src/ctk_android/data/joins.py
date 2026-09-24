@@ -16,19 +16,14 @@ def join_sources(lamda: pl.DataFrame, androzoo: pl.DataFrame) -> JoinResult:
     )
     unmatched = linked.filter(pl.col(Column.PACKAGE).is_null()).select(Column.SHA256)
     joined = linked.filter(pl.col(Column.PACKAGE).is_not_null())
-    vt_agrees = joined.select(
-        (pl.col(Column.VT_COUNT) == pl.col(LINKED_VT)).all()
-    ).item()
+    vt_agrees = joined.select((pl.col(Column.VT_COUNT) == pl.col(LINKED_VT)).all()).item()
     joined = joined.drop(LINKED_VT).with_columns(
         pl.col(Column.MARKETS)
         .str.split(MARKET_SEPARATOR)
         .list.eval(pl.element().sort())
         .list.join(MARKET_SEPARATOR)
         .alias(Column.MARKETS),
-        pl.col(Column.MARKETS)
-        .str.split(MARKET_SEPARATOR)
-        .list.len()
-        .alias(Column.MARKET_COUNT),
+        pl.col(Column.MARKETS).str.split(MARKET_SEPARATOR).list.len().alias(Column.MARKET_COUNT),
     )
     return JoinResult(
         joined=joined,
@@ -36,7 +31,7 @@ def join_sources(lamda: pl.DataFrame, androzoo: pl.DataFrame) -> JoinResult:
         validations=(
             ValidationRecord(
                 check=ValidationCheck.LINKAGE_COMPLETE,
-                passed=unmatched.height == 0 and unique_links and bool(vt_agrees),
+                passed=unmatched.height == 0 and unique_links and vt_agrees,
                 detail=(
                     f"matched={joined.height} unmatched={unmatched.height} "
                     f"unique_links={unique_links} vt_agrees={vt_agrees}"

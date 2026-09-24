@@ -12,12 +12,14 @@ from ctk_android.types import (
     Float32Array,
     FloatArray,
     IntArray,
-    ProximalStrength,
+    ProximalAnchor,
     Scorer,
     Seed,
+    StateDict,
+    Stepper,
 )
 
-StateDict = dict[str, torch.Tensor]
+SCORING_CHUNK_ROWS = 1 << 13
 
 
 def resolve_device(requested: Device) -> Device:
@@ -39,7 +41,13 @@ def build_network(family: ModelFamily, features: FeatureCount, config: TrainingC
 
 
 def _tensor(features: ByteMatrix, rows: IntArray, device: Device) -> torch.Tensor:
-    return torch.from_numpy(np.asarray(features[rows], dtype=np.float32)).to(device)
+    return torch.as_tensor(np.asarray(features[rows], dtype=np.float32)).to(device)
+
+
+def _optimizer(network: nn.Module, config: TrainingConfig) -> Stepper:
+    return torch.optim.Adam(
+        network.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
+    )
 
 
 def fit_epochs(
@@ -51,19 +59,13 @@ def fit_epochs(
     config: TrainingConfig,
     seed: Seed,
     device: Device,
-    anchor: StateDict | None = None,
-    proximal: ProximalStrength = 0.0,
+    proximal: ProximalAnchor | None,
 ) -> None:
     generator = torch.Generator().manual_seed(seed)
     inputs = _tensor(features, rows, device)
-    targets = torch.from_numpy(labels[rows].astype(np.float32)).to(device)
+    targets = torch.as_tensor(labels[rows].astype(np.float32)).to(device)
     network.to(device).train()
-    optimizer = torch.optim.Adam(
-        network.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
-    )
-    reference = (
-        {name: value.detach().clone() for name, value in anchor.items()} if anchor else None
-    )
+    optimizer = _optimizer(network, config)
     loss_fn = nn.BCEWithLogitsLoss()
     for _ in range(epochs):
         order = torch.randperm(rows.size, generator=generator).to(device)
@@ -71,23 +73,23 @@ def fit_epochs(
             batch = order[start : start + config.batch_size]
             optimizer.zero_grad()
             loss = loss_fn(network(inputs[batch]).squeeze(-1), targets[batch])
-            if reference is not None and proximal > 0.0:
+            if proximal is not None:
                 penalty = sum(
-                    ((param - reference[name]) ** 2).sum()
+                    ((param - proximal.state[name]) ** 2).sum()
                     for name, param in network.named_parameters()
                 )
-                loss = loss + 0.5 * proximal * penalty
+                loss = loss + 0.5 * proximal.strength * penalty
             loss.backward()
             optimizer.step()
     network.eval()
 
 
 def average_states(states: list[StateDict], weights: FloatArray) -> StateDict:
-    normalised = torch.from_numpy((weights / weights.sum()).astype(np.float32))
+    normalised = torch.as_tensor((weights / weights.sum()).astype(np.float32))
     return {
-        name: sum(
-            state[name].to(Device.CPU) * normalised[index] for index, state in enumerate(states)
-        )
+        name: torch.stack(
+            [state[name].to(Device.CPU) * normalised[index] for index, state in enumerate(states)]
+        ).sum(dim=0)
         for name in states[0]
     }
 
@@ -112,7 +114,7 @@ def scorer_logits(scorer: Scorer, features: ByteMatrix, rows: IntArray) -> Float
     scorer.network.to(scorer.device).eval()
     outputs: list[Float32Array] = []
     with torch.no_grad():
-        for start in range(0, rows.size, 8192):
-            chunk = _tensor(features, rows[start : start + 8192], scorer.device)
+        for start in range(0, rows.size, SCORING_CHUNK_ROWS):
+            chunk = _tensor(features, rows[start : start + SCORING_CHUNK_ROWS], scorer.device)
             outputs.append(scorer.network(chunk).squeeze(-1).cpu().numpy())
     return np.concatenate(outputs).astype(np.float64) if outputs else np.empty(0)

@@ -16,8 +16,9 @@ from ctk_android.experiment.models import (
 from ctk_android.types import (
     ByteMatrix,
     CtkError,
+    Epochs,
     IntArray,
-    ProximalStrength,
+    ProximalAnchor,
     Scorer,
     Seed,
     TrainingRows,
@@ -35,7 +36,7 @@ class TrainingContext:
 
 
 def derive_seed(base: Seed, *parts: Seed) -> Seed:
-    return int(np.random.SeedSequence([base, *parts]).generate_state(1)[0])
+    return np.random.SeedSequence([base, *parts]).generate_state(1)[0].item()
 
 
 def _require_both_classes(context: TrainingContext, rows: IntArray) -> None:
@@ -48,19 +49,32 @@ def _require_both_classes(context: TrainingContext, rows: IntArray) -> None:
 
 
 def _initial_network(context: TrainingContext, stream: Seed) -> torch.nn.Module:
-    torch.manual_seed(derive_seed(context.seed, stream))
+    torch.default_generator.manual_seed(derive_seed(context.seed, stream))
     return build_network(context.family, context.features.shape[1], context.config)
 
 
-def train_scorer(context: TrainingContext, rows: IntArray, epochs: int, stream: Seed) -> Scorer:
+def train_scorer(context: TrainingContext, rows: IntArray, epochs: Epochs, stream: Seed) -> Scorer:
     _require_both_classes(context, rows)
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
-        trees = fit_trees(context.features, context.labels, rows, context.config, derive_seed(context.seed, stream))
+        trees = fit_trees(
+            context.features,
+            context.labels,
+            rows,
+            context.config,
+            derive_seed(context.seed, stream),
+        )
         return Scorer(family=context.family, network=None, trees=trees, device=Device.CPU)
     network = _initial_network(context, stream)
     fit_epochs(
-        network, context.features, context.labels, rows, epochs, context.config,
-        derive_seed(context.seed, stream, 1), context.device,
+        network,
+        context.features,
+        context.labels,
+        rows,
+        epochs,
+        context.config,
+        derive_seed(context.seed, stream, 1),
+        context.device,
+        None,
     )
     return Scorer(family=context.family, network=network, trees=None, device=context.device)
 
@@ -76,23 +90,28 @@ def train_federated(
         raise CtkError(
             FailureReason.NOT_APPLICABLE_MODEL_FAMILY, "federated averaging needs parametric models"
         )
-    proximal: ProximalStrength = (
-        context.config.fedprox_mu if learner is Learner.FEDPROX else 0.0
-    )
     for client in ClientId:
         _require_both_classes(context, training[client])
     global_net = _initial_network(context, stream)
     weights = np.array([training[client].size for client in ClientId], dtype=np.float64)
     for round_index in range(context.config.federated_rounds):
-        anchor: StateDict = {k: v.detach().clone() for k, v in global_net.state_dict().items()}
+        anchor = ProximalAnchor(
+            state={k: v.detach().clone() for k, v in global_net.state_dict().items()},
+            strength=context.config.fedprox_mu,
+        )
         states: list[StateDict] = []
         for client_index, client in enumerate(ClientId):
             local = copy.deepcopy(global_net)
             fit_epochs(
-                local, context.features, context.labels, training[client],
-                context.config.federated_local_epochs, context.config,
-                derive_seed(context.seed, stream, round_index, client_index), context.device,
-                anchor=anchor if proximal > 0.0 else None, proximal=proximal,
+                local,
+                context.features,
+                context.labels,
+                training[client],
+                context.config.federated_local_epochs,
+                context.config,
+                derive_seed(context.seed, stream, round_index, client_index),
+                context.device,
+                anchor if learner is Learner.FEDPROX else None,
             )
             states.append({k: v.detach().cpu() for k, v in local.state_dict().items()})
         global_net.load_state_dict(average_states(states, weights))
@@ -104,7 +123,14 @@ def finetune(context: TrainingContext, scorer: Scorer, rows: IntArray, stream: S
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, "fine-tuning needs a network")
     network = copy.deepcopy(scorer.network)
     fit_epochs(
-        network, context.features, context.labels, rows, context.config.finetune_epochs,
-        context.config, derive_seed(context.seed, stream), context.device,
+        network,
+        context.features,
+        context.labels,
+        rows,
+        context.config.finetune_epochs,
+        context.config,
+        derive_seed(context.seed, stream),
+        context.device,
+        None,
     )
     return Scorer(family=context.family, network=network, trees=None, device=context.device)

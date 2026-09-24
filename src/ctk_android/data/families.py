@@ -5,14 +5,11 @@ from ctk_android.config import DataConfig, EligibilityRule
 from ctk_android.enums import (
     ClientId,
     Column,
-    EligibilityProfile,
     EligibilityReason,
     FamilySetName,
     SplitRole,
 )
-from ctk_android.types import FamilyName, Seed
-
-NAMED_FAMILY_COLUMN = Column.FAMILY
+from ctk_android.types import FamilyName, Fraction, Rank, Seed, SupportCount
 
 
 def classify_labels(assignments: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
@@ -51,11 +48,14 @@ def label_eligibility(labelled: pl.DataFrame) -> pl.DataFrame:
 
 
 def select_family_sets(
-    support: pl.DataFrame, config: DataConfig, set_size: int
+    support: pl.DataFrame, config: DataConfig, set_size: SupportCount
 ) -> dict[FamilySetName, tuple[FamilyName, ...]]:
     totals = (
         support.group_by(Column.FAMILY)
-        .agg(pl.col(Column.ROWS).sum().alias(Column.ROWS), pl.col(Column.CLIENT).n_unique().alias(Column.MARKETS))
+        .agg(
+            pl.col(Column.ROWS).sum().alias(Column.ROWS),
+            pl.col(Column.CLIENT).n_unique().alias(Column.MARKETS),
+        )
         .filter(
             (pl.col(Column.ROWS) >= config.family_selection.candidate_min_total_support)
             & (pl.col(Column.MARKETS) >= 2)
@@ -69,7 +69,9 @@ def select_family_sets(
     }
 
 
-def role_counts(labelled: pl.DataFrame, roles: pl.Series, families: tuple[FamilyName, ...]) -> pl.DataFrame:
+def role_counts(
+    labelled: pl.DataFrame, roles: pl.Series, families: tuple[FamilyName, ...]
+) -> pl.DataFrame:
     return (
         labelled.with_columns(roles.alias(Column.ROLE))
         .filter(
@@ -93,7 +95,9 @@ def controlled_pairs(
     rule: EligibilityRule,
 ) -> pl.DataFrame:
     fit = _count(counts, SplitRole.FIT).rename({Column.ROWS: Column.TARGET_FIT_ROWS})
-    fed_fit = fit.group_by(Column.FAMILY).agg(pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS))
+    fed_fit = fit.group_by(Column.FAMILY).agg(
+        pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS)
+    )
     fed_test = (
         _count(counts, SplitRole.TEST)
         .group_by(Column.FAMILY)
@@ -108,14 +112,19 @@ def controlled_pairs(
         .with_columns(
             pl.col(Column.FEDERATION_TEST_ROWS).fill_null(0),
             pl.col(Column.TARGET_TEST_ROWS).fill_null(0),
-            (pl.col(Column.TOTAL_FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS)).alias(Column.PEER_FIT_ROWS),
+            (pl.col(Column.TOTAL_FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS)).alias(
+                Column.PEER_FIT_ROWS
+            ),
         )
         .with_columns(
             (
                 (pl.col(Column.TARGET_FIT_ROWS) >= rule.target_min_fit)
                 & (pl.col(Column.PEER_FIT_ROWS) >= rule.peer_min_fit)
                 & (pl.col(Column.FEDERATION_TEST_ROWS) >= rule.federation_min_test)
-                & (pl.col(Column.FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS) >= rule.target_min_remaining_fit)
+                & (
+                    pl.col(Column.FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS)
+                    >= rule.target_min_remaining_fit
+                )
             ).alias(Column.ELIGIBLE)
         )
         .sort(Column.FAMILY, Column.CLIENT)
@@ -125,12 +134,14 @@ def controlled_pairs(
 def natural_pairs(
     counts: pl.DataFrame,
     client_fit_rows: pl.DataFrame,
-    max_target_share: float,
-    peer_min_fit: int,
-    own_domain_min_test: int,
+    max_target_share: Fraction,
+    peer_min_fit: SupportCount,
+    own_domain_min_test: SupportCount,
 ) -> pl.DataFrame:
     fit = _count(counts, SplitRole.FIT).rename({Column.ROWS: Column.TARGET_FIT_ROWS})
-    total = fit.group_by(Column.FAMILY).agg(pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS))
+    total = fit.group_by(Column.FAMILY).agg(
+        pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS)
+    )
     own_test = _count(counts, SplitRole.TEST).rename({Column.ROWS: Column.TARGET_TEST_ROWS})
     clients = client_fit_rows.select(Column.CLIENT)
     families = total.select(Column.FAMILY)
@@ -144,8 +155,12 @@ def natural_pairs(
             pl.col(Column.TARGET_TEST_ROWS).fill_null(0),
         )
         .with_columns(
-            (pl.col(Column.TARGET_FIT_ROWS) / pl.col(Column.TOTAL_FIT_ROWS)).alias(Column.TARGET_SHARE),
-            (pl.col(Column.TOTAL_FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS)).alias(Column.PEER_FIT_ROWS),
+            (pl.col(Column.TARGET_FIT_ROWS) / pl.col(Column.TOTAL_FIT_ROWS)).alias(
+                Column.TARGET_SHARE
+            ),
+            (pl.col(Column.TOTAL_FIT_ROWS) - pl.col(Column.TARGET_FIT_ROWS)).alias(
+                Column.PEER_FIT_ROWS
+            ),
         )
         .with_columns(
             (
@@ -168,13 +183,13 @@ def assign_targets(
     rng = np.random.default_rng(np.random.SeedSequence([seed, len(families)]))
     chosen: list[tuple[ClientId, FamilyName]] = []
     for family in families:
-        options = pairs.filter(
-            (pl.col(Column.FAMILY) == family) & pl.col(Column.ELIGIBLE)
-        ).sort(Column.CLIENT)
+        options = pairs.filter((pl.col(Column.FAMILY) == family) & pl.col(Column.ELIGIBLE)).sort(
+            Column.CLIENT
+        )
         candidates = list(options.iter_rows(named=True))
-        order = rng.permutation(len(candidates))
+        order: list[Rank] = rng.permutation(len(candidates)).tolist()
         for index in order:
-            row = candidates[int(index)]
+            row = candidates[index]
             client = ClientId(row[Column.CLIENT])
             after = remaining[client] - row[Column.TARGET_FIT_ROWS]
             if after >= rule.target_min_remaining_fit:
@@ -182,10 +197,6 @@ def assign_targets(
                 chosen.append((client, family))
                 break
     return chosen
-
-
-def profile_rule(config: DataConfig, profile: EligibilityProfile) -> EligibilityRule:
-    return config.eligibility[profile]
 
 
 def permute_family_labels(labelled: pl.DataFrame, seed: Seed, offset: Seed) -> pl.DataFrame:

@@ -12,22 +12,23 @@ from ctk_android.analysis.novelty import family_descriptors
 from ctk_android.config import Config, ExperimentSpec, TrainingConfig
 from ctk_android.data import partitions
 from ctk_android.data.cache import (
-    combine_fingerprints,
-    fingerprint_document,
+    fingerprint_model,
     fingerprint_source_tree,
     is_reusable,
-    write_json,
+    read_record,
     write_provenance,
+    write_record,
     write_table,
 )
 from ctk_android.enums import (
+    Artifact,
     ClientId,
     Column,
+    Device,
     EvaluationPopulation,
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
-    ExposureMode,
     FailureReason,
     Learner,
     LogEvent,
@@ -45,27 +46,36 @@ from ctk_android.types import (
     ArmKey,
     ArmScores,
     CtkError,
-    Directory,
     DoseRequest,
-    Fingerprint,
+    EnvironmentRecord,
+    File,
     IntArray,
     PartitionKey,
     Provenance,
+    RunInputs,
     RunKey,
+    RunManifest,
     RunReport,
+    RunStatusDocument,
     Scorer,
     Seed,
     StudyData,
     TargetPair,
     TrainingRows,
+    ValidationDocument,
     ValidationRecord,
 )
 from ctk_android.workflows.plan import planned_targets
 
 log = structlog.get_logger()
-STATUS_FILE = "status.json"
 LOCAL_ARM = ArmKey(learner=Learner.LOCAL, condition=ExposureCondition.PEER_PRESENT, dose=None)
-GLOBAL_LEARNERS = (Learner.CENTRAL, Learner.FEDAVG, Learner.FEDPROX, Learner.FEDAVG_FINETUNE, Learner.BLEND)
+GLOBAL_LEARNERS = (
+    Learner.CENTRAL,
+    Learner.FEDAVG,
+    Learner.FEDPROX,
+    Learner.FEDAVG_FINETUNE,
+    Learner.BLEND,
+)
 STREAM_BY_LEARNER = {learner: index + 1 for index, learner in enumerate(Learner)}
 
 
@@ -81,7 +91,9 @@ def training_config(config: Config, mode: ExecutionMode) -> TrainingConfig:
     return config.experiments.training
 
 
-def settings_for(spec: ExperimentSpec, config: Config) -> list[tuple[ExposureCondition, DoseRequest]]:
+def settings_for(
+    spec: ExperimentSpec, config: Config
+) -> list[tuple[ExposureCondition, DoseRequest]]:
     if spec.dose_sweep:
         doses: list[DoseRequest] = list(config.experiments.dose_levels)
         if config.experiments.dose_include_all_available:
@@ -90,21 +102,25 @@ def settings_for(spec: ExperimentSpec, config: Config) -> list[tuple[ExposureCon
     return [(condition, None) for condition in spec.conditions]
 
 
-def run_provenance(paths: Paths, config: Config, key: RunKey, targets: tuple[TargetPair, ...]) -> Provenance:
+def run_provenance(
+    paths: Paths, config: Config, key: RunKey, targets: tuple[TargetPair, ...]
+) -> Provenance:
     spec = config.experiments.experiments[key.experiment]
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
-    document = {
-        "key": key.model_dump(mode="json"),
-        "partition": (paths.partition(partition_key) / "provenance.json").read_text(encoding="utf-8"),
-        "config": config.fingerprint(),
-        "targets": [pair.model_dump(mode="json") for pair in targets],
-    }
+    inputs = RunInputs(
+        key=key,
+        partition=read_record(
+            paths.provenance_file(paths.partition_dir(partition_key)), Provenance
+        ),
+        config=config.fingerprint(),
+        targets=targets,
+    )
     return Provenance(
-        stage=Stage.RUN,
-        inputs=fingerprint_document(document),
-        code=fingerprint_source_tree(paths.root / "src" / "ctk_android"),
+        stage=Stage.RUNS,
+        inputs=fingerprint_model(inputs),
+        code=fingerprint_source_tree(paths.source_root),
     )
 
 
@@ -120,17 +136,28 @@ def _train_learner(
     config = context.config
     stream = STREAM_BY_LEARNER[learner]
     if learner is Learner.CENTRAL:
-        scorer = training.train_scorer(context, training.pooled_rows(rows), config.central_epochs, stream)
-        return ArmResult(evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer))
+        scorer = training.train_scorer(
+            context, training.pooled_rows(rows), config.central_epochs, stream
+        )
+        return ArmResult(
+            evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer)
+        )
     if learner in (Learner.FEDAVG, Learner.FEDPROX):
         scorer = training.train_federated(context, rows, learner, stream)
-        return ArmResult(evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer))
-    if federated is None or federated.scorers is None:
-        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, f"{learner} needs a federated model")
+        return ArmResult(
+            evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer)
+        )
+    if federated is None:
+        raise CtkError(
+            FailureReason.NOT_APPLICABLE_MODEL_FAMILY, f"{learner} needs a federated model"
+        )
     if learner is Learner.FEDAVG_FINETUNE:
         tuned = {
             client: training.finetune(
-                context, federated.scorers[client], rows[client], stream * 10 + index
+                context,
+                federated.scorers[client],
+                rows[client],
+                training.derive_seed(stream, index),
             )
             for index, client in enumerate(ClientId)
         }
@@ -150,7 +177,10 @@ def _train_local(
 ) -> ArmResult:
     scorers = {
         client: training.train_scorer(
-            context, rows[client], context.config.local_epochs, STREAM_BY_LEARNER[Learner.LOCAL] * 10 + index
+            context,
+            rows[client],
+            context.config.local_epochs,
+            training.derive_seed(STREAM_BY_LEARNER[Learner.LOCAL], index),
         )
         for index, client in enumerate(ClientId)
     }
@@ -169,11 +199,11 @@ def _pool_validations(
         labels = attributes.labels[rows]
         own = attributes.clients[rows] == client
         calibration = roles == SplitRole.CALIBRATION
-        calibration_ok &= bool((own[calibration] & (labels[calibration] == 0)).all())
+        calibration_ok &= (own[calibration] & (labels[calibration] == 0)).all().item()
         unseen = np.zeros(rows.size, dtype=bool)
         for family in evaluation.target_families(targets, client):
             unseen |= attributes.masks[family][rows]
-        hidden_test_only &= bool((roles[unseen] == SplitRole.TEST).all())
+        hidden_test_only &= (roles[unseen] == SplitRole.TEST).all().item()
     return [
         ValidationRecord(
             check=ValidationCheck.THRESHOLD_FROM_BENIGN_CALIBRATION,
@@ -188,63 +218,62 @@ def _pool_validations(
     ]
 
 
-def _operating_validation(
-    summary: pl.DataFrame, config: Config
-) -> ValidationRecord:
+def _operating_validation(summary: pl.DataFrame, config: Config) -> ValidationRecord:
     fpr = summary.filter(
         (pl.col(Column.METRIC) == Metric.REALISED_FPR)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
         & (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.VALID)
     )
+    values = fpr[Column.VALUE].to_numpy()
     deviation = (
-        (fpr[Column.VALUE] - config.experiments.operating.primary_alpha).abs().max()
-        if fpr.height
-        else None
+        np.abs(values - config.experiments.operating.primary_alpha).max() if values.size else None
     )
-    tolerance = config.statistics.gates.operating_point_tolerance
+    tolerance = config.experiments.operating.realised_fpr_tolerance
     return ValidationRecord(
         check=ValidationCheck.OPERATING_POINT_REALISED,
-        passed=deviation is not None and deviation <= tolerance,
+        passed=deviation is not None and (deviation <= tolerance).item(),
         detail=f"max |realised FPR - alpha| = {deviation}",
     )
 
 
-def _save_models(directory: Directory, arm: ArmKey, scorers: dict[ClientId, Scorer]) -> None:
+def _save_models(file: File, scorers: dict[ClientId, Scorer]) -> None:
     states = {
         client: scorer.network.state_dict()
         for client, scorer in scorers.items()
         if scorer.network is not None
     }
     if states:
-        directory.mkdir(parents=True, exist_ok=True)
-        torch.save(states, directory / f"{arm.label()}.pt")
+        file.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(states, file)
 
 
-def _environment(device: str) -> dict[str, str]:
-    return {
-        "python": sys.version.split()[0],
-        "platform": platform.platform(),
-        "torch": torch.__version__,
-        "numpy": version("numpy"),
-        "polars": version("polars"),
-        "scikit-learn": version("scikit-learn"),
-        "device": device,
-    }
+def _environment(device: Device) -> EnvironmentRecord:
+    return EnvironmentRecord(
+        python=sys.version.split()[0],
+        platform=platform.platform(),
+        torch=torch.__version__,
+        numpy=version("numpy"),
+        polars=version("polars"),
+        scikit_learn=version("scikit-learn"),
+        device=device,
+    )
 
 
 def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> RunReport:
-    directory = paths.run(key)
+    directory = paths.run_dir(key)
     planned_status, targets = planned_targets(paths, key)
     provenance = run_provenance(paths, config, key, targets)
-    if not overwrite and is_reusable(directory, provenance):
+    if not overwrite and is_reusable(paths.provenance_file(directory), provenance):
         log.info(LogEvent.RUN_REUSED, experiment=key.experiment, seed=key.seed)
         return RunReport(key=key, status=RunStatus.COMPLETED, reused=True, directory=directory)
     if planned_status is RunStatus.INFEASIBLE:
-        write_json(
-            directory / STATUS_FILE,
-            {"status": RunStatus.INFEASIBLE, "reason": FailureReason.NO_ELIGIBLE_TARGETS},
+        write_record(
+            paths.run_file(key, Artifact.STATUS),
+            RunStatusDocument(
+                status=RunStatus.INFEASIBLE, reason=FailureReason.NO_ELIGIBLE_TARGETS
+            ),
         )
-        write_provenance(directory, provenance)
+        write_provenance(paths.provenance_file(directory), provenance)
         return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
     log.info(LogEvent.RUN_STARTED, experiment=key.experiment, seed=key.seed, salt=key.salt)
     spec = config.experiments.experiments[key.experiment]
@@ -253,7 +282,11 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
     study = partitions.load_study(
-        paths, partition_key, config.data, spec.family_labels, config.experiments.permutation_seed_offset
+        paths,
+        partition_key,
+        config.data,
+        spec.family_labels,
+        config.experiments.permutation_seed_offset,
     )
     families = tuple(dict.fromkeys(pair.family for pair in targets))
     masks = exposure.family_masks(study, families)
@@ -266,7 +299,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         config=train_config,
         family=spec.model_family,
         device=device,
-        seed=key.seed * 1000 + key.salt,
+        seed=training.derive_seed(key.seed, key.salt),
     )
     orders = exposure.training_orders(study, key.seed, key.salt)
     priorities = exposure.row_priorities(study, key.seed, key.salt)
@@ -279,7 +312,11 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     local: ArmResult | None = None
     if need_local:
         local_rows = exposure.select_training(
-            orders, masks, exposure.exposure_spec(LOCAL_ARM, spec.exposure_mode, targets), {}, budget
+            orders,
+            masks,
+            exposure.exposure_spec(LOCAL_ARM, spec.exposure_mode, targets),
+            {},
+            budget,
         )
         local = _train_local(context, local_rows, study, pools)
         if Learner.LOCAL in spec.learners:
@@ -317,12 +354,16 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     operating = pl.concat([item.operating for item in evaluations])
     clients = pl.concat([item.clients for item in evaluations])
     family_table = pl.concat([item.families for item in evaluations if item.families.height])
-    discrimination = pl.concat([item.discrimination for item in evaluations if item.discrimination.height])
+    discrimination = pl.concat(
+        [item.discrimination for item in evaluations if item.discrimination.height]
+    )
     rule = config.data.eligibility[spec.eligibility]
-    summary = metrics.summarize(clients, family_table, discrimination, operating, rule.own_domain_min_test)
+    summary = metrics.summarize(
+        clients, family_table, discrimination, operating, rule.own_domain_min_test
+    )
 
     exposure_table = pl.concat(
-        [exposure.exposure_counts(study, trainings[arm], masks, arm) for arm in trainings]
+        [exposure.exposure_counts(trainings[arm], masks, arm) for arm in trainings]
     )
     validations = [
         *exposure.validate_exposure(
@@ -332,18 +373,20 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     ]
     validations.append(_operating_validation(summary, config))
     structural = [v for v in validations if v.check is not ValidationCheck.OPERATING_POINT_REALISED]
-    status = RunStatus.COMPLETED if all(v.passed for v in structural) else RunStatus.FAILED_VALIDATION
+    status = (
+        RunStatus.COMPLETED if all(v.passed for v in structural) else RunStatus.FAILED_VALIDATION
+    )
 
     write_table(
         family_descriptors(study, targets, masks, config.experiments.novelty),
-        directory / "novelty.parquet",
+        paths.run_file(key, Artifact.NOVELTY),
     )
-    write_table(exposure_table, directory / "exposure.parquet")
-    write_table(operating, directory / "thresholds.parquet")
-    write_table(summary, directory / "metrics" / "summary.parquet")
-    write_table(clients, directory / "metrics" / "clients.parquet")
-    write_table(family_table, directory / "metrics" / "families.parquet")
-    write_table(discrimination, directory / "metrics" / "discrimination.parquet")
+    write_table(exposure_table, paths.run_file(key, Artifact.EXPOSURE))
+    write_table(operating, paths.run_file(key, Artifact.THRESHOLDS))
+    write_table(summary, paths.run_metric_file(key, Artifact.SUMMARY))
+    write_table(clients, paths.run_metric_file(key, Artifact.CLIENT_METRICS))
+    write_table(family_table, paths.run_metric_file(key, Artifact.FAMILY_METRICS))
+    write_table(discrimination, paths.run_metric_file(key, Artifact.DISCRIMINATION))
     benign = clients.filter(pl.col(Column.POPULATION) == EvaluationPopulation.BENIGN)
     write_table(
         operating.join(
@@ -352,7 +395,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
             ),
             on=[*metrics.ARM_COLUMNS, Column.CLIENT, Column.ALPHA],
         ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
-        directory / "metrics" / "operating-points.parquet",
+        paths.run_metric_file(key, Artifact.OPERATING_POINTS),
     )
     for arm, result in results.items():
         write_table(
@@ -368,30 +411,31 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
                     for client in ClientId
                 ]
             ),
-            directory / "scores" / f"{arm.label()}.parquet",
+            paths.run_scores_file(key, arm),
         )
-        _save_models(directory / "models", arm, result.scorers)
-    write_json(
-        directory / "validation.json",
-        {"validations": [record.model_dump(mode="json") for record in validations]},
+        _save_models(paths.run_models_file(key, arm), result.scorers)
+    write_record(
+        paths.run_file(key, Artifact.VALIDATION), ValidationDocument(validations=tuple(validations))
     )
-    write_json(directory / STATUS_FILE, {"status": status, "reason": None})
-    write_json(
-        directory / "manifest.json",
-        {
-            "key": key.model_dump(mode="json"),
-            "partition": partition_key.model_dump(mode="json"),
-            "targets": [pair.model_dump(mode="json") for pair in targets],
-            "arms": [arm.label() for arm in results],
-            "budget": budget,
-            "training": train_config.model_dump(mode="json"),
-            "config_fingerprint": config.fingerprint(),
-            "provenance": provenance.model_dump(mode="json"),
-            "environment": _environment(str(device)),
-            "status": status,
-        },
+    write_record(
+        paths.run_file(key, Artifact.STATUS), RunStatusDocument(status=status, reason=None)
     )
-    write_provenance(directory, provenance)
+    write_record(
+        paths.run_file(key, Artifact.MANIFEST),
+        RunManifest(
+            key=key,
+            partition=partition_key,
+            targets=targets,
+            arms=tuple(results),
+            budget=budget,
+            training=fingerprint_model(train_config),
+            config=config.fingerprint(),
+            provenance=provenance,
+            environment=_environment(device),
+            status=status,
+        ),
+    )
+    write_provenance(paths.provenance_file(directory), provenance)
     log.info(LogEvent.RUN_FINISHED, experiment=key.experiment, seed=key.seed, status=status)
     return RunReport(key=key, status=status, reused=False, directory=directory)
 
@@ -414,12 +458,17 @@ def run_experiment(
             try:
                 reports.append(execute_run(paths, config, key, overwrite))
             except CtkError as error:
-                directory = paths.run(key)
-                write_json(directory / STATUS_FILE, {"status": RunStatus.INFEASIBLE, "reason": error.reason})
-                log.error(LogEvent.STAGE_FAILED, experiment=experiment, seed=seed, reason=error.reason)
+                directory = paths.run_dir(key)
+                write_record(
+                    paths.run_file(key, Artifact.STATUS),
+                    RunStatusDocument(status=RunStatus.INFEASIBLE, reason=error.reason),
+                )
+                log.error(
+                    LogEvent.STAGE_FAILED, experiment=experiment, seed=seed, reason=error.reason
+                )
                 reports.append(
-                    RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
+                    RunReport(
+                        key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory
+                    )
                 )
     return reports
-
-

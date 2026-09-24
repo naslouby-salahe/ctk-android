@@ -11,7 +11,11 @@ def assign_clients(joined: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
     early_play = pl.col(Column.YEAR_MONTH) < config.play_era_boundary
     client = (
         pl.when(pl.col(Column.MARKETS) == Market.GOOGLE_PLAY)
-        .then(pl.when(early_play).then(pl.lit(ClientId.PLAY_EARLY)).otherwise(pl.lit(ClientId.PLAY_LATE)))
+        .then(
+            pl.when(early_play)
+            .then(pl.lit(ClientId.PLAY_EARLY))
+            .otherwise(pl.lit(ClientId.PLAY_LATE))
+        )
         .when(pl.col(Column.MARKETS) == Market.ANZHI)
         .then(pl.lit(ClientId.ANZHI))
         .when(pl.col(Column.MARKETS) == Market.APPCHINA)

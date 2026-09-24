@@ -33,14 +33,13 @@ The authoritative list is in [`docs/Roadmap.md`](docs/Roadmap.md). In brief:
 
 Public datasets only, primarily **LAMDA** and **AndroZoo** metadata. Raw datasets are not redistributed and are never committed.
 
-Raw data are expected under `data/raw`, which is Git-ignored. Create your own symlink (or directory) to wherever you keep the datasets:
+Raw data are expected under `data/lamda/raw` and `data/androzoo/raw`, which are Git-ignored. Create your own symlinks (or directories) to wherever you keep the datasets:
 
 ```bash
-mkdir -p data
-ln -s /path/to/your/datasets data/raw
+mkdir -p data/lamda data/androzoo
+ln -s /path/to/LAMDA data/lamda/raw
+ln -s /path/to/AndroZoo data/androzoo/raw
 ```
-
-Optional local example: `ln -s ~/Projects/datp-shared-data/raw data/raw`.
 
 ## Research protocol
 

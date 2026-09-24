@@ -3,7 +3,6 @@ import polars as pl
 from ctk_android.enums import (
     Column,
     EvaluationPopulation,
-    FamilyPopulation,
     Metric,
     OperatingPointStatus,
 )
@@ -13,9 +12,13 @@ ARM_COLUMNS = [Column.LEARNER, Column.CONDITION, Column.DOSE]
 GROUP_COLUMNS = [*ARM_COLUMNS, Column.ALPHA]
 
 
-def _rates(table: pl.DataFrame, population: EvaluationPopulation, minimum: SupportCount) -> pl.DataFrame:
+def _rates(
+    table: pl.DataFrame, population: EvaluationPopulation, minimum: SupportCount
+) -> pl.DataFrame:
     return (
-        table.filter((pl.col(Column.POPULATION) == population) & (pl.col(Column.TRIALS) >= max(minimum, 1)))
+        table.filter(
+            (pl.col(Column.POPULATION) == population) & (pl.col(Column.TRIALS) >= max(minimum, 1))
+        )
         .with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
         .select(*GROUP_COLUMNS, Column.CLIENT, Column.RECALL)
     )
@@ -62,13 +65,10 @@ def summarize(
     parts.append(_long(fpr, Metric.WORST_CLIENT_FPR, recall.max()))
     parts.append(_long(fpr, Metric.FPR_DISPERSION, _spread(recall)))
     if families.height:
-        fed_families = (
-            families.filter(
-                (pl.col(Column.POPULATION) == FamilyPopulation.FEDERATION_WIDE)
-                & (pl.col(Column.TRIALS) > 0)
-            )
-            .with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
-        )
+        fed_families = families.filter(
+            (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+            & (pl.col(Column.TRIALS) > 0)
+        ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
         parts.append(_long(fed_families, Metric.FAMILY_MACRO_UNSEEN_RECALL, recall.mean()))
         parts.append(_long(fed_families, Metric.FAMILY_RECALL_DISPERSION, _spread(recall)))
         parts.append(
@@ -79,11 +79,12 @@ def summarize(
             )
         )
     if discrimination.height:
-        disc = discrimination.with_columns(
-            pl.lit(None, dtype=pl.Float64).alias(Column.ALPHA)
+        auroc = discrimination.group_by(ARM_COLUMNS).agg(
+            pl.col(Column.AUROC).mean().alias(Column.VALUE)
         )
-        auroc = disc.group_by(ARM_COLUMNS).agg(pl.col(Column.RECALL).mean().alias(Column.VALUE))
-        auprc = disc.group_by(ARM_COLUMNS).agg(pl.col(Column.VALUE).mean().alias(Column.VALUE))
+        auprc = discrimination.group_by(ARM_COLUMNS).agg(
+            pl.col(Column.AUPRC).mean().alias(Column.VALUE)
+        )
         alphas = clients.select(Column.ALPHA).unique()
         parts.append(
             auroc.join(alphas, how="cross").with_columns(pl.lit(Metric.AUROC).alias(Column.METRIC))
@@ -91,18 +92,17 @@ def summarize(
         parts.append(
             auprc.join(alphas, how="cross").with_columns(pl.lit(Metric.AUPRC).alias(Column.METRIC))
         )
-    status = (
-        operating.group_by(GROUP_COLUMNS)
-        .agg(
-            pl.when((pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE).any())
-            .then(pl.lit(OperatingPointStatus.INSUFFICIENT_EVIDENCE))
-            .otherwise(pl.lit(OperatingPointStatus.VALID))
-            .alias(Column.OPERATING_STATUS)
+    status = operating.group_by(GROUP_COLUMNS).agg(
+        pl.when(
+            (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE).any()
         )
+        .then(pl.lit(OperatingPointStatus.INSUFFICIENT_EVIDENCE))
+        .otherwise(pl.lit(OperatingPointStatus.VALID))
+        .alias(Column.OPERATING_STATUS)
     )
     wanted = [*GROUP_COLUMNS, Column.METRIC, Column.VALUE]
     return (
         pl.concat([part.select(wanted) for part in parts])
-        .join(status, on=GROUP_COLUMNS, how="left")
+        .join(status, on=GROUP_COLUMNS, how="left", nulls_equal=True)
         .sort([*GROUP_COLUMNS, Column.METRIC])
     )

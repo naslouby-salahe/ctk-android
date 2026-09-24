@@ -27,13 +27,15 @@ def package_identities(packages: pl.Series) -> IntArray:
 
 def connected_component_ids(package_ids: IntArray, feature_ids: IntArray) -> IntArray:
     rows = package_ids.size
-    package_count = int(package_ids.max(initial=-1)) + 1
-    feature_count = int(feature_ids.max(initial=-1)) + 1
+    package_count = package_ids.max(initial=-1).item() + 1
+    feature_count = feature_ids.max(initial=-1).item() + 1
     row_index = np.arange(rows)
     sources = np.concatenate([row_index, row_index])
     targets = np.concatenate([rows + package_ids, rows + package_count + feature_ids])
     nodes = rows + package_count + feature_count
-    graph = coo_matrix((np.ones(sources.size, dtype=np.int8), (sources, targets)), shape=(nodes, nodes))
+    graph = coo_matrix(
+        (np.ones(sources.size, dtype=np.int8), (sources, targets)), shape=(nodes, nodes)
+    )
     _, labels = connected_components(graph, directed=False)
     return _first_occurrence_ids(labels[:rows].astype(np.int64))
 

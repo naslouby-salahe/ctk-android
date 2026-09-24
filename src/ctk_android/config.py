@@ -1,12 +1,12 @@
 import hashlib
 import json
-from pathlib import Path
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ctk_android.enums import (
     BudgetLevel,
+    ConfigFile,
     Device,
     EligibilityProfile,
     ExecutionMode,
@@ -18,26 +18,24 @@ from ctk_android.enums import (
     Grouping,
     Learner,
     ModelFamily,
-    NoveltyDescriptor,
 )
+from ctk_android.paths import Paths
 from ctk_android.types import (
     Alpha,
     BatchSize,
     BlendWeight,
-    Confidence,
     DropoutRate,
     Epochs,
     ExceedanceCount,
-    Fingerprint,
     FamilyName,
+    Fingerprint,
     Fraction,
     LabelPrefix,
     LearningRate,
     ProximalStrength,
     ReleaseName,
-    ResampleCount,
-    RowCount,
     Rounds,
+    RowCount,
     Salt,
     Seed,
     SupportCount,
@@ -49,6 +47,8 @@ from ctk_android.types import (
     YamlDocument,
     YearMonth,
 )
+
+PARTITION_SUM_TOLERANCE = 1e-9
 
 
 class Frozen(BaseModel):
@@ -62,8 +62,8 @@ class SeedConfig(Frozen):
 
     @model_validator(mode="after")
     def _disjoint_roles(self) -> "SeedConfig":
-        roles = (set(self.smoke), set(self.development), set(self.confirmatory))
-        if sum(len(role) for role in roles) != len(set().union(*roles)):
+        every_seed = (*self.smoke, *self.development, *self.confirmatory)
+        if len(every_seed) != len(set(every_seed)):
             raise ValueError("seed roles must be disjoint")
         return self
 
@@ -75,14 +75,8 @@ class SeedConfig(Frozen):
         return self.confirmatory
 
 
-class SaltConfig(Frozen):
-    primary: Salt
-    sensitivity: tuple[Salt, ...]
-
-
 class ProjectConfig(Frozen):
     seeds: SeedConfig
-    salts: SaltConfig
     device: Device
     logging_level: LabelPrefix
 
@@ -95,7 +89,7 @@ class PartitionConfig(Frozen):
 
     @model_validator(mode="after")
     def _sums_to_one(self) -> "PartitionConfig":
-        if abs(self.fit + self.calibration + self.test - 1.0) > 1e-9:
+        if abs(self.fit + self.calibration + self.test - 1.0) > PARTITION_SUM_TOLERANCE:
             raise ValueError("partition fractions must sum to one")
         return self
 
@@ -154,7 +148,6 @@ class TrainingConfig(Frozen):
     fedprox_mu: ProximalStrength
     finetune_epochs: Epochs
     blend_weight: BlendWeight
-    linear_epochs: Epochs
     trees: TreeConfig
     min_rows_per_class: SupportCount
 
@@ -163,18 +156,12 @@ class OperatingConfig(Frozen):
     primary_alpha: Alpha
     alphas: tuple[Alpha, ...]
     min_expected_exceedances: ExceedanceCount
+    realised_fpr_tolerance: Fraction
 
 
 class NoveltyConfig(Frozen):
     min_active_prevalence: Fraction
     min_known_family_rows: SupportCount
-    primary_descriptor: NoveltyDescriptor
-
-
-class FairnessGrids(Frozen):
-    local_epochs: tuple[Epochs, ...]
-    finetune_epochs: tuple[Epochs, ...]
-    fedprox_mu: tuple[ProximalStrength, ...]
 
 
 class ExperimentSpec(Frozen):
@@ -200,63 +187,26 @@ class ExperimentsConfig(Frozen):
     novelty: NoveltyConfig
     dose_levels: tuple[SupportCount, ...]
     dose_include_all_available: bool
-    top_family_removal_count: SupportCount
     permutation_seed_offset: Seed
-    fairness_grids: FairnessGrids
     experiments: dict[ExperimentName, ExperimentSpec]
-
-
-class GateConfig(Frozen):
-    local_deficit_min_seeds: SupportCount
-    local_deficit_min_gap: Fraction
-    collaboration_min_gain: Fraction
-    ctk_min_gain: Fraction
-    ctk_min_positive_seeds: SupportCount
-    pooling_majority_share: Fraction
-    dose_min_peers: SupportCount
-    dose_min_gain: Fraction
-    dose_max_family_share: Fraction
-    known_family_tolerance: Fraction
-    fpr_tolerance: Fraction
-    poor_full_recall: Fraction
-    novelty_min_abs_spearman: Fraction
-    mechanism_mean_gap: Fraction
-    mechanism_worst_gap: Fraction
-    permutation_null_max: Fraction
-    operating_point_tolerance: Fraction
-    dose_monotone_tolerance: Fraction
-    heterogeneity_min: Fraction
-
-
-class StatisticsConfig(Frozen):
-    bootstrap_resamples: ResampleCount
-    cluster_bootstrap_resamples: ResampleCount
-    confidence_level: Confidence
-    statistics_seed: Seed
-    share_min_total_gain: Fraction
-    gates: GateConfig
 
 
 class Config(Frozen):
     project: ProjectConfig
     data: DataConfig
     experiments: ExperimentsConfig
-    statistics: StatisticsConfig
 
     def fingerprint(self) -> Fingerprint:
         payload = json.dumps(self.model_dump(mode="json"), sort_keys=True).encode()
         return hashlib.sha256(payload).hexdigest()
 
 
-def load_config(config_dir: Path) -> Config:
-    def read(name: str) -> YamlDocument:
-        return yaml.safe_load((config_dir / name).read_text(encoding="utf-8"))
+def load_config(paths: Paths) -> Config:
+    def read(name: ConfigFile) -> YamlDocument:
+        return yaml.safe_load(paths.config_file(name).read_text(encoding="utf-8"))
 
-    return Config.model_validate(
-        {
-            "project": read("project.yaml"),
-            "data": read("data.yaml"),
-            "experiments": read("experiments.yaml"),
-            "statistics": read("statistics.yaml"),
-        }
+    return Config(
+        project=ProjectConfig.model_validate(read(ConfigFile.PROJECT)),
+        data=DataConfig.model_validate(read(ConfigFile.DATA)),
+        experiments=ExperimentsConfig.model_validate(read(ConfigFile.EXPERIMENTS)),
     )

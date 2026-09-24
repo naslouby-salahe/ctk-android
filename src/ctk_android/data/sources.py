@@ -3,46 +3,37 @@ import hashlib
 import numpy as np
 import polars as pl
 import pyarrow as pa
-import pyarrow.compute as pc
 import pyarrow.csv as pacsv
 
 from ctk_android.config import DataConfig
 from ctk_android.data.cache import combine_fingerprints, fingerprint_file
-from ctk_android.enums import Column, DatasetName, FailureReason, ValidationCheck
+from ctk_android.enums import (
+    AndroZooColumn,
+    Column,
+    DatasetName,
+    FailureReason,
+    LamdaColumn,
+    ValidationCheck,
+)
+from ctk_android.paths import Paths
 from ctk_android.types import (
     ByteMatrix,
     CtkError,
     Directory,
-    File,
     FeatureColumn,
     FeatureCount,
+    File,
     Fingerprint,
-    InventoryDocument,
+    InventoryEntry,
     LamdaTable,
-    ReleaseName,
-    StatKey,
     SourceFingerprint,
+    SourceInventory,
+    StatKey,
     ValidationRecord,
 )
 
 FEATURE_PREFIX = "feat_"
-LAMDA_HASH_COLUMN = "hash"
-LAMDA_VT_COLUMN = "vt_count"
-ANDROZOO_ARCHIVE = "latest.csv.gz"
 ANDROZOO_BLOCK_BYTES = 1 << 26
-ANDROZOO_SHA = "sha256"
-ANDROZOO_PACKAGE = "pkg_name"
-ANDROZOO_MARKETS = "markets"
-ANDROZOO_VT = "vt_detection"
-LAMDA_FEATURE_MAPPING = "feature_mapping.csv"
-
-
-def lamda_files(root: Directory, release: ReleaseName) -> list[File]:
-    release_dir = root / release
-    parquets = sorted(release_dir.glob("*/*.parquet"))
-    if not parquets:
-        raise CtkError(FailureReason.SCHEMA_MISMATCH, f"no LAMDA parquet files under {release_dir}")
-    return [*parquets, release_dir / LAMDA_FEATURE_MAPPING]
 
 
 def _stat_key(path: File) -> StatKey:
@@ -51,36 +42,44 @@ def _stat_key(path: File) -> StatKey:
 
 
 def fingerprint_files(
-    dataset: DatasetName, root: Directory, files: list[File], known: InventoryDocument
-) -> tuple[SourceFingerprint, InventoryDocument]:
-    inventory: InventoryDocument = {}
-    parts: list[Fingerprint] = []
+    dataset: DatasetName, root: Directory, files: list[File], known: SourceInventory
+) -> tuple[SourceFingerprint, SourceInventory]:
+    previous = {entry.name: entry for entry in known.entries}
+    entries: list[InventoryEntry] = []
     for path in files:
-        name = str(path.relative_to(root))
-        entry = known.get(name)
+        name = f"{path.relative_to(root)}"
         stat_key = _stat_key(path)
-        digest = entry[1] if entry is not None and entry[0] == stat_key else fingerprint_file(path)
-        inventory[name] = (stat_key, digest)
-        parts.append(f"{name}:{digest}")
+        entry = previous.get(name)
+        digest = (
+            entry.digest if entry is not None and entry.stat == stat_key else fingerprint_file(path)
+        )
+        entries.append(InventoryEntry(name=name, stat=stat_key, digest=digest))
+    listing = "\n".join(f"{entry.name}:{entry.digest}" for entry in entries)
     fingerprint = SourceFingerprint(
         dataset=dataset,
-        fingerprint=hashlib.sha256("\n".join(parts).encode()).hexdigest(),
+        fingerprint=hashlib.sha256(listing.encode()).hexdigest(),
         file_count=len(files),
         total_bytes=sum(path.stat().st_size for path in files),
     )
-    return fingerprint, inventory
+    return fingerprint, SourceInventory(entries=tuple(entries))
 
 
 def fingerprint_lamda(
-    root: Directory, config: DataConfig, known: InventoryDocument
-) -> tuple[SourceFingerprint, InventoryDocument]:
-    return fingerprint_files(DatasetName.LAMDA, root, lamda_files(root, config.lamda_release), known)
+    paths: Paths, config: DataConfig, known: SourceInventory
+) -> tuple[SourceFingerprint, SourceInventory]:
+    files = paths.lamda_release_files(config.lamda_release)
+    return fingerprint_files(DatasetName.LAMDA, paths.raw_data(DatasetName.LAMDA), files, known)
 
 
 def fingerprint_androzoo(
-    root: Directory, known: InventoryDocument
-) -> tuple[SourceFingerprint, InventoryDocument]:
-    return fingerprint_files(DatasetName.ANDROZOO, root, [root / ANDROZOO_ARCHIVE], known)
+    paths: Paths, known: SourceInventory
+) -> tuple[SourceFingerprint, SourceInventory]:
+    return fingerprint_files(
+        DatasetName.ANDROZOO,
+        paths.raw_data(DatasetName.ANDROZOO),
+        [paths.androzoo_archive()],
+        known,
+    )
 
 
 def sources_fingerprint(lamda: SourceFingerprint, androzoo: SourceFingerprint) -> Fingerprint:
@@ -91,29 +90,32 @@ def _feature_columns(count: FeatureCount) -> list[FeatureColumn]:
     return [f"{FEATURE_PREFIX}{index}" for index in range(count)]
 
 
-def load_lamda(root: Directory, config: DataConfig) -> LamdaTable:
+def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
+    files = paths.lamda_release_files(config.lamda_release)[:-1]
+    if not files:
+        raise CtkError(FailureReason.SCHEMA_MISMATCH, "no LAMDA parquet files found")
     feature_names = _feature_columns(config.expected_features)
     frames: list[pl.DataFrame] = []
     blocks: list[ByteMatrix] = []
     non_binary = 0
     negative = 0
-    for path in lamda_files(root, config.lamda_release)[:-1]:
+    for path in files:
         frame = pl.read_parquet(path)
         missing = set(feature_names) - set(frame.columns)
         extra = {c for c in frame.columns if c.startswith(FEATURE_PREFIX)} - set(feature_names)
         if missing or extra:
             raise CtkError(FailureReason.SCHEMA_MISMATCH, f"{path.name}: feature columns differ")
         raw = frame.select(feature_names).to_numpy()
-        non_binary += int((raw > 1).sum())
-        negative += int((raw < 0).sum())
+        non_binary += (raw > 1).sum().item()
+        negative += (raw < 0).sum().item()
         blocks.append((raw > 0).astype(np.uint8))
         frames.append(
             frame.select(
-                pl.col(LAMDA_HASH_COLUMN).str.to_lowercase().alias(Column.SHA256),
-                pl.col(Column.LABEL),
-                pl.col(Column.FAMILY),
-                pl.col(LAMDA_VT_COLUMN).alias(Column.VT_COUNT),
-                pl.col(Column.YEAR_MONTH),
+                pl.col(LamdaColumn.HASH).str.to_lowercase().alias(Column.SHA256),
+                pl.col(LamdaColumn.LABEL).alias(Column.LABEL),
+                pl.col(LamdaColumn.FAMILY).alias(Column.FAMILY),
+                pl.col(LamdaColumn.VT_COUNT).alias(Column.VT_COUNT),
+                pl.col(LamdaColumn.YEAR_MONTH).alias(Column.YEAR_MONTH),
             )
         )
     metadata = pl.concat(frames)
@@ -152,39 +154,41 @@ def validate_lamda(table: LamdaTable, config: DataConfig) -> list[ValidationReco
         ),
         ValidationRecord(
             check=ValidationCheck.LABEL_RULE,
-            passed=bool(malware_ok and benign_ok),
-            detail=f"malware>={config.malware_min_vt}={malware_ok} benign=={config.benign_vt}={benign_ok}",
+            passed=malware_ok and benign_ok,
+            detail=(
+                f"malware>={config.malware_min_vt}={malware_ok} "
+                f"benign=={config.benign_vt}={benign_ok}"
+            ),
         ),
     ]
 
 
-def scan_androzoo(root: Directory, wanted: pl.Series) -> pl.DataFrame:
-    wanted_upper = pa.array(wanted.str.to_uppercase().to_list(), type=pa.string())
+def scan_androzoo(paths: Paths, wanted: pl.Series) -> pl.DataFrame:
+    wanted_upper = wanted.str.to_uppercase()
     reader = pacsv.open_csv(
-        root / ANDROZOO_ARCHIVE,
+        paths.androzoo_archive(),
         read_options=pacsv.ReadOptions(block_size=ANDROZOO_BLOCK_BYTES),
         convert_options=pacsv.ConvertOptions(
-            include_columns=[ANDROZOO_SHA, ANDROZOO_PACKAGE, ANDROZOO_MARKETS, ANDROZOO_VT],
+            include_columns=[column for column in AndroZooColumn],
             column_types={
-                ANDROZOO_SHA: pa.string(),
-                ANDROZOO_PACKAGE: pa.string(),
-                ANDROZOO_MARKETS: pa.string(),
-                ANDROZOO_VT: pa.float64(),
+                AndroZooColumn.SHA256: pa.string(),
+                AndroZooColumn.PACKAGE: pa.string(),
+                AndroZooColumn.MARKETS: pa.string(),
+                AndroZooColumn.VT_DETECTION: pa.float64(),
             },
         ),
     )
-    matched = [
-        pa.Table.from_batches([batch.filter(pc.is_in(batch[ANDROZOO_SHA], value_set=wanted_upper))])
-        for batch in reader
-    ]
-    frame = pl.from_arrow(pa.concat_tables(matched))
-    if not isinstance(frame, pl.DataFrame):
-        raise CtkError(FailureReason.SCHEMA_MISMATCH, "AndroZoo scan produced no table")
-    return frame.select(
-        pl.col(ANDROZOO_SHA).str.to_lowercase().alias(Column.SHA256),
-        pl.col(ANDROZOO_PACKAGE).alias(Column.PACKAGE),
-        pl.col(ANDROZOO_MARKETS).alias(Column.MARKETS),
-        pl.col(ANDROZOO_VT).alias(Column.VT_COUNT),
+    frame = pl.concat(
+        [
+            pl.DataFrame(pa.Table.from_batches([batch])).filter(
+                pl.col(AndroZooColumn.SHA256).is_in(wanted_upper.implode())
+            )
+            for batch in reader
+        ]
     )
-
-
+    return frame.select(
+        pl.col(AndroZooColumn.SHA256).str.to_lowercase().alias(Column.SHA256),
+        pl.col(AndroZooColumn.PACKAGE).alias(Column.PACKAGE),
+        pl.col(AndroZooColumn.MARKETS).alias(Column.MARKETS),
+        pl.col(AndroZooColumn.VT_DETECTION).alias(Column.VT_COUNT),
+    )

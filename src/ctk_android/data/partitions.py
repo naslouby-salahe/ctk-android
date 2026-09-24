@@ -10,14 +10,25 @@ from ctk_android.data.families import (
     permute_family_labels,
     role_counts,
 )
-from ctk_android.enums import Column, FamilyLabelSource, Grouping, SplitRole, ValidationCheck
+from ctk_android.enums import (
+    Artifact,
+    Column,
+    FailureReason,
+    FamilyLabelSource,
+    Grouping,
+    SplitRole,
+    Stage,
+    ValidationCheck,
+)
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    CtkError,
     FamilyName,
     IntArray,
     PartitionKey,
     PartitionResult,
     Rank,
+    RowCount,
     Seed,
     StudyData,
     ValidationRecord,
@@ -29,7 +40,7 @@ ROLE_ORDER = (SplitRole.FIT, SplitRole.CALIBRATION, SplitRole.TEST)
 def assign_roles(
     group_ids: IntArray, key: PartitionKey, attempt: Rank, config: DataConfig
 ) -> pl.Series:
-    group_count = int(group_ids.max(initial=-1)) + 1
+    group_count = group_ids.max(initial=-1).item() + 1
     rng = np.random.default_rng(np.random.SeedSequence([key.seed, key.salt, attempt]))
     position = np.empty(group_count, dtype=np.int64)
     position[rng.permutation(group_count)] = np.arange(group_count)
@@ -39,9 +50,7 @@ def assign_roles(
     fraction = started / group_ids.size
     fit_edge = config.partition.fit
     calibration_edge = fit_edge + config.partition.calibration
-    role_of_ordered = np.where(
-        fraction < fit_edge, 0, np.where(fraction < calibration_edge, 1, 2)
-    )
+    role_of_ordered = np.where(fraction < fit_edge, 0, np.where(fraction < calibration_edge, 1, 2))
     role_of_group = np.empty(group_count, dtype=np.int64)
     role_of_group[order] = role_of_ordered
     codes = role_of_group[group_ids]
@@ -82,7 +91,7 @@ def validate_partition(
 ) -> tuple[ValidationRecord, ...]:
     frame = identities.with_columns(roles.alias(Column.ROLE))
 
-    def crossing(column: Column) -> int:
+    def crossing(column: Column) -> RowCount:
         return (
             frame.group_by(column)
             .agg(pl.col(Column.ROLE).n_unique().alias(Column.ROWS))
@@ -122,20 +131,24 @@ def build_partition(
     key: PartitionKey,
     config: DataConfig,
 ) -> PartitionResult:
-    best: tuple[int, int] | None = None
+    best_score: RowCount = 0
+    best_attempt: Rank = 0
     best_roles: pl.Series | None = None
     for attempt in range(config.partition.attempts):
         roles = assign_roles(group_ids, key, attempt, config)
         controlled, natural = evaluate_partition(labelled, roles, families, config, key)
-        score = int(controlled[Column.ELIGIBLE].sum()) + int(natural[Column.ELIGIBLE].sum())
-        if best is None or score > best[0]:
-            best, best_roles = (score, attempt), roles
-    if best is None or best_roles is None:
-        raise ValueError("partition attempts must be positive")
+        score = (
+            controlled.filter(pl.col(Column.ELIGIBLE)).height
+            + natural.filter(pl.col(Column.ELIGIBLE)).height
+        )
+        if best_roles is None or score > best_score:
+            best_score, best_attempt, best_roles = score, attempt, roles
+    if best_roles is None:
+        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, "partition attempts must be positive")
     controlled, natural = evaluate_partition(labelled, best_roles, families, config, key)
     return PartitionResult(
         roles=best_roles,
-        attempt=best[1],
+        attempt=best_attempt,
         controlled=controlled,
         natural=natural,
         validations=validate_partition(identities, best_roles, key.grouping),
@@ -149,9 +162,9 @@ def load_study(
     labels: FamilyLabelSource,
     permutation_offset: Seed,
 ) -> StudyData:
-    assignments = pl.read_parquet(paths.clients / "assignments.parquet")
-    identities = pl.read_parquet(paths.identity / "components.parquet")
-    roles = pl.read_parquet(paths.partition(key) / "assignments.parquet")
+    assignments = pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS))
+    identities = pl.read_parquet(paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS))
+    roles = pl.read_parquet(paths.partition_file(key, Artifact.ASSIGNMENTS))
     labelled = classify_labels(assignments, config)
     if labels is FamilyLabelSource.PERMUTED:
         labelled = permute_family_labels(labelled, key.seed, permutation_offset)
@@ -162,4 +175,4 @@ def load_study(
         .rename({group: Column.COMPONENT})
         .sort(Column.ROW)
     )
-    return StudyData(table=table, features=load_features(paths.cache / "features.npy"))
+    return StudyData(table=table, features=load_features(paths.cache_file(Artifact.FEATURES)))

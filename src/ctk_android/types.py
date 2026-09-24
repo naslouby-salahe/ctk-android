@@ -1,29 +1,34 @@
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 
 import numpy as np
-import torch
-from sklearn.ensemble import HistGradientBoostingClassifier
 import polars as pl
+import torch
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
+from sklearn.ensemble import HistGradientBoostingClassifier
+
 from ctk_android.enums import (
     ClientId,
+    Column,
     DatasetName,
     Device,
+    DoctorCheck,
     EligibilityProfile,
+    EvaluationPopulation,
     ExecutionMode,
-    ExposureCondition,
     ExperimentName,
+    ExposureCondition,
     FailureReason,
     Grouping,
     Learner,
     ModelFamily,
+    NoveltyDescriptor,
     OperatingPointStatus,
     RunStatus,
     Stage,
     ValidationCheck,
 )
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
 PositiveInt = Annotated[int, Field(gt=0)]
@@ -52,6 +57,8 @@ TreeDepth = PositiveInt
 VtCount = NonNegativeInt
 Rank = NonNegativeInt
 ExceedanceCount = PositiveInt
+
+SEED_ADAPTER: TypeAdapter[Seed] = TypeAdapter(Seed)
 
 Fraction = UnitInterval
 Rate = UnitInterval
@@ -87,19 +94,20 @@ ByteMatrix = NDArray[np.uint8]
 
 Directory = Path
 File = Path
+StateDict = dict[str, torch.Tensor]
 
 
 class FrozenRecord(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
+
 ReleaseName = Annotated[str, StringConstraints(min_length=1)]
 LabelPrefix = Annotated[str, StringConstraints(min_length=1)]
 SupportCount = NonNegativeInt
 StatKey = Annotated[str, StringConstraints(min_length=1)]
+FileName = Annotated[str, StringConstraints(min_length=1)]
 
 YamlDocument = dict[str, Any]
-JsonDocument = dict[str, Any]
-InventoryDocument = dict[str, tuple[str, str]]
 
 
 class PartitionKey(FrozenRecord):
@@ -184,7 +192,7 @@ class ArmKey(FrozenRecord):
     dose: DoseRequest
 
     def label(self) -> str:
-        dose = "all" if self.dose is None else str(self.dose)
+        dose = "all" if self.dose is None else f"{self.dose}"
         return f"{self.learner}__{self.condition}__dose-{dose}"
 
 
@@ -204,7 +212,6 @@ class Scorer(FrozenRecord):
     network: torch.nn.Module | None
     trees: HistGradientBoostingClassifier | None
     device: Device
-
 
 
 ArmScores = dict[ClientId, FloatArray]
@@ -229,3 +236,161 @@ class RunReport(FrozenRecord):
     status: RunStatus
     reused: bool
     directory: Directory
+
+
+class Stepper(Protocol):
+    def zero_grad(self) -> None: ...
+
+    def step(self) -> None: ...
+
+
+class DoctorResult(FrozenRecord):
+    check: DoctorCheck
+    passed: bool
+    detail: Message
+
+
+class ArmRow(FrozenRecord):
+    learner: Learner
+    condition: ExposureCondition
+    dose: DoseRequest
+
+
+class OperatingRow(ArmRow):
+    client: ClientId
+    alpha: Alpha
+    threshold: Threshold
+    calibration_benign: RowCount
+    operating_status: OperatingPointStatus
+
+
+class ClientCountRow(ArmRow):
+    client: ClientId
+    alpha: Alpha
+    population: EvaluationPopulation
+    hits: RowCount
+    trials: RowCount
+
+
+class FamilyCountRow(ClientCountRow):
+    family: FamilyName
+
+
+class DiscriminationRow(ArmRow):
+    client: ClientId
+    auroc: Rate
+    auprc: Rate
+
+
+class ExposureRow(ArmRow):
+    client: ClientId
+    family: FamilyName
+    rows: RowCount
+    train_rows: RowCount
+
+
+class DescriptorRow(FrozenRecord):
+    client: ClientId
+    family: FamilyName
+    descriptor: NoveltyDescriptor
+    value: Score
+
+
+class StatusRow(FrozenRecord):
+    experiment: ExperimentName
+    status: RunStatus
+
+
+class InventoryEntry(FrozenRecord):
+    name: FileName
+    stat: StatKey
+    digest: Fingerprint
+
+
+class SourceInventory(FrozenRecord):
+    entries: tuple[InventoryEntry, ...]
+
+
+class ValidationDocument(FrozenRecord):
+    validations: tuple[ValidationRecord, ...]
+
+
+class LamdaSchema(FrozenRecord):
+    release: ReleaseName
+    feature_count: FeatureCount
+    metadata_columns: tuple[Column, ...]
+    non_binary_cells_binarized: RowCount
+    negative_cells: RowCount
+
+
+class LamdaCounts(FrozenRecord):
+    rows: RowCount
+    malware: RowCount
+    benign: RowCount
+
+
+class LinkageSchema(FrozenRecord):
+    columns: tuple[Column, ...]
+
+
+class LinkageCounts(FrozenRecord):
+    linked_rows: RowCount
+
+
+class FamilySetDocument(FrozenRecord):
+    families: tuple[FamilyName, ...]
+
+
+class PartitionManifest(FrozenRecord):
+    key: PartitionKey
+    attempt: Rank
+    eligible_controlled_pairs: RowCount
+    eligible_natural_pairs: RowCount
+
+
+class PlanSummary(FrozenRecord):
+    mode: ExecutionMode
+    config_fingerprint: Fingerprint
+    runs: RowCount
+    infeasible: RowCount
+    seeds: tuple[Seed, ...]
+
+
+class RunStatusDocument(FrozenRecord):
+    status: RunStatus
+    reason: FailureReason | None
+
+
+class EnvironmentRecord(FrozenRecord):
+    python: Message
+    platform: Message
+    torch: Message
+    numpy: Message
+    polars: Message
+    scikit_learn: Message
+    device: Device
+
+
+class RunInputs(FrozenRecord):
+    key: RunKey
+    partition: Provenance
+    config: Fingerprint
+    targets: tuple[TargetPair, ...]
+
+
+class RunManifest(FrozenRecord):
+    key: RunKey
+    partition: PartitionKey
+    targets: tuple[TargetPair, ...]
+    arms: tuple[ArmKey, ...]
+    budget: RowCount
+    training: Fingerprint
+    config: Fingerprint
+    provenance: Provenance
+    environment: EnvironmentRecord
+    status: RunStatus
+
+
+class ProximalAnchor(FrozenRecord):
+    state: StateDict
+    strength: ProximalStrength

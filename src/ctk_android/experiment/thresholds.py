@@ -14,10 +14,12 @@ def calibrate(
             calibration_benign=0,
             status=OperatingPointStatus.INSUFFICIENT_EVIDENCE,
         )
-    threshold = np.quantile(benign_scores, 1.0 - alpha, method="higher")
+    threshold = np.quantile(benign_scores, 1.0 - alpha, method="higher").item()
     resolved = count * alpha >= min_exceedances
     return OperatingPoint(
         threshold=threshold,
         calibration_benign=count,
-        status=OperatingPointStatus.VALID if resolved else OperatingPointStatus.INSUFFICIENT_EVIDENCE,
+        status=OperatingPointStatus.VALID
+        if resolved
+        else OperatingPointStatus.INSUFFICIENT_EVIDENCE,
     )

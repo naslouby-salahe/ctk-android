@@ -30,6 +30,9 @@ dev = [
     "semgrep>=1.78",
     "pandas-stubs",
     "types-pyyaml",
+    "pyarrow-stubs>=20.0.0.20260819",
+    "scikit-learn-stubs>=0.0.3",
+    "scipy-stubs>=1.18.1.1",
 ]
 
 [build-system]
@@ -54,6 +57,8 @@ include = ["src", "tests"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
+venvPath = "."
+venv = ".venv"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

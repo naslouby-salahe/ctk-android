@@ -1,20 +1,19 @@
 import hashlib
-import json
-from pathlib import Path
+from collections.abc import Sequence
 
 import numpy as np
 import polars as pl
+from pydantic import BaseModel
 
 from ctk_android.types import (
     ByteMatrix,
     Directory,
     File,
     Fingerprint,
-    JsonDocument,
+    FrozenRecord,
     Provenance,
 )
 
-MANIFEST_NAME = "provenance.json"
 CHUNK_BYTES = 1 << 22
 
 
@@ -30,8 +29,8 @@ def combine_fingerprints(*parts: Fingerprint) -> Fingerprint:
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
-def fingerprint_document(document: JsonDocument) -> Fingerprint:
-    return hashlib.sha256(json.dumps(document, sort_keys=True).encode()).hexdigest()
+def fingerprint_model(model: BaseModel) -> Fingerprint:
+    return hashlib.sha256(model.model_dump_json().encode()).hexdigest()
 
 
 def fingerprint_source_tree(source_root: Directory) -> Fingerprint:
@@ -40,16 +39,15 @@ def fingerprint_source_tree(source_root: Directory) -> Fingerprint:
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()
 
 
-def write_provenance(directory: Directory, provenance: Provenance) -> None:
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / MANIFEST_NAME).write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
+def write_provenance(file: File, provenance: Provenance) -> None:
+    file.parent.mkdir(parents=True, exist_ok=True)
+    file.write_text(provenance.model_dump_json(indent=2), encoding="utf-8")
 
 
-def is_reusable(directory: Directory, expected: Provenance) -> bool:
-    manifest = directory / MANIFEST_NAME
-    if not manifest.is_file():
+def is_reusable(file: File, expected: Provenance) -> bool:
+    if not file.is_file():
         return False
-    return Provenance.model_validate_json(manifest.read_text(encoding="utf-8")) == expected
+    return Provenance.model_validate_json(file.read_text(encoding="utf-8")) == expected
 
 
 def save_features(path: File, features: ByteMatrix) -> None:
@@ -61,15 +59,19 @@ def load_features(path: File) -> ByteMatrix:
     return np.load(path, mmap_mode="r", allow_pickle=False)
 
 
-def write_json(path: File, document: JsonDocument) -> None:
+def write_record(path: File, record: BaseModel) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(document, indent=2, sort_keys=True), encoding="utf-8")
+    path.write_text(record.model_dump_json(indent=2), encoding="utf-8")
 
 
-def read_json(path: Path) -> JsonDocument:
-    return json.loads(path.read_text(encoding="utf-8"))
+def read_record[Record: BaseModel](path: File, model: type[Record]) -> Record:
+    return model.model_validate_json(path.read_text(encoding="utf-8"))
 
 
 def write_table(frame: pl.DataFrame, path: File) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(path)
+
+
+def records_to_frame(rows: Sequence[FrozenRecord]) -> pl.DataFrame:
+    return pl.DataFrame([row.model_dump() for row in rows]) if rows else pl.DataFrame()

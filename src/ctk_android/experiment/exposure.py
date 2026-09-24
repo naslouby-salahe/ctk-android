@@ -1,26 +1,26 @@
 import numpy as np
 import polars as pl
 
+from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import (
     ClientId,
     Column,
-    EligibilityReason,
     ExposureCondition,
     ExposureMode,
-    FailureReason,
     SplitRole,
     ValidationCheck,
 )
 from ctk_android.types import (
-    BoolArray,
     ArmKey,
-    CtkError,
+    BoolArray,
+    ExposureRow,
     ExposureSpec,
     FamilyName,
+    FloatArray,
     IntArray,
     RowCount,
-    Seed,
     Salt,
+    Seed,
     StudyData,
     SupportCount,
     TargetPair,
@@ -51,7 +51,7 @@ def training_orders(study: StudyData, seed: Seed, salt: Salt) -> TrainingRows:
     return orders
 
 
-def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> np.ndarray:
+def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> FloatArray:
     rng = np.random.default_rng(np.random.SeedSequence([seed, salt, len(ClientId)]))
     return rng.random(study.table.height)
 
@@ -84,7 +84,7 @@ def allowed_dose_rows(
     study: StudyData,
     masks: dict[FamilyName, BoolArray],
     spec: ExposureSpec,
-    priorities: np.ndarray,
+    priorities: FloatArray,
 ) -> dict[FamilyName, BoolArray]:
     table = study.table
     fit = (table[Column.ROLE] == SplitRole.FIT).to_numpy()
@@ -120,25 +120,25 @@ def select_training(
 
 
 def exposure_counts(
-    study: StudyData,
     training: TrainingRows,
     masks: dict[FamilyName, BoolArray],
     arm: ArmKey,
 ) -> pl.DataFrame:
-    rows = [
-        {
-            Column.LEARNER: arm.learner,
-            Column.CONDITION: arm.condition,
-            Column.DOSE: -1 if arm.dose is None else arm.dose,
-            Column.CLIENT: client,
-            Column.FAMILY: family,
-            Column.ROWS: int(mask[selected].sum()),
-            Column.TRAIN_ROWS: selected.size,
-        }
-        for client, selected in training.items()
-        for family, mask in masks.items()
-    ]
-    return pl.DataFrame(rows)
+    return records_to_frame(
+        [
+            ExposureRow(
+                learner=arm.learner,
+                condition=arm.condition,
+                dose=arm.dose,
+                client=client,
+                family=family,
+                rows=mask[selected].sum().item(),
+                train_rows=selected.size,
+            )
+            for client, selected in training.items()
+            for family, mask in masks.items()
+        ]
+    )
 
 
 def validate_exposure(
@@ -154,23 +154,26 @@ def validate_exposure(
     hidden_zero = True
     peer_present = True
     absent_zero = True
-    sizes: dict[ClientId, set[int]] = {client: set() for client in ClientId}
+    sizes: dict[ClientId, set[RowCount]] = {client: set() for client in ClientId}
     only_fit = True
     for arm, per_client in training.items():
         for client, rows in per_client.items():
             sizes[client].add(rows.size)
-            only_fit &= bool((roles[rows] == SplitRole.FIT).all())
-        if arm.condition is ExposureCondition.PEER_PRESENT and mode is ExposureMode.HIDE_FROM_TARGET:
+            only_fit &= (roles[rows] == SplitRole.FIT).all().item()
+        if (
+            arm.condition is ExposureCondition.PEER_PRESENT
+            and mode is ExposureMode.HIDE_FROM_TARGET
+        ):
             for pair in targets:
-                hidden_zero &= not bool(masks[pair.family][per_client[pair.client]].any())
+                hidden_zero &= not masks[pair.family][per_client[pair.client]].any().item()
                 if arm.dose is None:
                     peers = sum(
-                        int(masks[pair.family][rows].sum())
+                        masks[pair.family][rows].sum().item()
                         for client, rows in per_client.items()
                         if client is not pair.client
                     )
                     available = sum(
-                        int(masks[pair.family][rows].sum())
+                        masks[pair.family][rows].sum().item()
                         for client, rows in fit_pool.items()
                         if client is not pair.client
                     )
@@ -178,7 +181,7 @@ def validate_exposure(
         if arm.condition is ExposureCondition.FAMILY_ABSENT_EVERYWHERE:
             for pair in targets:
                 absent_zero &= not any(
-                    bool(masks[pair.family][rows].any()) for rows in per_client.values()
+                    masks[pair.family][rows].any().item() for rows in per_client.values()
                 )
     matched = all(len(values) == 1 for values in sizes.values())
     return [
@@ -208,11 +211,3 @@ def validate_exposure(
             detail="all training rows belong to the fit role",
         ),
     ]
-
-
-def require_targets(targets: tuple[TargetPair, ...]) -> None:
-    if not targets:
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, "no eligible target client-family pairs")
-
-
-NAMED = EligibilityReason.ELIGIBLE

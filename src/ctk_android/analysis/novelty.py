@@ -2,21 +2,37 @@ import numpy as np
 import polars as pl
 
 from ctk_android.config import NoveltyConfig
+from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import Column, EligibilityReason, NoveltyDescriptor, SplitRole
-from ctk_android.types import BoolArray, FamilyName, FloatArray, StudyData, TargetPair
+from ctk_android.types import (
+    BoolArray,
+    DescriptorRow,
+    FamilyName,
+    FloatArray,
+    Fraction,
+    IntArray,
+    Rate,
+    Score,
+    StudyData,
+    TargetPair,
+)
 
 
-def _prevalence(study: StudyData, rows: np.ndarray) -> FloatArray:
+def _prevalence(study: StudyData, rows: IntArray) -> FloatArray:
     return np.asarray(study.features[rows], dtype=np.float64).mean(axis=0)
 
 
-def _active(prevalence: FloatArray, threshold: float) -> BoolArray:
+def _active(prevalence: FloatArray, threshold: Fraction) -> BoolArray:
     return prevalence >= threshold
 
 
-def _jaccard(left: BoolArray, right: BoolArray) -> float:
-    union = np.logical_or(left, right).sum()
-    return 1.0 if union == 0 else np.logical_and(left, right).sum() / union
+def _jaccard(left: BoolArray, right: BoolArray) -> Rate:
+    union = np.logical_or(left, right).sum().item()
+    return 1.0 if union == 0 else np.logical_and(left, right).sum().item() / union
+
+
+def _distance(left: FloatArray, right: FloatArray) -> Score:
+    return np.linalg.norm(left - right).item()
 
 
 def family_descriptors(
@@ -31,7 +47,7 @@ def family_descriptors(
     named = (table[Column.REASON] == EligibilityReason.ELIGIBLE).to_numpy()
     client = table[Column.CLIENT].to_numpy()
     family = table[Column.FAMILY].to_numpy()
-    rows: list[dict[Column, object]] = []
+    rows: list[DescriptorRow] = []
     for pair in targets:
         own = client == pair.client
         hidden = np.zeros(table.height, dtype=bool)
@@ -45,43 +61,36 @@ def family_descriptors(
             continue
         target = _prevalence(study, peer_rows)
         known_centroid = _prevalence(study, known_rows)
-        benign_centroid = _prevalence(study, benign_rows)
         target_active = _active(target, config.min_active_prevalence)
-        distances: list[float] = []
-        jaccards: list[float] = []
+        distances: list[Score] = []
+        jaccards: list[Rate] = []
         for name in np.unique(family[known_mask & named]):
             group = np.flatnonzero(known_mask & named & (family == name))
             if group.size < config.min_known_family_rows:
                 continue
             centroid = _prevalence(study, group)
-            distances.append(np.linalg.norm(target - centroid))
-            jaccards.append(_jaccard(target_active, _active(centroid, config.min_active_prevalence)))
-        values: dict[NoveltyDescriptor, float] = {
-            NoveltyDescriptor.CENTROID_DISTANCE_TO_KNOWN_MALWARE: np.linalg.norm(target - known_centroid),
-            NoveltyDescriptor.DISTANCE_TO_BENIGN_CENTROID: np.linalg.norm(target - benign_centroid),
-            NoveltyDescriptor.FRACTION_ACTIVE_FEATURES_KNOWN: (
-                np.logical_and(target_active, _active(known_centroid, config.min_active_prevalence)).sum()
-                / max(target_active.sum(), 1)
+            distances.append(_distance(target, centroid))
+            jaccards.append(
+                _jaccard(target_active, _active(centroid, config.min_active_prevalence))
+            )
+        represented = np.logical_and(
+            target_active, _active(known_centroid, config.min_active_prevalence)
+        ).sum()
+        values: dict[NoveltyDescriptor, Score] = {
+            NoveltyDescriptor.CENTROID_DISTANCE_TO_KNOWN_MALWARE: _distance(target, known_centroid),
+            NoveltyDescriptor.DISTANCE_TO_BENIGN_CENTROID: _distance(
+                target, _prevalence(study, benign_rows)
             ),
+            NoveltyDescriptor.FRACTION_ACTIVE_FEATURES_KNOWN: represented.item()
+            / max(target_active.sum().item(), 1),
         }
         if distances:
             values[NoveltyDescriptor.NEAREST_KNOWN_FAMILY_DISTANCE] = min(distances)
             values[NoveltyDescriptor.MAX_JACCARD_TO_KNOWN_FAMILY] = max(jaccards)
         rows.extend(
-            {
-                Column.CLIENT: pair.client,
-                Column.FAMILY: pair.family,
-                Column.DESCRIPTOR: descriptor,
-                Column.VALUE: value,
-            }
+            DescriptorRow(
+                client=pair.client, family=pair.family, descriptor=descriptor, value=value
+            )
             for descriptor, value in values.items()
         )
-    return pl.DataFrame(
-        rows,
-        schema={
-            Column.CLIENT: pl.String,
-            Column.FAMILY: pl.String,
-            Column.DESCRIPTOR: pl.String,
-            Column.VALUE: pl.Float64,
-        },
-    )
+    return records_to_frame(rows)
