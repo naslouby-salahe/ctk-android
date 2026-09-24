@@ -1,9 +1,9 @@
 import ast
 import re
 import subprocess
-from collections import Counter
 
 from tests.architecture.source_index import (
+    ENUMS_MODULE,
     REPO_ROOT,
     SRC_ROOT,
     TESTS_ROOT,
@@ -12,6 +12,7 @@ from tests.architecture.source_index import (
     location,
     parse,
     source_files,
+    string_constants,
 )
 
 ALLOWED_LITERALS = {0, 1, 2, -1, 0.5}
@@ -37,36 +38,35 @@ def _target_name(node: ast.Assign | ast.AnnAssign) -> str:
     return target.id if isinstance(target, ast.Name) else ""
 
 
-def test_no_magic_numeric_literals_inside_function_bodies() -> None:
-    offenders: list[str] = []
-    for path in source_files():
-        tree = parse(path)
-        for function in functions(tree):
-            for node in ast.walk(function):
-                if (
-                    isinstance(node, ast.Constant)
-                    and isinstance(node.value, int | float)
-                    and not isinstance(node.value, bool)
-                    and node.value not in ALLOWED_LITERALS
-                ):
-                    offenders.append(f"{location(path, node.lineno)} literal {node.value}")
+def test_numeric_literals_live_in_enums_or_are_trivial() -> None:
+    offenders = [
+        f"{location(path, node.lineno)} literal {node.value}"
+        for path in source_files(ENUMS_MODULE, TYPES_MODULE)
+        for node in ast.walk(parse(path))
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, int | float)
+        and not isinstance(node.value, bool)
+        and node.value not in ALLOWED_LITERALS
+    ]
     assert not offenders, offenders
 
 
-def test_named_constants_have_one_owner_and_are_used() -> None:
-    names = Counter[str]()
-    for path in source_files():
-        names.update(_target_name(node) for node in _module_constants(parse(path)))
-    duplicated = sorted(name for name, count in names.items() if count > 1)
-    assert not duplicated, duplicated
-    referenced = {
-        node.id
-        for path in source_files()
-        for node in ast.walk(parse(path))
-        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
-    }
-    dead = sorted(name for name in names if name not in referenced)
-    assert not dead, dead
+def test_constants_are_enum_members_not_module_level_names() -> None:
+    offenders = [
+        f"{location(path, node.lineno)} {_target_name(node)}"
+        for path in source_files(ENUMS_MODULE)
+        for node in _module_constants(parse(path))
+    ]
+    assert not offenders, offenders
+
+
+def test_no_string_literals_outside_enums_py() -> None:
+    offenders = [
+        f"{location(path, line)} hardcodes {text!r}"
+        for path in source_files(ENUMS_MODULE)
+        for line, text in string_constants(parse(path))
+    ]
+    assert not offenders, offenders
 
 
 def test_no_unfinished_markers_shims_or_claim_infrastructure() -> None:

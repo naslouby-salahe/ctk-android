@@ -4,7 +4,7 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 from torch import nn
 
 from ctk_android.config import TrainingConfig
-from ctk_android.enums import Device, ModelFamily
+from ctk_android.enums import Device, ErrorMessage, ModelFamily, RowBlock
 from ctk_android.types import (
     ByteMatrix,
     Epochs,
@@ -18,8 +18,6 @@ from ctk_android.types import (
     StateDict,
     Stepper,
 )
-
-SCORING_CHUNK_ROWS = 1 << 13
 
 
 def resolve_device(requested: Device) -> Device:
@@ -110,11 +108,11 @@ def scorer_logits(scorer: Scorer, features: ByteMatrix, rows: IntArray) -> Float
     if scorer.trees is not None:
         return scorer.trees.decision_function(np.asarray(features[rows])).astype(np.float64)
     if scorer.network is None:
-        raise ValueError("scorer has neither network nor trees")
+        raise ValueError(ErrorMessage.EMPTY_SCORER)
     scorer.network.to(scorer.device).eval()
     outputs: list[Float32Array] = []
     with torch.no_grad():
-        for start in range(0, rows.size, SCORING_CHUNK_ROWS):
-            chunk = _tensor(features, rows[start : start + SCORING_CHUNK_ROWS], scorer.device)
+        for start in range(0, rows.size, RowBlock.SCORING):
+            chunk = _tensor(features, rows[start : start + RowBlock.SCORING], scorer.device)
             outputs.append(scorer.network(chunk).squeeze(-1).cpu().numpy())
     return np.concatenate(outputs).astype(np.float64) if outputs else np.empty(0)

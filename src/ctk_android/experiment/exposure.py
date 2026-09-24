@@ -5,8 +5,10 @@ from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import (
     ClientId,
     Column,
+    DetailMessage,
     ExposureCondition,
     ExposureMode,
+    LibraryOption,
     SplitRole,
     ValidationCheck,
 )
@@ -93,7 +95,9 @@ def allowed_dose_rows(
         target = spec.dose_targets[family]
         peer = (table[Column.CLIENT] != target).to_numpy()
         candidates = np.flatnonzero(masks[family] & fit & peer)
-        ranked = candidates[np.argsort(priorities[candidates], kind="stable")][:cap]
+        ranked = candidates[np.argsort(priorities[candidates], kind=LibraryOption.SORT_STABLE)][
+            :cap
+        ]
         mask = np.zeros(table.height, dtype=bool)
         mask[ranked] = True
         allowed[family] = mask
@@ -188,26 +192,26 @@ def validate_exposure(
         ValidationRecord(
             check=ValidationCheck.HIDDEN_FAMILY_ABSENT_FROM_TARGET,
             passed=hidden_zero,
-            detail="target training exposure to hidden families is zero",
+            detail=DetailMessage.HIDDEN_ZERO,
         ),
         ValidationRecord(
             check=ValidationCheck.PEER_FAMILY_PRESENT,
             passed=peer_present,
-            detail=f"peer support >= {peer_min_fit} in fit pool and present in training",
+            detail=DetailMessage.PEER_SUPPORT.format(minimum=peer_min_fit),
         ),
         ValidationRecord(
             check=ValidationCheck.FAMILY_ABSENT_EVERYWHERE,
             passed=absent_zero,
-            detail="target families absent from every client in the absent-everywhere arms",
+            detail=DetailMessage.ABSENT_EVERYWHERE,
         ),
         ValidationRecord(
             check=ValidationCheck.SAMPLE_SIZE_MATCHED,
             passed=matched,
-            detail=f"per-client training sizes {sorted(map(sorted, sizes.values()))}",
+            detail=DetailMessage.SIZES.format(sizes=sorted(map(sorted, sizes.values()))),
         ),
         ValidationRecord(
             check=ValidationCheck.TRAINING_EXCLUDES_TEST,
             passed=only_fit,
-            detail="all training rows belong to the fit role",
+            detail=DetailMessage.FIT_ONLY,
         ),
     ]

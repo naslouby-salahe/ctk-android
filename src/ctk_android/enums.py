@@ -1,4 +1,5 @@
-from enum import StrEnum
+from enum import Enum, IntEnum, StrEnum
+from typing import Final
 
 
 class DatasetName(StrEnum):
@@ -29,7 +30,6 @@ class ExecutionMode(StrEnum):
     SMOKE = "smoke"
     DEVELOPMENT = "development"
     CONFIRMATORY = "confirmatory"
-    EXPLORATORY = "exploratory"
 
 
 class ExperimentName(StrEnum):
@@ -108,7 +108,6 @@ class EvaluationPopulation(StrEnum):
     FEDERATION_WIDE = "federation-wide"
     KNOWN_FAMILY = "known-family"
     BENIGN = "benign"
-    DISCRIMINATION = "discrimination"
 
 
 class EligibilityReason(StrEnum):
@@ -116,11 +115,6 @@ class EligibilityReason(StrEnum):
     EMPTY_LABEL = "empty-label"
     UNKNOWN_LABEL = "unknown-label"
     SINGLETON_LABEL = "singleton-label"
-    INSUFFICIENT_PEER_SUPPORT = "insufficient-peer-support"
-    INSUFFICIENT_TEST_SUPPORT = "insufficient-test-support"
-    INVALID_TARGET_TRAINING = "invalid-target-training"
-    TARGET_SHARE_TOO_LARGE = "target-share-too-large"
-    INSUFFICIENT_OWN_DOMAIN_SUPPORT = "insufficient-own-domain-support"
     NOT_IN_FAMILY_SET = "not-in-family-set"
 
 
@@ -128,26 +122,13 @@ class RunStatus(StrEnum):
     COMPLETED = "completed"
     FAILED_VALIDATION = "failed-validation"
     INFEASIBLE = "infeasible"
-    STRUCTURALLY_EXCLUDED = "structurally-excluded"
     INCOMPLETE = "incomplete"
 
 
 class FailureReason(StrEnum):
     SCHEMA_MISMATCH = "schema-mismatch"
-    ROW_COUNT_MISMATCH = "row-count-mismatch"
-    LABEL_RULE_VIOLATION = "label-rule-violation"
-    UNMATCHED_LINKAGE = "unmatched-linkage"
-    LEAKAGE_SHA = "leakage-sha"
-    LEAKAGE_COMPONENT = "leakage-component"
-    LEAKAGE_FEATURE_VECTOR = "leakage-feature-vector"
-    TARGET_EXPOSURE_NONZERO = "target-exposure-nonzero"
-    PEER_SUPPORT_MISSING = "peer-support-missing"
-    ABSENT_FAMILY_PRESENT = "absent-family-present"
-    SAMPLE_SIZE_MISMATCH = "sample-size-mismatch"
-    TEST_ROW_IN_TRAINING = "test-row-in-training"
     NO_ELIGIBLE_TARGETS = "no-eligible-targets"
     INSUFFICIENT_CALIBRATION = "insufficient-calibration"
-    OPERATING_POINT_DEVIATION = "operating-point-deviation"
     NOT_APPLICABLE_MODEL_FAMILY = "not-applicable-model-family"
 
 
@@ -193,55 +174,12 @@ class Metric(StrEnum):
     MICRO_UNSEEN_RECALL = "micro-unseen-recall"
 
 
-class Estimand(StrEnum):
-    TOTAL_GAIN = "total-gain"
-    POOLING_GAIN = "pooling-gain"
-    CTK_GAIN = "ctk-gain"
-    CTK_SHARE = "ctk-share"
-    ORACLE_GAP_RECOVERY = "oracle-gap-recovery"
-
-
-class ContrastName(StrEnum):
-    FEDAVG_PEER_VS_LOCAL = "fedavg-peer-present-vs-local"
-    FEDAVG_ABSENT_VS_LOCAL = "fedavg-absent-everywhere-vs-local"
-    FEDAVG_PEER_VS_ABSENT = "fedavg-peer-present-vs-absent-everywhere"
-    CENTRAL_PEER_VS_LOCAL = "central-peer-present-vs-local"
-    CENTRAL_ABSENT_VS_LOCAL = "central-absent-everywhere-vs-local"
-    CENTRAL_PEER_VS_ABSENT = "central-peer-present-vs-absent-everywhere"
-    LOCAL_VS_FULL_CENTRAL = "local-vs-full-exposure-central"
-
-
 class ContrastFamily(StrEnum):
     PRIMARY = "primary"
-    REFERENCE = "reference"
-    EXPLORATORY = "exploratory"
 
 
 class ClaimName(StrEnum):
-    LOCAL_DEFICIT = "local-deficit"
-    COLLABORATION_BENEFIT = "collaboration-benefit"
-    COMPLEMENTARY_KNOWLEDGE = "complementary-knowledge"
-    GENERIC_POOLING_MAJORITY = "generic-pooling-majority"
     DOSE_RESPONSE = "dose-response"
-    OWN_DOMAIN_BENEFIT = "own-domain-benefit"
-    WORST_CLIENT_BENEFIT = "worst-client-benefit"
-    KNOWN_FAMILY_SAFETY = "known-family-safety"
-    FAMILY_DEPENDENCE = "family-dependence"
-    REPRESENTATION_LIMITED_FAMILY = "representation-limited-family"
-    FEATURE_NOVELTY_EXPLANATION = "feature-novelty-explanation"
-    NEW_MECHANISM_TRIGGER = "new-mechanism-trigger"
-
-
-class ClaimStatus(StrEnum):
-    PROMOTED = "promoted"
-    NARROWED = "narrowed"
-    INSUFFICIENT_EVIDENCE = "insufficient-evidence"
-    REJECTED = "rejected"
-
-
-class PromotionState(StrEnum):
-    PROMOTED = "promoted"
-    BLOCKED = "blocked"
 
 
 class NoveltyDescriptor(StrEnum):
@@ -250,12 +188,6 @@ class NoveltyDescriptor(StrEnum):
     MAX_JACCARD_TO_KNOWN_FAMILY = "max-jaccard-to-known-family"
     FRACTION_ACTIVE_FEATURES_KNOWN = "fraction-active-features-known"
     DISTANCE_TO_BENIGN_CENTROID = "distance-to-benign-centroid"
-
-
-class Sensitivity(StrEnum):
-    OPERATING_POINT = "operating-point"
-    TOP_FAMILY_REMOVAL = "top-family-removal"
-    REPRESENTATION_DEDUPLICATION = "representation-deduplication"
 
 
 class Stage(StrEnum):
@@ -357,23 +289,18 @@ class Column(StrEnum):
     REASON = "reason"
     ELIGIBLE = "eligible"
     FIT_ROWS = "fit_rows"
-    CALIBRATION_ROWS = "calibration_rows"
-    TEST_ROWS = "test_rows"
     TARGET_FIT_ROWS = "target_fit_rows"
     PEER_FIT_ROWS = "peer_fit_rows"
     TARGET_TEST_ROWS = "target_test_rows"
     FEDERATION_TEST_ROWS = "federation_test_rows"
     TARGET_SHARE = "target_share"
     TOTAL_FIT_ROWS = "total_fit_rows"
-    RANK = "rank"
     EXPERIMENT = "experiment"
     MODE = "mode"
     MODEL_FAMILY = "model_family"
     LEARNER = "learner"
     CONDITION = "condition"
-    ARM = "arm"
     DOSE = "dose"
-    EFFECTIVE_DOSE = "effective_dose"
     ALPHA = "alpha"
     METRIC = "metric"
     VALUE = "value"
@@ -381,51 +308,16 @@ class Column(StrEnum):
     POPULATION = "population"
     HITS = "hits"
     TRIALS = "trials"
-    THRESHOLD = "threshold"
-    CALIBRATION_BENIGN = "calibration_benign"
     OPERATING_STATUS = "operating_status"
     SCORE = "score"
-    LOCAL_ROWS = "local_rows"
     TARGET_CLIENT = "target_client"
-    HYPERPARAMETER = "hyperparameter"
-    CONTRAST = "contrast"
-    CONTRAST_FAMILY = "contrast_family"
-    MEAN_DIFFERENCE = "mean_difference"
-    MEDIAN_DIFFERENCE = "median_difference"
-    CI_LOW = "ci_low"
-    CI_HIGH = "ci_high"
-    P_VALUE = "p_value"
-    P_HOLM = "p_holm"
-    POSITIVE_SEEDS = "positive_seeds"
-    SEED_COUNT = "seed_count"
-    EFFECT_SIZE = "effect_size"
-    ESTIMAND = "estimand"
-    CLAIM = "claim"
-    CLAIM_STATUS = "claim_status"
-    WORDING = "wording"
-    DESCRIPTOR = "descriptor"
-    SPEARMAN = "spearman"
-    STAT_UNIT = "stat_unit"
-    TRAIN_ROWS = "train_rows"
-    PATH = "path"
-    FINGERPRINT = "fingerprint"
-    CHECK = "check"
-    PASSED = "passed"
-    DETAIL = "detail"
-    LOCAL_RECALL = "local_recall"
-    ABSENT_RECALL = "absent_recall"
-    PEER_RECALL = "peer_recall"
-    FULL_RECALL = "full_recall"
-    CTK_GAIN = "ctk_gain"
     NOVELTY = "novelty"
-    CLASSIFICATION = "classification"
     RECALL = "recall"
     AUROC = "auroc"
     AUPRC = "auprc"
     LOW = "low"
     HIGH = "high"
-    RESAMPLES = "resamples"
-    FEATURE_INDEX = "feature_index"
+    LINKED_VT = "linked_vt_detection"
 
 
 class LogEvent(StrEnum):
@@ -436,7 +328,6 @@ class LogEvent(StrEnum):
     RUN_REUSED = "run-reused"
     RUN_FINISHED = "run-finished"
     ARM_TRAINED = "arm-trained"
-    REPORT_WRITTEN = "report-written"
 
 
 class CliCommand(StrEnum):
@@ -446,7 +337,6 @@ class CliCommand(StrEnum):
     SMOKE = "smoke"
     RUN = "run"
     STATUS = "status"
-    REPORT = "report"
 
 
 class DoctorCheck(StrEnum):
@@ -456,4 +346,208 @@ class DoctorCheck(StrEnum):
     RAW_ANDROZOO = "raw-androzoo"
     COMPUTE_DEVICE = "compute-device"
     GIT_REVISION = "git-revision"
-    OUTPUTS_WRITABLE = "outputs-writable"
+
+
+class WorkspaceDirectory(StrEnum):
+    DATA = "data"
+    RAW = "raw"
+    SOURCE = "src"
+    PACKAGE = "ctk_android"
+    CONFIGS = "configs"
+    OUTPUTS = "outputs"
+    PREPROCESSING = "preprocessing"
+    LINKAGE = "linkage"
+    CACHE = "cache"
+    PLANS = "plans"
+    METRICS = "metrics"
+    SCORES = "scores"
+    MODELS = "models"
+
+
+class SourceFile(StrEnum):
+    PROJECT_MARKER = "pyproject.toml"
+    LAMDA_FEATURE_MAPPING = "feature_mapping.csv"
+    LAMDA_PARQUET_GLOB = "*/*.parquet"
+    ANDROZOO_ARCHIVE = "latest.csv.gz"
+    PYTHON_GLOB = "*.py"
+
+
+class CoreModule(StrEnum):
+    TYPES = "types.py"
+    ENUMS = "enums.py"
+    CONFIG = "config.py"
+    PATHS = "paths.py"
+
+
+class FileSuffix(StrEnum):
+    PARQUET = ".parquet"
+    TORCH = ".pt"
+    FAMILY_SET = "-family-set.json"
+
+
+class NameFragment(StrEnum):
+    SEED = "seed-"
+    SALT = "-salt-"
+    SEPARATOR = "-"
+    ARM_SEPARATOR = "__"
+    DOSE = "dose-"
+    ALL_DOSE = "all"
+
+
+class LamdaRelease(StrEnum):
+    BASELINE = "Baseline"
+    VARIANCE_0_0001 = "var_thresh_0.0001"
+    VARIANCE_0_01 = "var_thresh_0.01"
+
+
+class LogLevel(StrEnum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+class SourceFamilyLabel(StrEnum):
+    EMPTY = ""
+    UNKNOWN = "unknown"
+    BENIGN = "benign"
+
+
+class Verdict(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+
+
+class TrackedPackage(StrEnum):
+    NUMPY = "numpy"
+    POLARS = "polars"
+    SCIKIT_LEARN = "scikit-learn"
+
+
+class ByteBlock(IntEnum):
+    ANDROZOO_SCAN = 1 << 26
+    HASH_CHUNK = 1 << 22
+
+
+class RowBlock(IntEnum):
+    SCORING = 1 << 13
+
+
+class Display(IntEnum):
+    FINGERPRINT_PREFIX = 12
+
+
+class PythonRequirement(IntEnum):
+    MAJOR = 3
+    MINOR = 12
+
+
+class Tolerance(float, Enum):
+    PARTITION_FRACTIONS = 1e-9
+
+
+class Separator(StrEnum):
+    NEWLINE = "\n"
+    COLON = ":"
+    COLON_SPACE = ": "
+    PIPE = "|"
+    EMPTY = ""
+
+
+class FormatSpec(StrEnum):
+    THREE_DIGITS = "03d"
+
+
+class TextEncoding(StrEnum):
+    UTF8 = "utf-8"
+
+
+class GitArgument(StrEnum):
+    GIT = "git"
+    DIRECTORY = "-C"
+    REV_PARSE = "rev-parse"
+    HEAD = "HEAD"
+
+
+class ErrorMessage(StrEnum):
+    NO_PROJECT_ROOT = "no {marker} above {start}"
+    NO_LAMDA_FILES = "no LAMDA parquet files found"
+    FEATURE_COLUMNS_DIFFER = "{name}: feature columns differ"
+    STAGE_VALIDATION = "{stage}: {check} {detail}"
+    PLAN_MISSING = "no plan for mode {mode}; run plan first"
+    RUN_NOT_PLANNED = "run {experiment} seed {seed} is not in the {mode} plan"
+    EXPERIMENT_MODE = "{experiment} is not defined for {mode}"
+    NEEDS_FEDERATED = "{learner} needs a federated model"
+    NEEDS_LOCAL = "blend needs local models"
+    PARAMETRIC_ONLY = "federated averaging needs parametric models"
+    FINETUNE_NETWORK = "fine-tuning needs a network"
+    CLASS_COUNTS = "training rows have class counts {counts}"
+    EMPTY_SCORER = "scorer has neither network nor trees"
+    PARTITION_ATTEMPTS = "partition attempts must be positive"
+    FRACTIONS_SUM = "partition fractions must sum to one"
+    SEED_ROLES = "seed roles must be disjoint"
+    SMOKE_INCOMPLETE = "smoke workflow incomplete: {detail}"
+    SEED_OUTSIDE_PLAN = "seed {seed} is not a {mode} seed in the configuration"
+
+
+class DetailMessage(StrEnum):
+    FEATURE_CONTRACT = "rows={rows} features={features} non_binary_cells_binarized={binarized}"
+    SHA_UNIQUE = "unique={unique} of {total}"
+    LABEL_RULE = "malware>={malware_min}={malware_ok} benign=={benign_vt}={benign_ok}"
+    LINKAGE = "matched={matched} unmatched={unmatched} unique_links={unique} vt_agrees={agrees}"
+    CROSSING = "crossing={crossing}"
+    GROUP_CROSSING = "grouping={grouping} crossing={crossing}"
+    FEATURE_CROSSING = "crossing={crossing} enforced={enforced}"
+    CLIENTS_PRESENT = "clients={clients}"
+    FAMILY_SETS = "disjoint family sets, overlap={overlap}"
+    HIDDEN_ZERO = "target training exposure to hidden families is zero"
+    PEER_SUPPORT = "peer support >= {minimum} in fit pool and present in training"
+    ABSENT_EVERYWHERE = "target families absent from every client in the absent-everywhere arms"
+    SIZES = "per-client training sizes {sizes}"
+    FIT_ONLY = "all training rows belong to the fit role"
+    CALIBRATION_ROWS = "calibration rows are own-client benign calibration rows"
+    HIDDEN_TEST_ONLY = "evaluated hidden-family rows belong to the test partition"
+    OPERATING_DEVIATION = "max |realised FPR - alpha| = {deviation}"
+    FILE_COUNT = "{count} files, {missing} missing"
+    NOT_A_CHECKOUT = "not a git checkout"
+    CONFIG_FINGERPRINT = "configuration fingerprint {prefix}"
+    DEVICE = "available {available}, configured {configured}"
+
+
+class CliMessage(StrEnum):
+    DOCTOR_LINE = "{verdict} {check}: {detail}"
+    STAGE_LINE = "{stage} reused={reused} {directory}"
+    PLANNED = "{count} runs planned for {mode}"
+    SMOKE_LINE = "smoke {status} {directory}"
+    RUN_LINE = "{experiment} seed={seed} {status}"
+    FAILURE_LINE = "{reason}: {error}"
+
+
+class LibraryOption:
+    """Literal-typed option values that third-party APIs accept only as string literals."""
+
+    JOIN_LEFT: Final = "left"
+    JOIN_CROSS: Final = "cross"
+    SORT_STABLE: Final = "stable"
+    RANK_DENSE: Final = "dense"
+    QUANTILE_HIGHER: Final = "higher"
+    READ_BINARY: Final = "rb"
+    DUMP_JSON: Final = "json"
+    FORBID_EXTRA: Final = "forbid"
+    VALIDATE_AFTER: Final = "after"
+    MMAP_READ: Final = "r"
+
+
+class Pattern(StrEnum):
+    SHA256 = r"^[0-9a-f]{64}$"
+    YEAR_MONTH = r"^\d{4}-\d{2}$"
+    FEATURE_COLUMN = r"^feat_\d+$"
+
+
+class FeatureNaming(StrEnum):
+    PREFIX = "feat_"
+
+
+class MarketCount(IntEnum):
+    SINGLE = 1

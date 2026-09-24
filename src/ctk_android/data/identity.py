@@ -3,14 +3,14 @@ import polars as pl
 from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
-from ctk_android.enums import Column, Grouping
+from ctk_android.enums import Column, Grouping, LibraryOption
 from ctk_android.types import ByteMatrix, IntArray
 
 
 def _first_occurrence_ids(labels: IntArray) -> IntArray:
     _, first_index, inverse = np.unique(labels, return_index=True, return_inverse=True)
     rank = np.empty(first_index.size, dtype=np.int64)
-    rank[np.argsort(first_index, kind="stable")] = np.arange(first_index.size)
+    rank[np.argsort(first_index, kind=LibraryOption.SORT_STABLE)] = np.arange(first_index.size)
     return rank[inverse.reshape(-1)]
 
 
@@ -22,7 +22,9 @@ def feature_identities(features: ByteMatrix) -> IntArray:
 
 
 def package_identities(packages: pl.Series) -> IntArray:
-    return _first_occurrence_ids(packages.rank("dense").to_numpy().astype(np.int64))
+    return _first_occurrence_ids(
+        packages.rank(LibraryOption.RANK_DENSE).to_numpy().astype(np.int64)
+    )
 
 
 def connected_component_ids(package_ids: IntArray, feature_ids: IntArray) -> IntArray:

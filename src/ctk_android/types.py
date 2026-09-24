@@ -21,10 +21,14 @@ from ctk_android.enums import (
     ExposureCondition,
     FailureReason,
     Grouping,
+    LamdaRelease,
     Learner,
+    LibraryOption,
     ModelFamily,
+    NameFragment,
     NoveltyDescriptor,
     OperatingPointStatus,
+    Pattern,
     RunStatus,
     Stage,
     ValidationCheck,
@@ -58,7 +62,7 @@ VtCount = NonNegativeInt
 Rank = NonNegativeInt
 ExceedanceCount = PositiveInt
 
-SEED_ADAPTER: TypeAdapter[Seed] = TypeAdapter(Seed)
+seed_adapter: TypeAdapter[Seed] = TypeAdapter(Seed)
 
 Fraction = UnitInterval
 Rate = UnitInterval
@@ -76,14 +80,13 @@ Correlation = FiniteFloat
 PValue = UnitInterval
 Seconds = NonNegativeFloat
 
-Sha256 = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
+Sha256 = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
 PackageName = Annotated[str, StringConstraints(min_length=1)]
 FamilyName = Annotated[str, StringConstraints(strip_whitespace=True)]
-YearMonth = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}$")]
-Fingerprint = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{64}$")]
-Revision = Annotated[str, StringConstraints(min_length=1)]
+YearMonth = Annotated[str, StringConstraints(pattern=Pattern.YEAR_MONTH)]
+Fingerprint = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
 Message = Annotated[str, StringConstraints(min_length=1)]
-FeatureColumn = Annotated[str, StringConstraints(pattern=r"^feat_\d+$")]
+FeatureColumn = Annotated[str, StringConstraints(pattern=Pattern.FEATURE_COLUMN)]
 Label = Annotated[int, Field(ge=0, le=1)]
 
 FloatArray = NDArray[np.float64]
@@ -93,15 +96,18 @@ BoolArray = NDArray[np.bool_]
 ByteMatrix = NDArray[np.uint8]
 
 Directory = Path
+LamdaReleaseFiles = list[Path]
+EntryName = Annotated[str, StringConstraints(min_length=1)]
 File = Path
 StateDict = dict[str, torch.Tensor]
 
 
 class FrozenRecord(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        frozen=True, extra=LibraryOption.FORBID_EXTRA, arbitrary_types_allowed=True
+    )
 
 
-ReleaseName = Annotated[str, StringConstraints(min_length=1)]
 LabelPrefix = Annotated[str, StringConstraints(min_length=1)]
 SupportCount = NonNegativeInt
 StatKey = Annotated[str, StringConstraints(min_length=1)]
@@ -192,8 +198,9 @@ class ArmKey(FrozenRecord):
     dose: DoseRequest
 
     def label(self) -> str:
-        dose = "all" if self.dose is None else f"{self.dose}"
-        return f"{self.learner}__{self.condition}__dose-{dose}"
+        dose = NameFragment.ALL_DOSE if self.dose is None else f"{self.dose}"
+        parts = (self.learner, self.condition, f"{NameFragment.DOSE}{dose}")
+        return NameFragment.ARM_SEPARATOR.join(parts)
 
 
 class StudyData(FrozenRecord):
@@ -316,7 +323,7 @@ class ValidationDocument(FrozenRecord):
 
 
 class LamdaSchema(FrozenRecord):
-    release: ReleaseName
+    release: LamdaRelease
     feature_count: FeatureCount
     metadata_columns: tuple[Column, ...]
     non_binary_cells_binarized: RowCount

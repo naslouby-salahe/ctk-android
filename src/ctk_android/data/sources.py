@@ -9,10 +9,16 @@ from ctk_android.config import DataConfig
 from ctk_android.data.cache import combine_fingerprints, fingerprint_file
 from ctk_android.enums import (
     AndroZooColumn,
+    ByteBlock,
     Column,
     DatasetName,
+    DetailMessage,
+    ErrorMessage,
     FailureReason,
+    FeatureNaming,
     LamdaColumn,
+    LibraryOption,
+    Separator,
     ValidationCheck,
 )
 from ctk_android.paths import Paths
@@ -32,13 +38,10 @@ from ctk_android.types import (
     ValidationRecord,
 )
 
-FEATURE_PREFIX = "feat_"
-ANDROZOO_BLOCK_BYTES = 1 << 26
-
 
 def _stat_key(path: File) -> StatKey:
     stat = path.stat()
-    return f"{stat.st_size}:{stat.st_mtime_ns}"
+    return Separator.COLON.join((f"{stat.st_size}", f"{stat.st_mtime_ns}"))
 
 
 def fingerprint_files(
@@ -54,7 +57,9 @@ def fingerprint_files(
             entry.digest if entry is not None and entry.stat == stat_key else fingerprint_file(path)
         )
         entries.append(InventoryEntry(name=name, stat=stat_key, digest=digest))
-    listing = "\n".join(f"{entry.name}:{entry.digest}" for entry in entries)
+    listing = Separator.NEWLINE.join(
+        Separator.COLON.join((entry.name, entry.digest)) for entry in entries
+    )
     fingerprint = SourceFingerprint(
         dataset=dataset,
         fingerprint=hashlib.sha256(listing.encode()).hexdigest(),
@@ -87,13 +92,13 @@ def sources_fingerprint(lamda: SourceFingerprint, androzoo: SourceFingerprint) -
 
 
 def _feature_columns(count: FeatureCount) -> list[FeatureColumn]:
-    return [f"{FEATURE_PREFIX}{index}" for index in range(count)]
+    return [f"{FeatureNaming.PREFIX}{index}" for index in range(count)]
 
 
 def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
     files = paths.lamda_release_files(config.lamda_release)[:-1]
     if not files:
-        raise CtkError(FailureReason.SCHEMA_MISMATCH, "no LAMDA parquet files found")
+        raise CtkError(FailureReason.SCHEMA_MISMATCH, ErrorMessage.NO_LAMDA_FILES)
     feature_names = _feature_columns(config.expected_features)
     frames: list[pl.DataFrame] = []
     blocks: list[ByteMatrix] = []
@@ -102,9 +107,14 @@ def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
     for path in files:
         frame = pl.read_parquet(path)
         missing = set(feature_names) - set(frame.columns)
-        extra = {c for c in frame.columns if c.startswith(FEATURE_PREFIX)} - set(feature_names)
+        extra = {c for c in frame.columns if c.startswith(FeatureNaming.PREFIX)} - set(
+            feature_names
+        )
         if missing or extra:
-            raise CtkError(FailureReason.SCHEMA_MISMATCH, f"{path.name}: feature columns differ")
+            raise CtkError(
+                FailureReason.SCHEMA_MISMATCH,
+                ErrorMessage.FEATURE_COLUMNS_DIFFER.format(name=path.name),
+            )
         raw = frame.select(feature_names).to_numpy()
         non_binary += (raw > 1).sum().item()
         negative += (raw < 0).sum().item()
@@ -120,7 +130,7 @@ def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
         )
     metadata = pl.concat(frames)
     features = np.concatenate(blocks)
-    order = np.argsort(metadata[Column.SHA256].to_numpy(), kind="stable")
+    order = np.argsort(metadata[Column.SHA256].to_numpy(), kind=LibraryOption.SORT_STABLE)
     return LamdaTable(
         metadata=metadata[order],
         features=features[order],
@@ -142,22 +152,25 @@ def validate_lamda(table: LamdaTable, config: DataConfig) -> list[ValidationReco
             passed=table.features.shape[1] == config.expected_features
             and rows == config.expected_rows
             and table.negative_cells == 0,
-            detail=(
-                f"rows={rows} features={table.features.shape[1]} "
-                f"non_binary_cells_binarized={table.non_binary_cells}"
+            detail=DetailMessage.FEATURE_CONTRACT.format(
+                rows=rows, features=table.features.shape[1], binarized=table.non_binary_cells
             ),
         ),
         ValidationRecord(
             check=ValidationCheck.SHA_UNIQUENESS,
             passed=metadata[Column.SHA256].n_unique() == metadata.height,
-            detail=f"unique={metadata[Column.SHA256].n_unique()} of {metadata.height}",
+            detail=DetailMessage.SHA_UNIQUE.format(
+                unique=metadata[Column.SHA256].n_unique(), total=metadata.height
+            ),
         ),
         ValidationRecord(
             check=ValidationCheck.LABEL_RULE,
             passed=malware_ok and benign_ok,
-            detail=(
-                f"malware>={config.malware_min_vt}={malware_ok} "
-                f"benign=={config.benign_vt}={benign_ok}"
+            detail=DetailMessage.LABEL_RULE.format(
+                malware_min=config.malware_min_vt,
+                malware_ok=malware_ok,
+                benign_vt=config.benign_vt,
+                benign_ok=benign_ok,
             ),
         ),
     ]
@@ -167,7 +180,7 @@ def scan_androzoo(paths: Paths, wanted: pl.Series) -> pl.DataFrame:
     wanted_upper = wanted.str.to_uppercase()
     reader = pacsv.open_csv(
         paths.androzoo_archive(),
-        read_options=pacsv.ReadOptions(block_size=ANDROZOO_BLOCK_BYTES),
+        read_options=pacsv.ReadOptions(block_size=ByteBlock.ANDROZOO_SCAN),
         convert_options=pacsv.ConvertOptions(
             include_columns=[column for column in AndroZooColumn],
             column_types={

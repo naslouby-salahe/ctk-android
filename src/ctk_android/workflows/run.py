@@ -24,7 +24,9 @@ from ctk_android.enums import (
     Artifact,
     ClientId,
     Column,
+    DetailMessage,
     Device,
+    ErrorMessage,
     EvaluationPopulation,
     ExecutionMode,
     ExperimentName,
@@ -37,6 +39,7 @@ from ctk_android.enums import (
     RunStatus,
     SplitRole,
     Stage,
+    TrackedPackage,
     ValidationCheck,
 )
 from ctk_android.experiment import evaluation, exposure, metrics, training
@@ -68,15 +71,18 @@ from ctk_android.types import (
 from ctk_android.workflows.plan import planned_targets
 
 log = structlog.get_logger()
-LOCAL_ARM = ArmKey(learner=Learner.LOCAL, condition=ExposureCondition.PEER_PRESENT, dose=None)
-GLOBAL_LEARNERS = (
-    Learner.CENTRAL,
-    Learner.FEDAVG,
-    Learner.FEDPROX,
-    Learner.FEDAVG_FINETUNE,
-    Learner.BLEND,
-)
-STREAM_BY_LEARNER = {learner: index + 1 for index, learner in enumerate(Learner)}
+
+
+def local_arm() -> ArmKey:
+    return ArmKey(learner=Learner.LOCAL, condition=ExposureCondition.PEER_PRESENT, dose=None)
+
+
+def global_learners() -> list[Learner]:
+    return [learner for learner in Learner if learner is not Learner.LOCAL]
+
+
+def learner_stream(learner: Learner) -> Seed:
+    return list(Learner).index(learner) + 1
 
 
 @dataclass(frozen=True)
@@ -134,7 +140,7 @@ def _train_learner(
     federated: ArmResult | None,
 ) -> ArmResult:
     config = context.config
-    stream = STREAM_BY_LEARNER[learner]
+    stream = learner_stream(learner)
     if learner is Learner.CENTRAL:
         scorer = training.train_scorer(
             context, training.pooled_rows(rows), config.central_epochs, stream
@@ -149,7 +155,8 @@ def _train_learner(
         )
     if federated is None:
         raise CtkError(
-            FailureReason.NOT_APPLICABLE_MODEL_FAMILY, f"{learner} needs a federated model"
+            FailureReason.NOT_APPLICABLE_MODEL_FAMILY,
+            ErrorMessage.NEEDS_FEDERATED.format(learner=learner),
         )
     if learner is Learner.FEDAVG_FINETUNE:
         tuned = {
@@ -163,7 +170,7 @@ def _train_learner(
         }
         return ArmResult(evaluation.score_per_client(tuned, study, pools), tuned)
     if local is None:
-        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, "blend needs local models")
+        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.NEEDS_LOCAL)
     return ArmResult(
         evaluation.blend_scores(local.scores, federated.scores, config.blend_weight), {}
     )
@@ -180,7 +187,7 @@ def _train_local(
             context,
             rows[client],
             context.config.local_epochs,
-            training.derive_seed(STREAM_BY_LEARNER[Learner.LOCAL], index),
+            training.derive_seed(learner_stream(Learner.LOCAL), index),
         )
         for index, client in enumerate(ClientId)
     }
@@ -208,12 +215,12 @@ def _pool_validations(
         ValidationRecord(
             check=ValidationCheck.THRESHOLD_FROM_BENIGN_CALIBRATION,
             passed=calibration_ok,
-            detail="calibration rows are own-client benign calibration rows",
+            detail=DetailMessage.CALIBRATION_ROWS,
         ),
         ValidationRecord(
             check=ValidationCheck.HIDDEN_ROWS_IN_TEST_ONLY,
             passed=hidden_test_only,
-            detail="evaluated hidden-family rows belong to the test partition",
+            detail=DetailMessage.HIDDEN_TEST_ONLY,
         ),
     ]
 
@@ -232,7 +239,7 @@ def _operating_validation(summary: pl.DataFrame, config: Config) -> ValidationRe
     return ValidationRecord(
         check=ValidationCheck.OPERATING_POINT_REALISED,
         passed=deviation is not None and (deviation <= tolerance).item(),
-        detail=f"max |realised FPR - alpha| = {deviation}",
+        detail=DetailMessage.OPERATING_DEVIATION.format(deviation=deviation),
     )
 
 
@@ -252,9 +259,9 @@ def _environment(device: Device) -> EnvironmentRecord:
         python=sys.version.split()[0],
         platform=platform.platform(),
         torch=torch.__version__,
-        numpy=version("numpy"),
-        polars=version("polars"),
-        scikit_learn=version("scikit-learn"),
+        numpy=version(TrackedPackage.NUMPY),
+        polars=version(TrackedPackage.POLARS),
+        scikit_learn=version(TrackedPackage.SCIKIT_LEARN),
         device=device,
     )
 
@@ -314,22 +321,22 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         local_rows = exposure.select_training(
             orders,
             masks,
-            exposure.exposure_spec(LOCAL_ARM, spec.exposure_mode, targets),
+            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
             {},
             budget,
         )
         local = _train_local(context, local_rows, study, pools)
         if Learner.LOCAL in spec.learners:
-            results[LOCAL_ARM] = local
-            trainings[LOCAL_ARM] = local_rows
-    reported = tuple(learner for learner in GLOBAL_LEARNERS if learner in spec.learners)
+            results[local_arm()] = local
+            trainings[local_arm()] = local_rows
+    reported = tuple(learner for learner in global_learners() if learner in spec.learners)
     for condition, dose in settings_for(spec, config):
         base = ArmKey(learner=Learner.CENTRAL, condition=condition, dose=dose)
         exposure_spec = exposure.exposure_spec(base, spec.exposure_mode, targets)
         allowed = exposure.allowed_dose_rows(study, masks, exposure_spec, priorities)
         rows = exposure.select_training(orders, masks, exposure_spec, allowed, budget)
         federated: ArmResult | None = None
-        for learner in GLOBAL_LEARNERS:
+        for learner in global_learners():
             needed = learner in reported or (
                 learner is Learner.FEDAVG
                 and {Learner.FEDAVG_FINETUNE, Learner.BLEND} & set(reported)
@@ -391,9 +398,9 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     write_table(
         operating.join(
             benign.select(
-                *metrics.ARM_COLUMNS, Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
+                *metrics.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
             ),
-            on=[*metrics.ARM_COLUMNS, Column.CLIENT, Column.ALPHA],
+            on=[*metrics.arm_columns(), Column.CLIENT, Column.ALPHA],
         ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
         paths.run_metric_file(key, Artifact.OPERATING_POINTS),
     )
@@ -450,7 +457,16 @@ def run_experiment(
 ) -> list[RunReport]:
     spec = config.experiments.experiments[experiment]
     if mode not in spec.modes:
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, f"{experiment} is not defined for {mode}")
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS,
+            ErrorMessage.EXPERIMENT_MODE.format(experiment=experiment, mode=mode),
+        )
+    outside = [seed for seed in seeds if seed not in config.project.seeds.for_mode(mode)]
+    if outside:
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS,
+            ErrorMessage.SEED_OUTSIDE_PLAN.format(seed=outside[0], mode=mode),
+        )
     reports: list[RunReport] = []
     for seed in seeds:
         for salt in spec.salts:

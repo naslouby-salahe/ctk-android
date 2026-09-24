@@ -22,6 +22,8 @@ from ctk_android.enums import (
     ClientId,
     Column,
     DatasetName,
+    DetailMessage,
+    ErrorMessage,
     FailureReason,
     FamilySetName,
     LogEvent,
@@ -80,7 +82,10 @@ def _record(
     if failed:
         log.error(LogEvent.STAGE_FAILED, stage=stage, check=failed[0].check)
         raise CtkError(
-            FailureReason.SCHEMA_MISMATCH, f"{stage}: {failed[0].check} {failed[0].detail}"
+            FailureReason.SCHEMA_MISMATCH,
+            ErrorMessage.STAGE_VALIDATION.format(
+                stage=stage, check=failed[0].check, detail=failed[0].detail
+            ),
         )
 
 
@@ -216,7 +221,7 @@ def clients_stage(
             ValidationRecord(
                 check=ValidationCheck.CLIENTS_COMPLETE,
                 passed=present == set(ClientId),
-                detail=f"clients={sorted(present)}",
+                detail=DetailMessage.CLIENTS_PRESENT.format(clients=sorted(present)),
             )
         ],
         directory,
@@ -276,7 +281,7 @@ def families_stage(
             ValidationRecord(
                 check=ValidationCheck.FAMILY_SETS_DISJOINT,
                 passed=not overlap and all(len(members) > 0 for members in sets.values()),
-                detail=f"disjoint family sets, overlap={sorted(overlap)}",
+                detail=DetailMessage.FAMILY_SETS.format(overlap=sorted(overlap)),
             )
         ],
         directory,

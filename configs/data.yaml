@@ -4,7 +4,7 @@ expected_features: 925
 malware_min_vt: 4
 benign_vt: 0
 singleton_prefix: "singleton:"
-unknown_labels: ["unknown", "benign", ""]
+unknown_labels: [unknown, benign]
 play_era_boundary: "2019-06"
 partition:
   fit: 0.6

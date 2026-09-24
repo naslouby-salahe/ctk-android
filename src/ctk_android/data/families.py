@@ -7,6 +7,8 @@ from ctk_android.enums import (
     Column,
     EligibilityReason,
     FamilySetName,
+    LibraryOption,
+    SourceFamilyLabel,
     SplitRole,
 )
 from ctk_android.types import FamilyName, Fraction, Rank, Seed, SupportCount
@@ -17,9 +19,9 @@ def classify_labels(assignments: pl.DataFrame, config: DataConfig) -> pl.DataFra
     reason = (
         pl.when(pl.col(Column.LABEL) == 0)
         .then(pl.lit(EligibilityReason.NOT_IN_FAMILY_SET))
-        .when(family.str.strip_chars() == "")
+        .when(family.str.strip_chars() == SourceFamilyLabel.EMPTY)
         .then(pl.lit(EligibilityReason.EMPTY_LABEL))
-        .when(family.is_in(list(config.unknown_labels)))
+        .when(family.is_in(pl.Series(config.unknown_labels, dtype=pl.String)))
         .then(pl.lit(EligibilityReason.UNKNOWN_LABEL))
         .when(family.str.starts_with(config.singleton_prefix))
         .then(pl.lit(EligibilityReason.SINGLETON_LABEL))
@@ -106,8 +108,8 @@ def controlled_pairs(
     own_test = _count(counts, SplitRole.TEST).rename({Column.ROWS: Column.TARGET_TEST_ROWS})
     return (
         fit.join(fed_fit, on=Column.FAMILY)
-        .join(fed_test, on=Column.FAMILY, how="left")
-        .join(own_test, on=[Column.CLIENT, Column.FAMILY], how="left")
+        .join(fed_test, on=Column.FAMILY, how=LibraryOption.JOIN_LEFT)
+        .join(own_test, on=[Column.CLIENT, Column.FAMILY], how=LibraryOption.JOIN_LEFT)
         .join(client_fit_rows, on=Column.CLIENT)
         .with_columns(
             pl.col(Column.FEDERATION_TEST_ROWS).fill_null(0),
@@ -145,11 +147,11 @@ def natural_pairs(
     own_test = _count(counts, SplitRole.TEST).rename({Column.ROWS: Column.TARGET_TEST_ROWS})
     clients = client_fit_rows.select(Column.CLIENT)
     families = total.select(Column.FAMILY)
-    grid = clients.join(families, how="cross")
+    grid = clients.join(families, how=LibraryOption.JOIN_CROSS)
     return (
-        grid.join(fit, on=[Column.CLIENT, Column.FAMILY], how="left")
+        grid.join(fit, on=[Column.CLIENT, Column.FAMILY], how=LibraryOption.JOIN_LEFT)
         .join(total, on=Column.FAMILY)
-        .join(own_test, on=[Column.CLIENT, Column.FAMILY], how="left")
+        .join(own_test, on=[Column.CLIENT, Column.FAMILY], how=LibraryOption.JOIN_LEFT)
         .with_columns(
             pl.col(Column.TARGET_FIT_ROWS).fill_null(0),
             pl.col(Column.TARGET_TEST_ROWS).fill_null(0),

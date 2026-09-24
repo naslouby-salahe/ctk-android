@@ -7,6 +7,7 @@ from ctk_android.data.cache import write_record, write_table
 from ctk_android.enums import (
     Artifact,
     Column,
+    ErrorMessage,
     ExecutionMode,
     ExperimentName,
     ExposureMode,
@@ -160,7 +161,7 @@ def planned_targets(paths: Paths, key: RunKey) -> tuple[RunStatus, tuple[TargetP
     matrix_path = paths.plan_file(key.mode, Artifact.RUN_MATRIX)
     if not matrix_path.is_file():
         raise CtkError(
-            FailureReason.NO_ELIGIBLE_TARGETS, f"no plan for mode {key.mode}; run plan first"
+            FailureReason.NO_ELIGIBLE_TARGETS, ErrorMessage.PLAN_MISSING.format(mode=key.mode)
         )
     matrix = pl.read_parquet(matrix_path).filter(
         (pl.col(Column.EXPERIMENT) == key.experiment)
@@ -169,7 +170,10 @@ def planned_targets(paths: Paths, key: RunKey) -> tuple[RunStatus, tuple[TargetP
     )
     if matrix.height != 1:
         raise CtkError(
-            FailureReason.NO_ELIGIBLE_TARGETS, f"run {key} is not in the {key.mode} plan"
+            FailureReason.NO_ELIGIBLE_TARGETS,
+            ErrorMessage.RUN_NOT_PLANNED.format(
+                experiment=key.experiment, seed=key.seed, mode=key.mode
+            ),
         )
     assignments = pl.read_parquet(paths.plan_file(key.mode, Artifact.FAMILY_ASSIGNMENTS)).filter(
         (pl.col(Column.EXPERIMENT) == key.experiment)

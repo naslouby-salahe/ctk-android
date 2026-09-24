@@ -3,13 +3,19 @@ import polars as pl
 from ctk_android.enums import (
     Column,
     EvaluationPopulation,
+    LibraryOption,
     Metric,
     OperatingPointStatus,
 )
 from ctk_android.types import SupportCount
 
-ARM_COLUMNS = [Column.LEARNER, Column.CONDITION, Column.DOSE]
-GROUP_COLUMNS = [*ARM_COLUMNS, Column.ALPHA]
+
+def arm_columns() -> list[Column]:
+    return [Column.LEARNER, Column.CONDITION, Column.DOSE]
+
+
+def group_columns() -> list[Column]:
+    return [*arm_columns(), Column.ALPHA]
 
 
 def _rates(
@@ -20,13 +26,13 @@ def _rates(
             (pl.col(Column.POPULATION) == population) & (pl.col(Column.TRIALS) >= max(minimum, 1))
         )
         .with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
-        .select(*GROUP_COLUMNS, Column.CLIENT, Column.RECALL)
+        .select(*group_columns(), Column.CLIENT, Column.RECALL)
     )
 
 
 def _long(frame: pl.DataFrame, metric: Metric, expression: pl.Expr) -> pl.DataFrame:
     return (
-        frame.group_by(GROUP_COLUMNS)
+        frame.group_by(group_columns())
         .agg(expression.alias(Column.VALUE))
         .with_columns(pl.lit(metric).alias(Column.METRIC))
     )
@@ -79,20 +85,24 @@ def summarize(
             )
         )
     if discrimination.height:
-        auroc = discrimination.group_by(ARM_COLUMNS).agg(
+        auroc = discrimination.group_by(arm_columns()).agg(
             pl.col(Column.AUROC).mean().alias(Column.VALUE)
         )
-        auprc = discrimination.group_by(ARM_COLUMNS).agg(
+        auprc = discrimination.group_by(arm_columns()).agg(
             pl.col(Column.AUPRC).mean().alias(Column.VALUE)
         )
         alphas = clients.select(Column.ALPHA).unique()
         parts.append(
-            auroc.join(alphas, how="cross").with_columns(pl.lit(Metric.AUROC).alias(Column.METRIC))
+            auroc.join(alphas, how=LibraryOption.JOIN_CROSS).with_columns(
+                pl.lit(Metric.AUROC).alias(Column.METRIC)
+            )
         )
         parts.append(
-            auprc.join(alphas, how="cross").with_columns(pl.lit(Metric.AUPRC).alias(Column.METRIC))
+            auprc.join(alphas, how=LibraryOption.JOIN_CROSS).with_columns(
+                pl.lit(Metric.AUPRC).alias(Column.METRIC)
+            )
         )
-    status = operating.group_by(GROUP_COLUMNS).agg(
+    status = operating.group_by(group_columns()).agg(
         pl.when(
             (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE).any()
         )
@@ -100,9 +110,9 @@ def summarize(
         .otherwise(pl.lit(OperatingPointStatus.VALID))
         .alias(Column.OPERATING_STATUS)
     )
-    wanted = [*GROUP_COLUMNS, Column.METRIC, Column.VALUE]
+    wanted = [*group_columns(), Column.METRIC, Column.VALUE]
     return (
         pl.concat([part.select(wanted) for part in parts])
-        .join(status, on=GROUP_COLUMNS, how="left", nulls_equal=True)
-        .sort([*GROUP_COLUMNS, Column.METRIC])
+        .join(status, on=group_columns(), how=LibraryOption.JOIN_LEFT, nulls_equal=True)
+        .sort([*group_columns(), Column.METRIC])
     )

@@ -1,5 +1,5 @@
 import hashlib
-import json
+from typing import Self
 
 import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -9,6 +9,7 @@ from ctk_android.enums import (
     ConfigFile,
     Device,
     EligibilityProfile,
+    ErrorMessage,
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
@@ -16,8 +17,14 @@ from ctk_android.enums import (
     FamilyLabelSource,
     FamilySetName,
     Grouping,
+    LamdaRelease,
     Learner,
+    LibraryOption,
+    LogLevel,
     ModelFamily,
+    SourceFamilyLabel,
+    TextEncoding,
+    Tolerance,
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
@@ -27,13 +34,11 @@ from ctk_android.types import (
     DropoutRate,
     Epochs,
     ExceedanceCount,
-    FamilyName,
     Fingerprint,
     Fraction,
     LabelPrefix,
     LearningRate,
     ProximalStrength,
-    ReleaseName,
     Rounds,
     RowCount,
     Salt,
@@ -48,11 +53,9 @@ from ctk_android.types import (
     YearMonth,
 )
 
-PARTITION_SUM_TOLERANCE = 1e-9
-
 
 class Frozen(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra=LibraryOption.FORBID_EXTRA)
 
 
 class SeedConfig(Frozen):
@@ -60,11 +63,11 @@ class SeedConfig(Frozen):
     development: tuple[Seed, ...]
     confirmatory: tuple[Seed, ...]
 
-    @model_validator(mode="after")
-    def _disjoint_roles(self) -> "SeedConfig":
+    @model_validator(mode=LibraryOption.VALIDATE_AFTER)
+    def _disjoint_roles(self) -> Self:
         every_seed = (*self.smoke, *self.development, *self.confirmatory)
         if len(every_seed) != len(set(every_seed)):
-            raise ValueError("seed roles must be disjoint")
+            raise ValueError(ErrorMessage.SEED_ROLES)
         return self
 
     def for_mode(self, mode: ExecutionMode) -> tuple[Seed, ...]:
@@ -78,7 +81,7 @@ class SeedConfig(Frozen):
 class ProjectConfig(Frozen):
     seeds: SeedConfig
     device: Device
-    logging_level: LabelPrefix
+    logging_level: LogLevel
 
 
 class PartitionConfig(Frozen):
@@ -87,10 +90,10 @@ class PartitionConfig(Frozen):
     test: Fraction
     attempts: SupportCount
 
-    @model_validator(mode="after")
-    def _sums_to_one(self) -> "PartitionConfig":
-        if abs(self.fit + self.calibration + self.test - 1.0) > PARTITION_SUM_TOLERANCE:
-            raise ValueError("partition fractions must sum to one")
+    @model_validator(mode=LibraryOption.VALIDATE_AFTER)
+    def _sums_to_one(self) -> Self:
+        if abs(self.fit + self.calibration + self.test - 1.0) > Tolerance.PARTITION_FRACTIONS:
+            raise ValueError(ErrorMessage.FRACTIONS_SUM)
         return self
 
 
@@ -114,13 +117,13 @@ class NaturalScarcityConfig(Frozen):
 
 
 class DataConfig(Frozen):
-    lamda_release: ReleaseName
+    lamda_release: LamdaRelease
     expected_rows: RowCount
     expected_features: SupportCount
     malware_min_vt: VtCount
     benign_vt: VtCount
     singleton_prefix: LabelPrefix
-    unknown_labels: tuple[FamilyName, ...]
+    unknown_labels: tuple[SourceFamilyLabel, ...]
     play_era_boundary: YearMonth
     partition: PartitionConfig
     family_selection: FamilySelectionConfig
@@ -197,13 +200,12 @@ class Config(Frozen):
     experiments: ExperimentsConfig
 
     def fingerprint(self) -> Fingerprint:
-        payload = json.dumps(self.model_dump(mode="json"), sort_keys=True).encode()
-        return hashlib.sha256(payload).hexdigest()
+        return hashlib.sha256(self.model_dump_json().encode()).hexdigest()
 
 
 def load_config(paths: Paths) -> Config:
     def read(name: ConfigFile) -> YamlDocument:
-        return yaml.safe_load(paths.config_file(name).read_text(encoding="utf-8"))
+        return yaml.safe_load(paths.config_file(name).read_text(encoding=TextEncoding.UTF8))
 
     return Config(
         project=ProjectConfig.model_validate(read(ConfigFile.PROJECT)),

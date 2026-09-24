@@ -77,3 +77,15 @@ def test_partitions_assign_by_group_never_by_row() -> None:
         if isinstance(node, ast.FunctionDef) and node.name == "assign_roles"
     )
     assert "group_ids" in {arg.arg for arg in function.args.args}
+
+
+def test_novelty_descriptors_use_only_training_rows() -> None:
+    path = SRC_ROOT / "analysis" / "novelty.py"
+    roles = {
+        node.attr
+        for node in ast.walk(parse(path))
+        if isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "SplitRole"
+    }
+    assert roles == {"FIT"}

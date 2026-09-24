@@ -3,12 +3,13 @@ from collections import Counter
 from pathlib import Path
 
 from tests.architecture.source_index import (
+    CONFIG_MODULE,
     ENUMS_MODULE,
+    REPO_ROOT,
     TYPES_MODULE,
     location,
     parse,
     source_files,
-    string_constants,
 )
 
 GENERIC_CONSTRAINED_ALIASES = {
@@ -116,20 +117,68 @@ def test_no_duplicate_enums_for_one_concept() -> None:
     duplicates: list[str] = []
     for enum in enums:
         values = frozenset(_members(enum).values())
+        if not values:
+            continue
         if values in value_sets:
             duplicates.append(f"{enum.name} duplicates {value_sets[values]}")
         value_sets[values] = enum.name
     assert not duplicates, duplicates
 
 
-def test_no_categorical_string_literals_outside_enums_py() -> None:
-    categorical = {
-        value for enum in _enum_classes(ENUMS_MODULE) for value in _members(enum).values()
-    }
-    offenders = [
-        f"{location(path, line)} hardcodes {text!r}"
-        for path in source_files(ENUMS_MODULE)
-        for line, text in string_constants(parse(path))
-        if text in categorical
+def _used_enum_members() -> tuple[set[tuple[str, str]], set[str]]:
+    members: set[tuple[str, str]] = set()
+    iterated: set[str] = set()
+    for path in source_files(ENUMS_MODULE):
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                members.add((node.value.id, node.attr))
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                iterated.add(node.id)
+    return members, iterated
+
+
+def test_every_enum_member_is_used_by_code_or_configuration() -> None:
+    configuration = " ".join(
+        path.read_text(encoding="utf-8") for path in (REPO_ROOT / "configs").glob("*.yaml")
+    )
+    used, referenced = _used_enum_members()
+    selectable = {node.id for node in ast.walk(parse(CONFIG_MODULE)) if isinstance(node, ast.Name)}
+    unused = [
+        f"{enum.name}.{member}"
+        for enum in _enum_classes(ENUMS_MODULE)
+        for member, value in _members(enum).items()
+        if (enum.name, member) not in used
+        and enum.name not in selectable
+        and not (
+            enum.name in referenced and (enum.name, member) not in used and _iterated(enum.name)
+        )
+        and value not in configuration
     ]
-    assert not offenders, offenders
+    assert not unused, unused
+
+
+def _iterated(name: str) -> bool:
+    for path in source_files(ENUMS_MODULE):
+        for node in ast.walk(parse(path)):
+            if (
+                isinstance(node, ast.For)
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == name
+            ):
+                return True
+            if (
+                isinstance(node, ast.comprehension)
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == name
+            ):
+                return True
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"list", "set", "tuple", "sorted"}
+                and node.args
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id == name
+            ):
+                return True
+    return False

@@ -13,9 +13,12 @@ from ctk_android.data.families import (
 from ctk_android.enums import (
     Artifact,
     Column,
+    DetailMessage,
+    ErrorMessage,
     FailureReason,
     FamilyLabelSource,
     Grouping,
+    LibraryOption,
     SplitRole,
     Stage,
     ValidationCheck,
@@ -34,8 +37,6 @@ from ctk_android.types import (
     ValidationRecord,
 )
 
-ROLE_ORDER = (SplitRole.FIT, SplitRole.CALIBRATION, SplitRole.TEST)
-
 
 def assign_roles(
     group_ids: IntArray, key: PartitionKey, attempt: Rank, config: DataConfig
@@ -45,7 +46,7 @@ def assign_roles(
     position = np.empty(group_count, dtype=np.int64)
     position[rng.permutation(group_count)] = np.arange(group_count)
     group_rows = np.bincount(group_ids, minlength=group_count)
-    order = np.argsort(position, kind="stable")
+    order = np.argsort(position, kind=LibraryOption.SORT_STABLE)
     started = np.cumsum(group_rows[order]) - group_rows[order]
     fraction = started / group_ids.size
     fit_edge = config.partition.fit
@@ -54,7 +55,8 @@ def assign_roles(
     role_of_group = np.empty(group_count, dtype=np.int64)
     role_of_group[order] = role_of_ordered
     codes = role_of_group[group_ids]
-    return pl.Series(Column.ROLE, [ROLE_ORDER[code] for code in codes], dtype=pl.String)
+    role_order = list(SplitRole)
+    return pl.Series(Column.ROLE, [role_order[code] for code in codes], dtype=pl.String)
 
 
 def client_fit_rows(labelled: pl.DataFrame, roles: pl.Series) -> pl.DataFrame:
@@ -108,17 +110,21 @@ def validate_partition(
         ValidationRecord(
             check=ValidationCheck.PARTITION_SHA_DISJOINT,
             passed=sha_crossing == 0,
-            detail=f"crossing={sha_crossing}",
+            detail=DetailMessage.CROSSING.format(crossing=sha_crossing),
         ),
         ValidationRecord(
             check=ValidationCheck.PARTITION_COMPONENT_DISJOINT,
             passed=crossing(component_column) == 0,
-            detail=f"grouping={grouping} crossing={crossing(component_column)}",
+            detail=DetailMessage.GROUP_CROSSING.format(
+                grouping=grouping, crossing=crossing(component_column)
+            ),
         ),
         ValidationRecord(
             check=ValidationCheck.PARTITION_FEATURE_DISJOINT,
             passed=feature_crossing == 0 or not feature_expected,
-            detail=f"crossing={feature_crossing} enforced={feature_expected}",
+            detail=DetailMessage.FEATURE_CROSSING.format(
+                crossing=feature_crossing, enforced=feature_expected
+            ),
         ),
     )
 
@@ -144,7 +150,7 @@ def build_partition(
         if best_roles is None or score > best_score:
             best_score, best_attempt, best_roles = score, attempt, roles
     if best_roles is None:
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, "partition attempts must be positive")
+        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, ErrorMessage.PARTITION_ATTEMPTS)
     controlled, natural = evaluate_partition(labelled, best_roles, families, config, key)
     return PartitionResult(
         roles=best_roles,

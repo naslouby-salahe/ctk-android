@@ -5,6 +5,7 @@ from ctk_android.data.cache import read_record
 from ctk_android.enums import (
     Artifact,
     Column,
+    ErrorMessage,
     ExecutionMode,
     ExperimentName,
     FailureReason,
@@ -33,5 +34,7 @@ def run_smoke(paths: Paths, config: Config, overwrite: bool) -> RunReport:
         or summary.filter(pl.col(Column.VALUE).is_null()).height
     ):
         detail = read_record(paths.run_file(report.key, Artifact.VALIDATION), ValidationDocument)
-        raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, f"smoke workflow incomplete: {detail}")
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS, ErrorMessage.SMOKE_INCOMPLETE.format(detail=detail)
+        )
     return report

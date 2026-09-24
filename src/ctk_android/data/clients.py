@@ -1,13 +1,11 @@
 import polars as pl
 
 from ctk_android.config import DataConfig
-from ctk_android.enums import ClientId, Column, Market
-
-SINGLE_MARKET = 1
+from ctk_android.enums import ClientId, Column, Market, MarketCount
 
 
 def assign_clients(joined: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
-    single = joined.filter(pl.col(Column.MARKET_COUNT) == SINGLE_MARKET)
+    single = joined.filter(pl.col(Column.MARKET_COUNT) == MarketCount.SINGLE)
     early_play = pl.col(Column.YEAR_MONTH) < config.play_era_boundary
     client = (
         pl.when(pl.col(Column.MARKETS) == Market.GOOGLE_PLAY)

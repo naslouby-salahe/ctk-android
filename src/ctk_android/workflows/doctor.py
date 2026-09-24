@@ -4,17 +4,27 @@ import sys
 import torch
 
 from ctk_android.config import Config
-from ctk_android.enums import Device, DoctorCheck
+from ctk_android.enums import (
+    DetailMessage,
+    Device,
+    Display,
+    DoctorCheck,
+    GitArgument,
+    PythonRequirement,
+)
 from ctk_android.paths import Paths
 from ctk_android.types import DoctorResult
-
-MIN_PYTHON = (3, 12)
-FINGERPRINT_PREFIX = 12
 
 
 def _git_revision(paths: Paths) -> DoctorResult:
     completed = subprocess.run(
-        ["git", "-C", f"{paths.root}", "rev-parse", "HEAD"],
+        [
+            GitArgument.GIT,
+            GitArgument.DIRECTORY,
+            f"{paths.root}",
+            GitArgument.REV_PARSE,
+            GitArgument.HEAD,
+        ],
         capture_output=True,
         text=True,
         check=False,
@@ -22,7 +32,7 @@ def _git_revision(paths: Paths) -> DoctorResult:
     return DoctorResult(
         check=DoctorCheck.GIT_REVISION,
         passed=completed.returncode == 0,
-        detail=completed.stdout.strip() or "not a git checkout",
+        detail=completed.stdout.strip() or DetailMessage.NOT_A_CHECKOUT,
     )
 
 
@@ -32,7 +42,7 @@ def _raw_lamda(paths: Paths, config: Config) -> DoctorResult:
     return DoctorResult(
         check=DoctorCheck.RAW_LAMDA,
         passed=not missing,
-        detail=f"{len(files)} files, {len(missing)} missing",
+        detail=DetailMessage.FILE_COUNT.format(count=len(files), missing=len(missing)),
     )
 
 
@@ -42,13 +52,15 @@ def run_doctor(paths: Paths, config: Config) -> list[DoctorResult]:
     return [
         DoctorResult(
             check=DoctorCheck.PYTHON_VERSION,
-            passed=sys.version_info[:2] >= MIN_PYTHON,
+            passed=sys.version_info[:2] >= (PythonRequirement.MAJOR, PythonRequirement.MINOR),
             detail=sys.version.split()[0],
         ),
         DoctorResult(
             check=DoctorCheck.CONFIG_VALID,
             passed=True,
-            detail=f"configuration fingerprint {config.fingerprint()[:FINGERPRINT_PREFIX]}",
+            detail=DetailMessage.CONFIG_FINGERPRINT.format(
+                prefix=config.fingerprint()[: Display.FINGERPRINT_PREFIX]
+            ),
         ),
         _raw_lamda(paths, config),
         DoctorResult(
@@ -59,7 +71,7 @@ def run_doctor(paths: Paths, config: Config) -> list[DoctorResult]:
         DoctorResult(
             check=DoctorCheck.COMPUTE_DEVICE,
             passed=device is config.project.device or device is Device.CPU,
-            detail=f"available {device}, configured {config.project.device}",
+            detail=DetailMessage.DEVICE.format(available=device, configured=config.project.device),
         ),
         _git_revision(paths),
     ]

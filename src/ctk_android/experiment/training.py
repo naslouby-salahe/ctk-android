@@ -5,7 +5,7 @@ import numpy as np
 import torch
 
 from ctk_android.config import TrainingConfig
-from ctk_android.enums import ClientId, Device, FailureReason, Learner, ModelFamily
+from ctk_android.enums import ClientId, Device, ErrorMessage, FailureReason, Learner, ModelFamily
 from ctk_android.experiment.models import (
     StateDict,
     average_states,
@@ -44,7 +44,7 @@ def _require_both_classes(context: TrainingContext, rows: IntArray) -> None:
     if counts.min() < context.config.min_rows_per_class:
         raise CtkError(
             FailureReason.INSUFFICIENT_CALIBRATION,
-            f"training rows have class counts {counts.tolist()}",
+            ErrorMessage.CLASS_COUNTS.format(counts=counts.tolist()),
         )
 
 
@@ -87,9 +87,7 @@ def train_federated(
     context: TrainingContext, training: TrainingRows, learner: Learner, stream: Seed
 ) -> Scorer:
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
-        raise CtkError(
-            FailureReason.NOT_APPLICABLE_MODEL_FAMILY, "federated averaging needs parametric models"
-        )
+        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.PARAMETRIC_ONLY)
     for client in ClientId:
         _require_both_classes(context, training[client])
     global_net = _initial_network(context, stream)
@@ -120,7 +118,7 @@ def train_federated(
 
 def finetune(context: TrainingContext, scorer: Scorer, rows: IntArray, stream: Seed) -> Scorer:
     if scorer.network is None:
-        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, "fine-tuning needs a network")
+        raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.FINETUNE_NETWORK)
     network = copy.deepcopy(scorer.network)
     fit_epochs(
         network,

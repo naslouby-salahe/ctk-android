@@ -1,6 +1,6 @@
 import numpy as np
 
-from ctk_android.enums import OperatingPointStatus
+from ctk_android.enums import LibraryOption, OperatingPointStatus
 from ctk_android.types import Alpha, ExceedanceCount, FloatArray, OperatingPoint
 
 
@@ -14,7 +14,7 @@ def calibrate(
             calibration_benign=0,
             status=OperatingPointStatus.INSUFFICIENT_EVIDENCE,
         )
-    threshold = np.quantile(benign_scores, 1.0 - alpha, method="higher").item()
+    threshold = np.quantile(benign_scores, 1.0 - alpha, method=LibraryOption.QUANTILE_HIGHER).item()
     resolved = count * alpha >= min_exceedances
     return OperatingPoint(
         threshold=threshold,

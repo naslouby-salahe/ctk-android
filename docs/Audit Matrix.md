@@ -20,6 +20,10 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | CLI delegation, no scientific imports in CLI, every function reachable from the CLI | PASS | `test_wiring.py` |
 | Training never reads test/calibration; thresholds only from benign calibration; reporting never trains | PASS | `test_scientific_isolation.py` |
 | Real-source schema (LAMDA parquet, feature map, AndroZoo header) | PASS | `test_source_schema.py` |
+| No string literal, module constant or magic number outside `enums.py` (messages are `ErrorMessage`/`DetailMessage`/`CliMessage` templates; numbers are `IntEnum`/float `Enum`) | PASS | `test_magic_values_and_hygiene.py` |
+| Third-party `Literal`-typed option strings | PASS | grouped in `enums.LibraryOption` (enum members cannot satisfy `Literal[...]` parameters); documented boundary, nothing else is allowed |
+| Every enum member is used by code or config; config-selectable enums are exempt | PASS | `test_types_and_enums.py`; unused members and the claim/contrast/estimand enums were removed and return with the analysis code |
+| Novelty descriptors read only fit rows | PASS | `test_scientific_isolation.py` |
 | Graphify before/after reachability | MISSING | not yet run |
 
 ## Scientific pipeline

@@ -4,8 +4,7 @@ import polars as pl
 import pytest
 
 from ctk_android.config import load_config
-from ctk_android.data.sources import FEATURE_PREFIX
-from ctk_android.enums import AndroZooColumn, DatasetName, LamdaColumn
+from ctk_android.enums import AndroZooColumn, DatasetName, FeatureNaming, LamdaColumn
 from ctk_android.paths import Paths
 from tests.architecture.source_index import REPO_ROOT
 
@@ -22,7 +21,7 @@ def test_lamda_parquet_schema_matches_the_source_contract() -> None:
     _require(PATHS.raw_data(DatasetName.LAMDA).is_dir())
     first = PATHS.lamda_release_files(CONFIG.data.lamda_release)[0]
     schema = pl.read_parquet_schema(first)
-    features = [name for name in schema if name.startswith(FEATURE_PREFIX)]
+    features = [name for name in schema if name.startswith(FeatureNaming.PREFIX)]
     assert len(features) == CONFIG.data.expected_features
     assert set(LamdaColumn) <= set(schema)
     assert all(schema[name] == pl.Int8 for name in features)
