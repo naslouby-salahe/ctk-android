@@ -44,8 +44,22 @@ class ExperimentName(StrEnum):
     MODEL_FAMILY_REPLICATION_TREES = "model-family-replication-trees"
     TRAINING_SUPPORT_SENSITIVITY = "training-support-sensitivity"
     PARTITION_SALT_SENSITIVITY = "partition-salt-sensitivity"
-    FAMILY_SUPPORT_SENSITIVITY = "family-support-sensitivity"
+    FAMILY_SUPPORT_SENSITIVITY_LOW = "family-support-sensitivity-low"
+    FAMILY_SUPPORT_SENSITIVITY_HIGH = "family-support-sensitivity-high"
     PACKAGE_ONLY_GROUPING = "package-only-grouping"
+
+
+class EligibilityProfile(StrEnum):
+    PRIMARY = "primary"
+    LOW = "low"
+    HIGH = "high"
+    SMOKE = "smoke"
+
+
+class BudgetLevel(StrEnum):
+    PRIMARY = "primary"
+    LOW = "low"
+    SMOKE = "smoke"
 
 
 class ModelFamily(StrEnum):
@@ -94,6 +108,7 @@ class EvaluationPopulation(StrEnum):
     FEDERATION_WIDE = "federation-wide"
     KNOWN_FAMILY = "known-family"
     BENIGN = "benign"
+    DISCRIMINATION = "discrimination"
 
 
 class EligibilityReason(StrEnum):
@@ -157,6 +172,11 @@ class ValidationCheck(StrEnum):
 class OperatingPointStatus(StrEnum):
     VALID = "valid"
     INSUFFICIENT_EVIDENCE = "insufficient-evidence"
+
+
+class FamilyPopulation(StrEnum):
+    OWN_DOMAIN = "own-domain"
+    FEDERATION_WIDE = "federation-wide"
 
 
 class Metric(StrEnum):
@@ -239,6 +259,16 @@ class Sensitivity(StrEnum):
     OPERATING_POINT = "operating-point"
     TOP_FAMILY_REMOVAL = "top-family-removal"
     REPRESENTATION_DEDUPLICATION = "representation-deduplication"
+
+
+class Stage(StrEnum):
+    SOURCE_AUDIT = "source-audit"
+    JOIN = "join"
+    IDENTITY = "identity"
+    CLIENTS = "clients"
+    FAMILIES = "families"
+    PARTITION = "partition"
+    RUN = "run"
 
 
 class Device(StrEnum):
@@ -339,3 +369,14 @@ class Column(StrEnum):
     HIGH = "high"
     RESAMPLES = "resamples"
     FEATURE_INDEX = "feature_index"
+
+
+class LogEvent(StrEnum):
+    STAGE_REUSED = "stage-reused"
+    STAGE_BUILT = "stage-built"
+    STAGE_FAILED = "stage-failed"
+    RUN_STARTED = "run-started"
+    RUN_REUSED = "run-reused"
+    RUN_FINISHED = "run-finished"
+    ARM_TRAINED = "arm-trained"
+    REPORT_WRITTEN = "report-written"

@@ -1,6 +1,5 @@
+budgets: {primary: 6000, low: 1500, smoke: 800}
 training:
-  budget_rows: 6000
-  budget_rows_low: 1500
   batch_size: 256
   learning_rate: 0.001
   weight_decay: 0.0
@@ -25,19 +24,210 @@ operating:
   min_expected_exceedances: 10
 novelty:
   min_active_prevalence: 0.1
-dose_levels: [0, 1, 10, 50, 100, 500, 1000, -1]
+dose_levels: [0, 1, 10, 50, 100, 500, 1000]
+dose_include_all_available: true
 top_family_removal_count: 3
 permutation_seed_offset: 7919
 fairness_grids:
   local_epochs: [10, 20, 40]
   finetune_epochs: [2, 5, 10]
   fedprox_mu: [0.001, 0.01, 0.1]
-smoke:
-  budget_rows: 800
-  epochs: 3
-  rounds: 3
-  family_set_size: 2
-  peer_min_fit: 20
-  federation_min_test: 5
-  own_domain_min_test: 2
-  target_min_remaining_fit: 50
+smoke_training:
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0
+  hidden_units: [32]
+  dropout: 0.0
+  local_epochs: 3
+  central_epochs: 3
+  federated_rounds: 3
+  federated_local_epochs: 1
+  fedprox_mu: 0.01
+  finetune_epochs: 1
+  blend_weight: 0.5
+  linear_epochs: 3
+  trees: {max_iter: 10, max_depth: 3, learning_rate: 0.1}
+  min_rows_per_class: 2
+experiments:
+  end-to-end:
+    modes: [smoke]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: smoke
+    eligibility: smoke
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  baseline-fairness:
+    modes: [development]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, fedavg, fedprox, fedavg-finetune, blend]
+    conditions: [peer-present]
+    dose_sweep: false
+  controlled-exposure:
+    modes: [development, confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg, fedprox, fedavg-finetune, blend]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  peer-dose-response:
+    modes: [development, confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [central, fedavg, fedavg-finetune]
+    conditions: [peer-present]
+    dose_sweep: true
+  natural-scarcity:
+    modes: [development, confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: natural
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere]
+    dose_sweep: false
+  family-permutation-control:
+    modes: [development, confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: permuted
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere]
+    dose_sweep: false
+  replication-family-set:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: replication
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg, fedprox, fedavg-finetune, blend]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  model-family-replication-linear:
+    modes: [confirmatory]
+    model_family: linear
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  model-family-replication-trees:
+    modes: [confirmatory]
+    model_family: gradient-boosted-trees
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  training-support-sensitivity:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: low
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  partition-salt-sensitivity:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [1, 2, 3]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  family-support-sensitivity-low:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: low
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  family-support-sensitivity-high:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: high
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+  package-only-grouping:
+    modes: [confirmatory]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: package-only
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false

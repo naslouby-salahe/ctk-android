@@ -2,7 +2,7 @@
 poc/
 
 # data and generated artifacts
-data/raw
+data/*/raw
 data/cache/
 outputs/
 __pycache__/
@@ -20,3 +20,4 @@ graphify-out/
 docs/temp/
 *.egg-info/
 .DS_Store
+data/raw
