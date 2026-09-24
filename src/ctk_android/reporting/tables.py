@@ -66,6 +66,7 @@ def primary_arm_comparison(paths: Paths, config: Config, mode: ExecutionMode) ->
         summary.group_by(Column.LEARNER, Column.CONDITION, Column.METRIC)
         .agg(pl.col(Column.VALUE).mean())
         .pivot(on=Column.METRIC, index=[Column.LEARNER, Column.CONDITION], values=Column.VALUE)
+        .select(Column.LEARNER, Column.CONDITION, *(metric for metric in _primary_metrics()))
         .sort(Column.LEARNER, Column.CONDITION)
     )
 

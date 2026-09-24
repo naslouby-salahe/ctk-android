@@ -1,8 +1,10 @@
 import numpy as np
+import polars as pl
 import pytest
 
-from ctk_android.analysis.novelty import novelty_association
+from ctk_android.analysis.novelty import descriptor_by_family, novelty_association
 from ctk_android.config import load_config
+from ctk_android.enums import Column, NoveltyDescriptor
 from ctk_android.paths import Paths
 from tests.architecture.source_index import REPO_ROOT
 
@@ -27,3 +29,16 @@ def test_an_unrelated_score_has_an_interval_spanning_zero() -> None:
 
 def test_too_few_families_cannot_be_associated() -> None:
     assert novelty_association(np.array([0.1, 0.2]), np.array([1.0, 2.0]), CONFIG) is None
+
+
+def test_family_scores_are_ordered_by_family_so_association_intervals_are_reproducible() -> None:
+    frame = pl.DataFrame(
+        {
+            Column.CLIENT: ["b", "a", "a", "b"],
+            Column.FAMILY: ["zeta", "zeta", "alpha", "alpha"],
+            Column.DESCRIPTOR: [NoveltyDescriptor.NEAREST_KNOWN_FAMILY_DISTANCE] * 4,
+            Column.VALUE: [1.0, 2.0, 3.0, 4.0],
+        }
+    )
+    scores = descriptor_by_family(frame, NoveltyDescriptor.NEAREST_KNOWN_FAMILY_DISTANCE)
+    assert scores[Column.FAMILY].to_list() == ["alpha", "zeta"]

@@ -137,7 +137,8 @@ def descriptor_by_family(
 ) -> DescriptorScoreTable:
     return (
         novelty.filter(pl.col(Column.DESCRIPTOR) == descriptor)
-        .group_by(Column.FAMILY)
+        .sort(Column.FAMILY, Column.CLIENT)
+        .group_by(Column.FAMILY, maintain_order=True)
         .agg(pl.col(Column.VALUE).mean().alias(Column.NOVELTY))
     )
 

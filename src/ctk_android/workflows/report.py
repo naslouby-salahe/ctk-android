@@ -83,7 +83,7 @@ def _associations(
             evidence.novelty.filter(pl.col(Column.EXPERIMENT) == experiment),
             config.experiments.novelty.primary_descriptor,
         )
-        joined = gains.join(scores, on=Column.FAMILY)
+        joined = gains.join(scores, on=Column.FAMILY).sort(Column.FAMILY)
         result[experiment] = novelty.novelty_association(
             joined[Column.CTK_GAIN].to_numpy(), joined[Column.NOVELTY].to_numpy(), config.statistics
         )
