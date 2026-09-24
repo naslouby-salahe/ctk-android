@@ -10,6 +10,7 @@ from ctk_android.analysis.gates import evaluate_claims
 from ctk_android.analysis.post_confirmatory import (
     anchored_client_selection,
     anchored_worst_client,
+    client_ctk_analysis,
     ctk_robustness_synthesis,
     family_mechanism_patterns,
     federated_arm_tradeoff,
@@ -268,6 +269,10 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTab
     write_table(
         anchored_worst_client(evidence.clients, config),
         paths.analysis_file(mode, Artifact.ANCHORED_WORST_CLIENT),
+    )
+    write_table(
+        client_ctk_analysis(evidence.clients, evidence.families, config),
+        paths.analysis_file(mode, Artifact.CLIENT_CTK),
     )
     write_table(
         anchored_client_selection(evidence.clients, config),

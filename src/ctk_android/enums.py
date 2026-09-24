@@ -224,6 +224,7 @@ class AndroZooColumn(StrEnum):
 
 
 class Artifact(StrEnum):
+    CLIENT_CTK = "client-ctk-analysis.parquet"
     ANCHORED_WORST_CLIENT = "anchored-worst-client.parquet"
     ANCHORED_CLIENT_SELECTION = "anchored-client-selection.parquet"
     ARM_TRADEOFF = "federated-arm-tradeoff.parquet"
@@ -378,6 +379,16 @@ class Column(StrEnum):
     MEETS_DOSE_CRITERION = "meets_dose_criterion"
     MICRO_POOLED_CTK_GAIN = "micro_pooled_ctk_gain"
     EVIDENCE_CLASS = "evidence_class"
+    KNOWN_LOCAL_RECALL = "known_local_recall"
+    KNOWN_PEER_RECALL = "known_peer_recall"
+    BENIGN_FPR = "benign_fpr"
+    POOLING_CI_LOW = "pooling_ci_low"
+    POOLING_CI_HIGH = "pooling_ci_high"
+    CTK_CI_LOW = "ctk_ci_low"
+    CTK_CI_HIGH = "ctk_ci_high"
+    KNOWN_FAMILY_CHANGE = "known_family_change"
+    KNOWN_FAMILY_CHANGE_CI_LOW = "known_family_change_ci_low"
+    KNOWN_FAMILY_CHANGE_CI_HIGH = "known_family_change_ci_high"
     SCOPE_ORDER = "scope_order"
     COMPARISON = "comparison"
     MEASURE = "measure"
@@ -810,6 +821,11 @@ class EvidenceClass(StrEnum):
     POST_CONFIRMATORY = "C-post-confirmatory-evidence-preserving"
 
 
+class IntervalStatus(StrEnum):
+    FORMAL = "formal-bca-interval"
+    DESCRIPTIVE = "descriptive-too-few-seeds"
+
+
 class TradeoffComparison(StrEnum):
     VERSUS_LOCAL = "versus-local"
     VERSUS_FEDAVG = "versus-fedavg"
@@ -853,6 +869,7 @@ class Sensitivity(StrEnum):
 
 
 class ReportTable(StrEnum):
+    CLIENT_CTK = "client-ctk-analysis"
     ANCHORED_WORST_CLIENT = "anchored-worst-client"
     ANCHORED_CLIENT_SELECTION = "anchored-client-selection"
     ARM_TRADEOFF = "federated-arm-tradeoff"
@@ -879,6 +896,7 @@ class ReportFigure(StrEnum):
     FAMILY_RESCUE_MAP = "family-rescue-map"
     FEATURE_NOVELTY_VERSUS_CTK_GAIN = "feature-novelty-versus-ctk-gain"
     KNOWN_VERSUS_UNSEEN_TRADEOFF = "known-versus-unseen-tradeoff"
+    CLIENT_CTK_ANALYSIS = "client-ctk-analysis"
     CTK_ROBUSTNESS_FOREST = "ctk-robustness-forest"
     FEDERATED_ARM_TRADEOFF = "federated-arm-tradeoff"
     NATURAL_VERSUS_CONTROLLED = "natural-versus-controlled"
@@ -958,6 +976,11 @@ class PlotText(StrEnum):
     NATURAL_TITLE = "Controlled exposure versus natural scarcity (FedAvg, separate estimands)"
     CONTROLLED_LABEL = "Controlled exposure"
     NATURAL_LABEL = "Natural scarcity"
+    CLIENT_TITLE = (
+        "Post-confirmatory client-level analysis, FedAvg federation-wide (class C; "
+        "play-late has too few seeds for a formal interval)"
+    )
+    CLIENT_KNOWN_TITLE = "Known-family recall change versus local, by client and arm"
     ESTIMAND_TOTAL = "Total gain"
     ESTIMAND_POOLING = "Pooling gain"
     ESTIMAND_CTK = "CTK gain"

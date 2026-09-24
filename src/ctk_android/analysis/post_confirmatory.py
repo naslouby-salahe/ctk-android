@@ -12,13 +12,16 @@ from ctk_android.analysis.statistics import paired_effect
 from ctk_android.config import Config, StatisticsConfig
 from ctk_android.data.cache import is_one_of, records_to_frame
 from ctk_android.enums import (
+    ClientId,
     Column,
     CtkAggregation,
+    EligibilityProfile,
     Estimand,
     EvaluationPopulation,
     EvidenceClass,
     ExperimentName,
     ExposureCondition,
+    IntervalStatus,
     Learner,
     LibraryOption,
     Metric,
@@ -32,12 +35,17 @@ from ctk_android.types import (
     AnchoredEffectRow,
     AnchoredSelectionRow,
     AnchoredTable,
+    ArmSeries,
+    ArmSpec,
     AuditTable,
     ClientCountsTable,
+    ClientCtkRow,
+    ClientCtkTable,
     ComparisonTable,
     Effect,
     EffectRow,
     EffectsTable,
+    FamilyCountsTable,
     FamilyEffectsTable,
     FamilySeedTable,
     FidelityTable,
@@ -53,6 +61,7 @@ from ctk_android.types import (
     SeedSummary,
     SelectionTable,
     SummaryTable,
+    SupportCount,
     SynthesisRow,
     SynthesisTable,
     Table,
@@ -617,3 +626,226 @@ def operating_point_fidelity(summary: SummaryTable) -> FidelityTable:
         )
         .sort(Column.EXPERIMENT, Column.LEARNER, Column.CONDITION, Column.ALPHA)
     )
+
+
+def _arm_series(
+    clients: ClientCountsTable,
+    client: ClientId,
+    arm: ArmSpec,
+    population: EvaluationPopulation,
+    alpha: Alpha,
+    minimum: SupportCount,
+    name: Column,
+) -> ArmSeries:
+    return (
+        clients.filter(
+            (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
+            & (pl.col(Column.ALPHA) == alpha)
+            & (pl.col(Column.CLIENT) == client)
+            & (pl.col(Column.LEARNER) == arm.learner)
+            & (pl.col(Column.CONDITION) == arm.condition)
+            & (pl.col(Column.POPULATION) == population)
+            & pl.col(Column.DOSE).is_null()
+            & (pl.col(Column.TRIALS) >= max(minimum, 1))
+        )
+        .select(
+            Column.SEED,
+            Column.TRIALS,
+            (pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(name),
+        )
+        .sort(Column.SEED)
+    )
+
+
+def _client_change(
+    clients: ClientCountsTable,
+    client: ClientId,
+    learner: Learner,
+    population: EvaluationPopulation,
+    alpha: Alpha,
+    names: tuple[Column, Column],
+) -> ArmSeries:
+    local = _arm_series(
+        clients,
+        client,
+        ArmSpec(learner=Learner.LOCAL, condition=ExposureCondition.PEER_PRESENT),
+        population,
+        alpha,
+        1,
+        names[0],
+    ).drop(Column.TRIALS)
+    peer = _arm_series(
+        clients,
+        client,
+        ArmSpec(learner=learner, condition=ExposureCondition.PEER_PRESENT),
+        population,
+        alpha,
+        1,
+        names[1],
+    ).drop(Column.TRIALS)
+    return local.join(peer, on=Column.SEED)
+
+
+def _pair_count(
+    families: FamilyCountsTable, client: ClientId, population: EvaluationPopulation, alpha: Alpha
+) -> SupportCount:
+    return (
+        families.filter(
+            (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
+            & (pl.col(Column.ALPHA) == alpha)
+            & (pl.col(Column.CLIENT) == client)
+            & (pl.col(Column.POPULATION) == population)
+            & (pl.col(Column.LEARNER) == Learner.LOCAL)
+            & pl.col(Column.DOSE).is_null()
+            & (pl.col(Column.TRIALS) > 0)
+        )
+        .select(Column.SEED, Column.FAMILY)
+        .unique()
+        .height
+    )
+
+
+def _client_wide(
+    clients: ClientCountsTable,
+    client: ClientId,
+    learner: Learner,
+    population: EvaluationPopulation,
+    alpha: Alpha,
+    minimum: SupportCount,
+) -> ArmSeries:
+    def arm(arm_learner: Learner, condition: ExposureCondition, name: Column) -> ArmSeries:
+        return _arm_series(
+            clients,
+            client,
+            ArmSpec(learner=arm_learner, condition=condition),
+            population,
+            alpha,
+            minimum,
+            name,
+        )
+
+    return (
+        arm(Learner.LOCAL, ExposureCondition.PEER_PRESENT, Column.LOCAL_RECALL)
+        .join(
+            arm(learner, ExposureCondition.PEER_PRESENT, Column.PEER_RECALL).drop(Column.TRIALS),
+            on=Column.SEED,
+        )
+        .join(
+            arm(learner, ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Column.ABSENT_RECALL).drop(
+                Column.TRIALS
+            ),
+            on=Column.SEED,
+        )
+        .join(
+            arm(learner, ExposureCondition.FULL_EXPOSURE, Column.FULL_RECALL).drop(Column.TRIALS),
+            on=Column.SEED,
+            how=LibraryOption.JOIN_LEFT,
+        )
+    )
+
+
+def _column_mean(frame: ArmSeries, column: Column) -> Effect | None:
+    present = frame[column].drop_nulls().to_numpy()
+    return present.mean().item() if present.size else None
+
+
+def _interval(summary: SeedSummary, formal: Passed) -> tuple[Effect | None, Effect | None]:
+    return (summary.ci_low, summary.ci_high) if formal else (None, None)
+
+
+def client_ctk_analysis(
+    clients: ClientCountsTable, families: FamilyCountsTable, config: Config
+) -> ClientCtkTable:
+    alpha = config.experiments.operating.primary_alpha
+    own_minimum = config.data.eligibility[EligibilityProfile.PRIMARY].own_domain_min_test
+    formal_seeds = config.statistics.gates.ctk_min_positive_seeds
+    rows: list[ClientCtkRow] = []
+    for client in ClientId:
+        for learner in (Learner.FEDAVG, Learner.FEDPROX, Learner.CENTRAL):
+            known = _client_change(
+                clients,
+                client,
+                learner,
+                EvaluationPopulation.KNOWN_FAMILY,
+                alpha,
+                (Column.KNOWN_LOCAL_RECALL, Column.KNOWN_PEER_RECALL),
+            )
+            benign = _arm_series(
+                clients,
+                client,
+                ArmSpec(learner=learner, condition=ExposureCondition.PEER_PRESENT),
+                EvaluationPopulation.BENIGN,
+                alpha,
+                1,
+                Column.BENIGN_FPR,
+            )
+            known_change = _summary(
+                (known[Column.KNOWN_PEER_RECALL] - known[Column.KNOWN_LOCAL_RECALL]).to_numpy(),
+                config.statistics,
+            )
+            for population, minimum in (
+                (EvaluationPopulation.FEDERATION_WIDE, 1),
+                (EvaluationPopulation.OWN_DOMAIN, own_minimum),
+            ):
+                wide = _client_wide(clients, client, learner, population, alpha, minimum)
+                if wide.height == 0:
+                    continue
+                peer = wide[Column.PEER_RECALL].to_numpy()
+                absent = wide[Column.ABSENT_RECALL].to_numpy()
+                base = wide[Column.LOCAL_RECALL].to_numpy()
+                total = _summary(peer - base, config.statistics)
+                pooling = _summary(absent - base, config.statistics)
+                ctk = _summary(peer - absent, config.statistics)
+                if total is None or pooling is None or ctk is None:
+                    continue
+                formal = wide.height >= formal_seeds
+                total_ci, pooling_ci, ctk_ci = (
+                    _interval(total, formal),
+                    _interval(pooling, formal),
+                    _interval(ctk, formal),
+                )
+                known_ci = (
+                    _interval(known_change, known.height >= formal_seeds)
+                    if known_change is not None
+                    else (None, None)
+                )
+                rows.append(
+                    ClientCtkRow(
+                        evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                        client=client,
+                        learner=learner,
+                        alpha=alpha,
+                        population=population,
+                        local_recall=base.mean().item(),
+                        absent_recall=absent.mean().item(),
+                        peer_recall=peer.mean().item(),
+                        full_recall=_column_mean(wide, Column.FULL_RECALL),
+                        total_gain=total.mean_difference,
+                        total_ci_low=total_ci[0],
+                        total_ci_high=total_ci[1],
+                        pooling_gain=pooling.mean_difference,
+                        pooling_ci_low=pooling_ci[0],
+                        pooling_ci_high=pooling_ci[1],
+                        ctk_gain=ctk.mean_difference,
+                        ctk_ci_low=ctk_ci[0],
+                        ctk_ci_high=ctk_ci[1],
+                        ctk_positive_seeds=ctk.positive_seeds,
+                        known_family_recall_local=_column_mean(known, Column.KNOWN_LOCAL_RECALL),
+                        known_family_recall_collaborative=_column_mean(
+                            known, Column.KNOWN_PEER_RECALL
+                        ),
+                        known_family_change=None
+                        if known_change is None
+                        else known_change.mean_difference,
+                        known_family_change_ci_low=known_ci[0],
+                        known_family_change_ci_high=known_ci[1],
+                        realised_fpr=_column_mean(benign, Column.BENIGN_FPR),
+                        hidden_family_trials_per_seed=_column_mean(wide, Column.TRIALS) or 0.0,
+                        contributing_seeds=wide.height,
+                        eligible_pairs=_pair_count(families, client, population, alpha),
+                        interval_status=IntervalStatus.FORMAL
+                        if formal
+                        else IntervalStatus.DESCRIPTIVE,
+                    )
+                )
+    return _ordered(records_to_frame(rows), Column.CLIENT, Column.POPULATION, Column.LEARNER)

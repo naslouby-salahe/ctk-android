@@ -3,6 +3,7 @@ import polars as pl
 from ctk_android.analysis.post_confirmatory import (
     anchored_client_selection,
     anchored_worst_client,
+    client_ctk_analysis,
     ctk_robustness_synthesis,
     federated_arm_tradeoff,
 )
@@ -16,6 +17,7 @@ from ctk_android.enums import (
     EvaluationPopulation,
     ExperimentName,
     ExposureCondition,
+    IntervalStatus,
     Learner,
     Metric,
     TradeoffComparison,
@@ -147,3 +149,58 @@ def test_the_synthesis_labels_micro_pooled_and_paired_estimands_separately() -> 
     synthesis = ctk_robustness_synthesis(pl.DataFrame(), micro, CONFIG)
     assert set(synthesis[Column.AGGREGATION]) == {CtkAggregation.MICRO_POOLED}
     assert synthesis[Column.METRIC].null_count() == synthesis.height
+
+
+def _client_clients() -> pl.DataFrame:
+    frame = _clients()
+    known = frame.with_columns(pl.lit(EvaluationPopulation.KNOWN_FAMILY).alias(Column.POPULATION))
+    benign = frame.with_columns(
+        pl.lit(EvaluationPopulation.BENIGN).alias(Column.POPULATION), pl.lit(5, dtype=pl.Int64).alias(Column.HITS)
+    )
+    return pl.concat([frame, known, benign])
+
+
+def _client_families() -> pl.DataFrame:
+    return pl.DataFrame(
+        [
+            {
+                Column.EXPERIMENT: ExperimentName.CONTROLLED_EXPOSURE,
+                Column.SEED: seed,
+                Column.ALPHA: ALPHA,
+                Column.CLIENT: client,
+                Column.POPULATION: population,
+                Column.LEARNER: Learner.LOCAL,
+                Column.DOSE: None,
+                Column.FAMILY: "alpha",
+                Column.TRIALS: 40,
+            }
+            for seed in range(100, 104)
+            for client in (WORSE, BETTER)
+            for population in (
+                EvaluationPopulation.FEDERATION_WIDE,
+                EvaluationPopulation.OWN_DOMAIN,
+            )
+        ],
+        schema_overrides={Column.DOSE: pl.Int64},
+    )
+
+
+def test_client_ctk_is_decomposed_per_client_with_its_own_arms_and_support() -> None:
+    table = client_ctk_analysis(_client_clients(), _client_families(), CONFIG)
+    row = table.filter(
+        (pl.col(Column.CLIENT) == WORSE)
+        & (pl.col(Column.LEARNER) == Learner.FEDAVG)
+        & (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+    ).row(0, named=True)
+    assert abs(row["ctk_gain"] - 0.2) < 1e-9
+    assert abs(row["total_gain"] - 0.3) < 1e-9
+    assert abs(row["pooling_gain"] - 0.1) < 1e-9
+    assert row["contributing_seeds"] == 4
+    assert row["eligible_pairs"] == 4
+    assert abs(row["realised_fpr"] - 0.05) < 1e-9
+
+
+def test_a_client_with_too_few_seeds_is_reported_descriptively_without_an_interval() -> None:
+    table = client_ctk_analysis(_client_clients(), _client_families(), CONFIG)
+    assert set(table["interval_status"]) == {IntervalStatus.DESCRIPTIVE}
+    assert table["ctk_ci_low"].null_count() == table.height

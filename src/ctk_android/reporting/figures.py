@@ -6,9 +6,11 @@ from ctk_android.config import Config
 from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
     Artifact,
+    ClientId,
     Column,
     CtkAggregation,
     Estimand,
+    EvaluationPopulation,
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
@@ -26,6 +28,7 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    ClientCtkTable,
     ComparisonTable,
     Directory,
     Effect,
@@ -541,6 +544,93 @@ def natural_versus_controlled(paths: Paths, mode: ExecutionMode) -> None:
     _save(figure, paths, mode, ReportFigure.NATURAL_VERSUS_CONTROLLED)
 
 
+def client_ctk_figure(paths: Paths, config: Config, mode: ExecutionMode) -> None:
+    table = pl.read_parquet(paths.analysis_file(mode, Artifact.CLIENT_CTK))
+    if table.height == 0:
+        _save(_blank(), paths, mode, ReportFigure.CLIENT_CTK_ANALYSIS)
+        return
+    figure = _blank(PlotGeometry.PANEL_WIDTH, PlotGeometry.HEIGHT)
+    clients = list(ClientId)
+    positions = np.arange(len(clients))
+    gains = figure.add_subplot(SubplotGrid.ROWS, SubplotGrid.COLUMNS, 1)
+    federation = table.filter(
+        (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+        & (pl.col(Column.LEARNER) == Learner.FEDAVG)
+    )
+    for offset, gain, low, high, label in (
+        (
+            -PlotGeometry.BAR_WIDTH / 2,
+            Column.POOLING_GAIN,
+            Column.POOLING_CI_LOW,
+            Column.POOLING_CI_HIGH,
+            PlotText.POOLING,
+        ),
+        (
+            PlotGeometry.BAR_WIDTH / 2,
+            Column.CTK_GAIN,
+            Column.CTK_CI_LOW,
+            Column.CTK_CI_HIGH,
+            PlotText.CTK,
+        ),
+    ):
+        means = _values([_client_value(federation, client, gain) for client in clients])
+        lower = _values([_client_value(federation, client, low) for client in clients])
+        upper = _values([_client_value(federation, client, high) for client in clients])
+        gains.bar(
+            positions + offset,
+            means,
+            PlotGeometry.BAR_WIDTH,
+            yerr=np.vstack(
+                [
+                    np.where(np.isnan(lower), 0.0, means - lower),
+                    np.where(np.isnan(upper), 0.0, upper - means),
+                ]
+            ),
+            label=label,
+        )
+    gains.axhline(0.0, color=LibraryOption.NEUTRAL_COLOR)
+    gains.set_xticks(positions, clients)
+    gains.set_ylabel(PlotText.GAIN)
+    gains.legend()
+    known = figure.add_subplot(SubplotGrid.ROWS, SubplotGrid.COLUMNS, 2)
+    arms = [Learner.FEDAVG, Learner.FEDPROX, Learner.CENTRAL]
+    width = PlotGeometry.BAR_WIDTH / 2
+    for index, arm in enumerate(arms):
+        rows = table.filter(
+            (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+            & (pl.col(Column.LEARNER) == arm)
+        )
+        means = _values(
+            [_client_value(rows, client, Column.KNOWN_FAMILY_CHANGE) for client in clients]
+        )
+        lower = _values(
+            [_client_value(rows, client, Column.KNOWN_FAMILY_CHANGE_CI_LOW) for client in clients]
+        )
+        upper = _values(
+            [_client_value(rows, client, Column.KNOWN_FAMILY_CHANGE_CI_HIGH) for client in clients]
+        )
+        known.bar(
+            positions + (index - 1) * width,
+            means,
+            width,
+            yerr=np.vstack([means - lower, upper - means]),
+            label=arm,
+        )
+    tolerance = config.statistics.gates.known_family_tolerance
+    for bound in (-tolerance, tolerance):
+        known.axhline(bound, linestyle=LibraryOption.LINE_DASHED)
+    known.set_xticks(positions, clients)
+    known.set_title(PlotText.CLIENT_KNOWN_TITLE, fontsize=PlotGeometry.SMALL_FONT)
+    known.legend()
+    figure.suptitle(PlotText.CLIENT_TITLE, fontsize=PlotGeometry.SMALL_FONT)
+    _save(figure, paths, mode, ReportFigure.CLIENT_CTK_ANALYSIS)
+
+
+def _client_value(table: ClientCtkTable, client: ClientId, column: Column) -> Effect | None:
+    row = table.filter(pl.col(Column.CLIENT) == client)
+    return None if row.height == 0 else row[column].item()
+
+
 def _band(
     table: ComparisonTable, experiment: ExperimentName, metric: Metric, estimand: Estimand
 ) -> PlotBand:
@@ -571,4 +661,5 @@ def build_figures(paths: Paths, config: Config, mode: ExecutionMode) -> Director
     ctk_robustness_forest(paths, config, mode)
     federated_arm_tradeoff_figure(paths, config, mode)
     natural_versus_controlled(paths, mode)
+    client_ctk_figure(paths, config, mode)
     return paths.report_figure_file(mode, ReportFigure.CTK_ROBUSTNESS_FOREST, FileSuffix.PNG).parent

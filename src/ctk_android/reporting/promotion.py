@@ -60,6 +60,7 @@ def evidence_files() -> list[Artifact]:
         Artifact.PEER_DOSE_RESPONSE,
         Artifact.FEATURE_NOVELTY,
         Artifact.ROBUSTNESS,
+        Artifact.CLIENT_CTK,
         Artifact.ANCHORED_WORST_CLIENT,
         Artifact.ANCHORED_CLIENT_SELECTION,
         Artifact.ARM_TRADEOFF,

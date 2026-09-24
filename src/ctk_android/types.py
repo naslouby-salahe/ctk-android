@@ -35,6 +35,7 @@ from ctk_android.enums import (
     FamilyLabelSource,
     FamilySetName,
     Grouping,
+    IntervalStatus,
     LamdaRelease,
     Learner,
     LibraryOption,
@@ -206,6 +207,9 @@ HeadroomTable = pl.DataFrame
 PatternTable = pl.DataFrame
 FidelityTable = pl.DataFrame
 ComparisonTable = pl.DataFrame
+ClientCtkTable = pl.DataFrame
+ArmSeries = pl.DataFrame
+PositiveOrZeroFloat = NonNegativeFloat
 ScopeMap = dict[ExperimentName, RobustnessScope]
 ForestRow = dict[str, Any]
 ForestText = str
@@ -649,6 +653,43 @@ class AnchoredSelectionRow(FrozenRecord):
     client: ClientId
     seeds_selected: RowCount
     mean_local_recall: Fraction
+
+
+class ArmSpec(FrozenRecord):
+    learner: Learner
+    condition: ExposureCondition
+
+
+class ClientCtkRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    client: ClientId
+    learner: Learner
+    alpha: Alpha
+    population: EvaluationPopulation
+    local_recall: Fraction
+    absent_recall: Fraction
+    peer_recall: Fraction
+    full_recall: Fraction | None
+    total_gain: Effect
+    total_ci_low: Effect | None
+    total_ci_high: Effect | None
+    pooling_gain: Effect
+    pooling_ci_low: Effect | None
+    pooling_ci_high: Effect | None
+    ctk_gain: Effect
+    ctk_ci_low: Effect | None
+    ctk_ci_high: Effect | None
+    ctk_positive_seeds: RowCount
+    known_family_recall_local: Fraction | None
+    known_family_recall_collaborative: Fraction | None
+    known_family_change: Effect | None
+    known_family_change_ci_low: Effect | None
+    known_family_change_ci_high: Effect | None
+    realised_fpr: Fraction | None
+    hidden_family_trials_per_seed: PositiveOrZeroFloat
+    contributing_seeds: RowCount
+    eligible_pairs: RowCount
+    interval_status: IntervalStatus
 
 
 class TradeoffRow(EvidenceRow):
