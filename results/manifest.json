@@ -1,0 +1,141 @@
+{
+  "mode": "confirmatory",
+  "files": [
+    {
+      "name": "evidence/run-index.parquet",
+      "digest": "50bb36ba947ebfab7c205dabefbaa0ed7e38009feea1ad217c5a709ed3ce65b9"
+    },
+    {
+      "name": "evidence/arm-metrics.parquet",
+      "digest": "9d899ed92025c43e1315a3083dc71ac7a678a43fa80070822de0c05ffdf81b1f"
+    },
+    {
+      "name": "evidence/collaboration-decomposition.parquet",
+      "digest": "023df4eb3a4713d0c3b476f3345456e15e847bb09d5e24b910720d987492eef8"
+    },
+    {
+      "name": "evidence/family-rescue.parquet",
+      "digest": "71aa4ef3229ff943b94d2818380930c4a270e4c31a247daaaf2838d30693d165"
+    },
+    {
+      "name": "evidence/peer-dose-response.parquet",
+      "digest": "d6d2c572ae42c02dfaaf5b9dc61adce6f0a03a1dae14dcb3ed4e28c2f0650fc0"
+    },
+    {
+      "name": "evidence/feature-novelty.parquet",
+      "digest": "70ff4ac87c1aa4e822df540d0e1bf3b3477ccdd546aa55ad71952e02d17c63ca"
+    },
+    {
+      "name": "evidence/robustness.parquet",
+      "digest": "ad3cc48cd91f112912339342b99565aa99ced55eaaeec3b925309d0ea26b52bd"
+    },
+    {
+      "name": "statistics/paired-effects.parquet",
+      "digest": "96b871d9d57af4cc509ed8a58090a3d76c99419ae479f171f5585e3b8af940a0"
+    },
+    {
+      "name": "statistics/cluster-bootstrap.parquet",
+      "digest": "72994e9e6bfa4dad59f9c949a36f816a29cce2a41280291feb470c2fde92a77a"
+    },
+    {
+      "name": "gates/claims.csv",
+      "digest": "6b476cdc1db3259edaa190ae346928eff69a9cf6f3a2a9d0733fb6398fbd8390"
+    },
+    {
+      "name": "gates/seed-status.csv",
+      "digest": "0f5fd19a466ec4007c68d3455fbcc5e267e628aae75ca06cecff699dd12cc814"
+    },
+    {
+      "name": "tables/dataset-client-audit.csv",
+      "digest": "0aaf14a51f612805a4ed66a48261261d8c07f5f6b5090a6426d03383828d65e0"
+    },
+    {
+      "name": "tables/primary-arm-comparison.csv",
+      "digest": "953c9a636dd1134f67e6b4967e874ba3c7943d3e2babcc936417c38a92f889ce"
+    },
+    {
+      "name": "tables/collaboration-decomposition.csv",
+      "digest": "abca9a7eb5ab1923bed906979edcb9d8a159b2b025c7f145de3b3c2a676ebef9"
+    },
+    {
+      "name": "tables/peer-dose-response.csv",
+      "digest": "3786d54f327ddcbef237bb4e435749652490939b41d552757c8fb37216964034"
+    },
+    {
+      "name": "tables/family-level.csv",
+      "digest": "04be2234e6e81a91f5323535c99282f97e3fe4068833fc9435e8f3f387a4d94a"
+    },
+    {
+      "name": "tables/claim-gates.csv",
+      "digest": "6b476cdc1db3259edaa190ae346928eff69a9cf6f3a2a9d0733fb6398fbd8390"
+    },
+    {
+      "name": "tables/robustness.csv",
+      "digest": "e1721164e9663f57dec337d5de042fd0787f4ae498e64a6427ff27346c0f0c41"
+    },
+    {
+      "name": "figures/collaboration-decomposition.pdf",
+      "digest": "705d36d6838bc88866394ccbe026b8ea31aa0caff6757b879a9436d94c1571d5"
+    },
+    {
+      "name": "figures/collaboration-decomposition.png",
+      "digest": "fd763ca204332a959b89bc38f8ed67258a8278859e169b7ce683161c9570a78a"
+    },
+    {
+      "name": "figures/mean-versus-worst-client.pdf",
+      "digest": "6477a1d486bd2e48689a25275de61e6d859cee57a920ba1ec06d2cd36815b62a"
+    },
+    {
+      "name": "figures/mean-versus-worst-client.png",
+      "digest": "838aa01905efb3c95f5de0a78859024db976734f54c10eb7a5407abdac601f22"
+    },
+    {
+      "name": "figures/own-domain-versus-federation-wide.pdf",
+      "digest": "926cdc0fa30aa5a7e17909fa3860f281557f11fdb27d4b6085b9cdc19e969c3e"
+    },
+    {
+      "name": "figures/own-domain-versus-federation-wide.png",
+      "digest": "7afd797ae2ab998ee90d576f064c14751ad9a7a93b9ace6887bbb04fad11e6b5"
+    },
+    {
+      "name": "figures/peer-dose-response.pdf",
+      "digest": "a5da4a477f4aa9cfc70e8966a23364cb25ff29f41f2d372916cfed2530176096"
+    },
+    {
+      "name": "figures/peer-dose-response.png",
+      "digest": "4ffc5bcbf6ec7b09eb8adfdefe90bab0d8f4cc4ff1656748d9684a3ca8cf4182"
+    },
+    {
+      "name": "figures/family-rescue-map.pdf",
+      "digest": "4864a4a6587ed558b3d60e63fa12b1db270c693343ab7da15982be8c8eeb6556"
+    },
+    {
+      "name": "figures/family-rescue-map.png",
+      "digest": "b14dc7a63199bd8bcb3ccefadf67d6ee3960d4f80a47975b658d66efcf7e39d1"
+    },
+    {
+      "name": "figures/feature-novelty-versus-ctk-gain.pdf",
+      "digest": "250bc700c090639ac6848de44d6affa91a30b89ab0365155533b5b42cc61d1dc"
+    },
+    {
+      "name": "figures/feature-novelty-versus-ctk-gain.png",
+      "digest": "03e49173c8ed13b69681438d86125d059483f382f7d1167bfb5b741072e3db94"
+    },
+    {
+      "name": "figures/known-versus-unseen-tradeoff.pdf",
+      "digest": "5ce2b5c066f8eb7d088739d37bd1dd55fa0bc9b4a2353722515a15aa22e6b8b9"
+    },
+    {
+      "name": "figures/known-versus-unseen-tradeoff.png",
+      "digest": "e553a9fbba13498c0e1b18db3fcef520e449712bf4fb5679350499029c1b1d1c"
+    },
+    {
+      "name": "figures/robustness-summary.pdf",
+      "digest": "7dd3b8d32c61725896add253591fc36704f59cdce8ddefc609b6ff905121c15c"
+    },
+    {
+      "name": "figures/robustness-summary.png",
+      "digest": "942c62b0c6db560ece29f956d6d690215e6a9d7e7bac0cae2b9fbda690be5c8a"
+    }
+  ]
+}

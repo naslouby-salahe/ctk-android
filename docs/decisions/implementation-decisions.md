@@ -13,3 +13,7 @@
 ## Smoke mode covers every experiment
 
 The eight confirmatory-only experiments list `smoke` in `modes` so the smoke plan exercises each of them end to end on the smoke seed with smoke training. This checks executability only (no evidence is used); confirmatory results still require seeds 100 to 109. Development-mode experiment specs are unchanged, so development runs stay fresh.
+
+## Representation-limited claim wording
+
+Roadmap 31.2 promotes this claim only for families that stay poor under the primary model and an independent model family. When some but not all poorly-rescued families are confirmed, the claim keeps the promoted status but carries the scoped wording ("supported only in the scopes that passed; state the restriction") and reports the confirmed and total family counts. Found on the confirmatory report (3 of 4 families); no outcome changed, only the wording.

@@ -60,11 +60,20 @@ def test_every_planned_claim_receives_an_outcome_and_the_report_is_deterministic
 def test_promotion_is_blocked_outside_confirmatory_mode_and_writes_no_results() -> None:
     _require_development_runs()
     config = load_config(PATHS)
+
+    def snapshot() -> dict[str, int]:
+        return {
+            f"{path}": path.stat().st_mtime_ns
+            for path in (REPO_ROOT / "results").rglob("*")
+            if path.is_file()
+        }
+
+    before = snapshot()
     decision = run_report(PATHS, config, MODE, promote_evidence=True)
     assert decision is not None
     assert decision.state is PromotionState.BLOCKED
     assert decision.blocks == (PromotionBlock.NOT_CONFIRMATORY,)
-    assert not (REPO_ROOT / "results").exists()
+    assert snapshot() == before
 
 
 def test_runs_made_under_a_different_configuration_are_stale_and_never_analysed() -> None:

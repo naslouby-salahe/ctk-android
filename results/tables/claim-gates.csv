@@ -1,0 +1,13 @@
+claim,claim_status,scopes_passed,scopes_total,wording
+local-deficit,promoted,2,2,supported in every evaluated scope
+collaboration-benefit,promoted,2,2,supported in every evaluated scope
+complementary-knowledge,promoted,3,3,supported in every evaluated scope
+generic-pooling-majority,rejected,0,2,not supported; report the measured components without the claim
+dose-response,narrowed,1,3,supported only in the scopes that passed; state the restriction
+own-domain-benefit,promoted,1,1,supported in every evaluated scope
+worst-client-benefit,promoted,1,1,supported in every evaluated scope
+known-family-safety,promoted,2,2,supported in every evaluated scope
+family-dependence,promoted,1,1,supported in every evaluated scope
+representation-limited-family,promoted,3,4,supported only in the scopes that passed; state the restriction
+feature-novelty-explanation,rejected,0,2,not supported; report the measured components without the claim
+new-mechanism-trigger,rejected,0,2,not supported; report the measured components without the claim

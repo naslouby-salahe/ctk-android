@@ -95,14 +95,18 @@ def _decide(passed: list[Passed], refuted: list[Refuted]) -> ClaimStatus:
 
 
 def _result(
-    claim: ClaimName, status: ClaimStatus, passed: RowCount, total: RowCount
+    claim: ClaimName,
+    status: ClaimStatus,
+    passed: RowCount,
+    total: RowCount,
+    wording: AllowedWording | None = None,
 ) -> ClaimResult:
     return ClaimResult(
         claim=claim,
         claim_status=status,
         scopes_passed=passed,
         scopes_total=total,
-        wording=AllowedWording[status.name],
+        wording=AllowedWording[status.name] if wording is None else wording,
     )
 
 
@@ -358,7 +362,14 @@ def representation_limited_family(evidence: GateEvidence, config: Config) -> Cla
     ) | poor_families(ExperimentName.MODEL_FAMILY_REPLICATION_TREES, Learner.CENTRAL)
     qualifying = primary & independent
     status = ClaimStatus.PROMOTED if qualifying else ClaimStatus.REJECTED
-    return _result(ClaimName.REPRESENTATION_LIMITED_FAMILY, status, len(qualifying), len(primary))
+    partial = status is ClaimStatus.PROMOTED and len(qualifying) < len(primary)
+    return _result(
+        ClaimName.REPRESENTATION_LIMITED_FAMILY,
+        status,
+        len(qualifying),
+        len(primary),
+        AllowedWording.NARROWED if partial else None,
+    )
 
 
 def feature_novelty_explanation(evidence: GateEvidence, config: Config) -> ClaimResult:

@@ -16,6 +16,7 @@ from ctk_android.analysis.gates import (
 from ctk_android.config import load_config
 from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import (
+    AllowedWording,
     ClaimStatus,
     Column,
     ContrastFamily,
@@ -307,6 +308,34 @@ def test_representation_limited_family_needs_a_second_model_to_agree() -> None:
     result = representation_limited_family(evidence, CONFIG)
     assert result.claim_status is ClaimStatus.PROMOTED
     assert result.scopes_passed == 1
+
+
+def test_representation_limited_family_wording_is_scoped_when_only_some_families_qualify() -> None:
+    def frame(experiment: ExperimentName, recalls: dict[str, float]) -> pl.DataFrame:
+        return pl.DataFrame(
+            [
+                {
+                    Column.EXPERIMENT: experiment,
+                    Column.LEARNER: Learner.CENTRAL,
+                    Column.FAMILY: family,
+                    Column.FULL_RECALL: value,
+                }
+                for family, value in recalls.items()
+            ]
+        )
+
+    effects = pl.concat(
+        [
+            frame(ExperimentName.CONTROLLED_EXPOSURE, {"alpha": 0.3, "beta": 0.2}),
+            frame(ExperimentName.MODEL_FAMILY_REPLICATION_LINEAR, {"alpha": 0.4, "beta": 0.9}),
+            frame(ExperimentName.MODEL_FAMILY_REPLICATION_TREES, {"alpha": 0.9, "beta": 0.9}),
+        ]
+    )
+    evidence = _evidence([]).model_copy(update={"family_effects": effects})
+    result = representation_limited_family(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.PROMOTED
+    assert (result.scopes_passed, result.scopes_total) == (1, 2)
+    assert result.wording is AllowedWording.NARROWED
 
 
 def _summary_rows(values: dict[tuple[Learner, ExposureCondition, Metric], float]) -> pl.DataFrame:
