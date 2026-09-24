@@ -637,6 +637,8 @@ Requested peer-family sample levels:
 
 The actual effective peer count is reported because client-level training caps and family availability may prevent some requested doses from being realized exactly.
 
+**Dose semantics (clarified after confirmatory analysis; see 31.3).** The *requested dose* is the design level; the *effective dose* is the number of the family's peer training rows actually present. The `all available` level has no requested dose but has an effective dose like any other level, and it is evaluated whenever that effective dose satisfies the criterion. Claims that refer to "at least 100 effective peer samples" are evaluated on effective, not requested, exposure.
+
 Primary questions:
 
 - At what peer support does recall begin to increase measurably?
@@ -668,6 +670,8 @@ For each eligible pair, compare:
 This analysis validates whether the controlled-exposure phenomenon appears in naturally imbalanced market-family distributions.
 
 Its effect magnitude is **not** numerically pooled with the controlled-exposure effect because the estimands differ.
+
+Natural scarcity is nevertheless the principal external check of the controlled-exposure phenomenon: agreement in sign, practical magnitude and seed consistency of the complementary component under naturally imbalanced exposure supports the view that the controlled intervention is not an artefact of artificial removal. It is reported side by side with, never merged into, the controlled estimate, and it is not a confirmatory gate unless a gate says so.
 
 ---
 
@@ -853,6 +857,8 @@ The main conclusions are stress-tested across:
 - de-duplicated test representations in a sensitivity where each identical feature vector contributes once.
 
 A conclusion is described as **robust** only when it survives the predeclared relevant robustness checks. Otherwise wording is explicitly scoped.
+
+Robustness of the complementary-knowledge effect means persistence of the effect's **sign and practical magnitude**. It does not mean identical decomposition proportions: the split between generic pooling and complementary knowledge may differ by model class, training support and exposure design.
 
 ---
 
@@ -1057,6 +1063,36 @@ A new peer-selection or family-aware collaboration mechanism is allowed only if 
 and there is a deployment-available predictor of that residual gain.
 
 If the trigger fails, the mechanism line is closed and the empirical decomposition remains the contribution.
+
+---
+
+### 31.3 Post-Confirmatory Evidence-Preserving Analyses and Interpretation Clarifications
+
+Added after the confirmatory campaign and recorded in `docs/decisions/protocol-amendments.md`. No original confirmatory arm, threshold, seed, family set, hyperparameter, or gate was changed, and no fresh seeds are required. Analyses below use only already-generated confirmatory evidence and do not modify original gates or claim outcomes unless they correct a documented implementation bug.
+
+Every reported result is labelled as exactly one of: **A** original confirmatory evidence, **B** predeclared confirmatory robustness or sensitivity evidence, **C** post-confirmatory evidence-preserving analysis, **D** proposed future work.
+
+**A. Dose-response clarification.** The 100-effective-peer-sample, +0.03 gain, monotonicity and not-one-family criteria are unchanged. Levels are ordered by effective exposure; the `all available` level is a level whose effective exposure is compared with the 100-sample criterion; the family-robustness criterion uses the levels that satisfy the criterion. Where a level mean is used, an observation-level sensitivity (rows with at least 100 effective samples) is reported alongside. Because caps and availability make effective exposure much smaller than requested exposure, low requested doses may never reach the criterion.
+
+**B. Evidence-preserving analyses.** Local-baseline-anchored worst-client robustness (the worst client under the local baseline is frozen per seed and followed through every arm; this does not replace the predeclared worst-client gate, and total and pooling gains against local are subject to selection on the local baseline, so the complementary gain is the cleaner contrast); federated-arm trade-off analysis (descriptive; no composite score or winner is defined); a canonical complementary-knowledge robustness synthesis; and family-level mechanism patterns (descriptive, no rigid taxonomy).
+
+**C. Natural scarcity** is elevated as validation of the controlled-exposure phenomenon, as described in 21; estimands are not merged.
+
+**D. Robustness** is as clarified in 28.
+
+**E. Known-family safety.** The gate evaluates the strongest federated arm, as written. Wording must be arm-specific: an arm that satisfies the tolerance does not certify other arms, and any arm outside the tolerance is reported as such.
+
+**F. Feature novelty.** The gate outcome is preserved as stored. Gate non-passage with very few families and wide intervals is unresolved evidence, not a demonstrated absence of an association; prose must not say novelty is disproven or proven. Other descriptors are exploratory only.
+
+**G. Representation-limited findings.** Exposure alone does not explain all family-level failures; the bounded statement applies to the tested static representation and models.
+
+**H. Generic pooling.** The rejected generic-pooling-majority gate stands. For the primary MLP decomposition the measured shares may support the bounded statement that generic pooling is not the dominant component; this is not extended to the linear model or other designs unless their own intervals support it, and no retrospective dominance gate is created.
+
+**I. Own-domain caveat.** The federation-wide permutation control is the gated negative control. Own-domain and worst-client permutation behaviour is reported separately; where its interval is not inside the equivalence band, causal wording for that population is limited. No own-domain permutation gate is added retrospectively.
+
+**J. Family-dependence scope.** The family-dependence claim is evaluated on the two frozen family sets only (primary and replication), not on arbitrary experiment pooling.
+
+**K. Aggregation naming.** The seed-paired macro complementary gain and the micro-pooled hits/trials complementary gain are different estimands and carry different names in every artifact; partition salts are reported separately, never as extra seeds.
 
 ---
 
@@ -1485,7 +1521,7 @@ Do not modify thresholds to rescue failed claims.
 
 ### Stage L — Publication evidence
 
-Generate final tables, figures, effect summaries, limitations, and chapter text only from frozen confirmatory outputs and explicitly labelled exploratory analyses.
+Generate final tables, figures, effect summaries, limitations, and chapter text only from frozen confirmatory outputs and explicitly labelled exploratory analyses. The post-confirmatory tables and figures of 31.3 are included and labelled as class C evidence.
 
 ---
 
@@ -1521,7 +1557,11 @@ Known-family recall/FPR versus unseen-family benefit.
 
 ### Robustness summary
 
-Family set, model family, operating point, support, and grouping sensitivities.
+Family set, model family, operating point, support, and grouping sensitivities, drawn as a forest plot that keeps the seed-paired macro estimand and the micro-pooled hits/trials estimand visibly separate.
+
+### Post-confirmatory figures (31.3)
+
+Federated-arm trade-off panels and controlled-versus-natural-scarcity decomposition. These are labelled as post-confirmatory, evidence-preserving views.
 
 ---
 
