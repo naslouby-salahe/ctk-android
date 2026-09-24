@@ -63,3 +63,19 @@ Scope statement: wording and class C additions only. No original confirmatory ar
 | 31.3 N (new), 33 | Pre-submission citation-chaining audit only | Bounded audit performed; no direct collision, three partial; "no closely matching study found in the audited literature" wording only; audit limits stated | Literature collision audit | `docs/Novelty Audit.md` |
 
 The formal-interval rule in the per-client analysis reuses the existing `ctk_min_positive_seeds` value (8) as a minimum contributing-seed count; no new threshold is introduced, and rows below it are reported descriptively without an interval.
+
+## 2026-09-25 - Per-client interval rule corrected (Roadmap 31.3 L)
+
+Problem: the per-client analysis showed a BCa interval only for clients with at least 8 contributing seeds, justified by the gate's 8-of-10 positive-seed rule. That rule has nothing to do with whether a bootstrap interval is appropriate; it was an arbitrary and mis-justified reuse.
+Correction: all clients are reported with their number of contributing seeds; intervals are labelled exploratory small-n BCa intervals and are shown whenever the existing helper can compute them (at least 3 seeds, non-constant effect), otherwise omitted (`interval-omitted-not-computable`). No threshold is used. The implementation requirement of the helper is documented separately from the scientific reading (intervals with 6 to 10 seeds and unequal support are unstable and are descriptive).
+Effect: point estimates for every client are unchanged (maximum absolute difference 0.0); play-late now shows exploratory intervals (federation-wide CTK 0.328, 0.224 to 0.431). No original confirmatory result, gate, threshold, seed or family set changed; the analysis remains class C; no new seeds are required; no scientific degree of freedom changed.
+
+## 2026-09-25 - Novelty positioning narrowed after the deeper audit; external-validity wording (Roadmap 33, 42, 31.3 L, N)
+
+Wording only. Scientific degree of freedom changed: no. Original confirmatory result changed: no. Fresh seeds required: no.
+
+| Section | Previous wording | New wording | Reason | Evidence source |
+|---|---|---|---|---|
+| 31.3 L | Per-client intervals "shown whenever the helper can compute one" (after the 2026-09-25 correction) | Adds that this is an implementation requirement, not a scientific threshold, and that intervals with 6 to 10 seeds are unstable and descriptive | Avoid implying precision | `client-ctk-analysis.csv` |
+| 31.3 N, 33 | First audit: no direct collision, three partial | Second audit: no direct collision, four partial (adds Bi et al.); dose and natural scarcity described as partially anticipated; audit limits stated | Deeper reading of seven papers in full plus forward/backward chaining | `docs/Novelty Audit.md` |
+| 42 Limited external replication | Independent validation named as the remedy | Adds the feasibility finding: no publicly verified independent corpus meets all requirements; replication is optional and gated on a support pre-check | Desk assessment of candidate datasets, none downloaded | `docs/Second Dataset Feasibility.md` |

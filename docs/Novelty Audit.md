@@ -1,122 +1,126 @@
 # Novelty Audit
 
-Status: literature collision audit performed 2026-09-24 with the paper-search tools available in this session. It is a **bounded** audit, not an exhaustive systematic review; its limits are stated in section 7. No sentence in this repository may claim "first", "novel", "unprecedented" or "state of the art" on the strength of this document. Everything here is class D (positioning), not an experimental result.
+Status: second, deeper literature collision audit, 2026-09-25 (first bounded audit 2026-09-24, superseded by this document). The goal is to determine whether the CTK-Android design materially overlaps prior work, not to prove novelty. This is positioning material (class D), not an experimental result. No sentence in this repository may claim "first", "novel", "unprecedented" or "state of the art" on the strength of this audit. Limits are in section 8.
 
-## 1. Search log
+## 1. What was done
 
-Fourteen search or discovery calls in this task (plus two earlier general web searches) were made across two indexes (a general academic-paper search over Semantic Scholar/Scopus/arXiv-style sources and an arXiv/alphaXiv discovery tool). Topics, one call each unless noted:
-
-1. federated Android malware detection, unseen family, missing classes (×2, plus a follow-up on client-held families with Drebin/AndroZoo);
-2. federated malware detection with novel family and clients lacking the family;
-3. missing / absent / vacant / incomplete classes in FL (×2);
-4. contribution valuation, decomposition and data-quantity versus class knowledge (×2);
-5. leave-one-class-out, controlled class removal, target class absent from clients;
-6. rare-class, long-tail and prototype-based knowledge transfer in FL;
-7. worst-client and per-client evaluation in federated malware detection;
-8. per-class benefit of collaboration for classes a client has never seen;
-9. peer-sample dose (class support sweep) and negative transfer versus class coverage (×2);
-10. cross-silo / collaborative malware threat-intelligence FL with unseen families;
-11. the LAMDA benchmark and Android family/concept-drift literature.
-
-Roughly 100 distinct records were screened by title and abstract. Twenty-two were retained as potentially close and are in the matrix. One paper was read in full (Breitholtz et al., label-set heterogeneity, including its related-work section and references); two (FedP3E, CELM) were read through the abstract and introduction; every other retained paper was assessed from its abstract only (marked "abstract"). Backward citation chaining was limited to the reference list and related work of the Breitholtz paper and the related work quoted in retrieved abstracts; forward citation search (cited-by) was **not** available.
+- **Search:** about 25 search or discovery calls across a general academic index (Semantic Scholar/Scopus/arXiv-style) and an arXiv/alphaXiv discovery tool, plus four arXiv API title lookups to obtain full-text access, and six Semantic Scholar citation-graph requests (four returned data, two were rate-limited). Across both audits roughly 200 distinct records were screened by title and abstract; 35 matrix rows resulted.
+- **Reading depth (reported per paper below):** seven papers were read in full, extracted text, by structured checklist (FedVLS, Breitholtz et al., MAP, Bi et al., GLFC, CELM, FedP3E); every other paper was assessed from its abstract only, and where the primary source was not read at all this is stated. Three dataset papers (MH-1M, AndroTruth, McNdroid) were read for dataset facts only; they are not collision candidates.
+- **Checklist applied to each full-text paper:** problem definition; how client labels are created; whether classes are absent by design or incidentally; whether absence is controlled (one class removed from one client with the rest matched); sample-count matching; class removed from all clients as a control; whether the effect of peers holding the class is isolated for the client lacking it; evaluation population; dose or support sweep; worst-client or per-client analysis; full-exposure reference; natural versus artificial scarcity; representation-level explanation; decomposition of collaboration benefit into generic pooling versus class-specific knowledge.
+- **Backward chaining:** reference lists and related work of the full-text papers (FedRS, FedAwS, FedGELA/FedMR partially class-disjoint data, FedROD, class-imbalance FL, FEDroid, DW-FedAvg, FedCRI/others cited by Bi et al.).
+- **Forward chaining (citations of the close papers):** MAP: 16 citing papers, none on malware or a controlled absent-class design. LAMDA: 12 citing papers, one federated (a drift-aware federated continual-learning Android malware paper, 2026, abstract-level only, drift focus). Breitholtz et al. and FedP3E: no citing papers indexed (recent). FedVLS: request rate-limited, not retrieved. CELM, FedRS, FEDroid, Otani et al.: not retrievable.
+- **Synonym coverage:** vacant / missing / absent / incomplete / class-deficient / disjoint / partially class-disjoint / label-set heterogeneity / label-skew / rare / minority / long-tail / class coverage / class-specific contribution / locally unseen. Different terminology found: partially class-disjoint data (FedGELA, FedMR), positive-labels-only (FedAwS), "Maverick" rare classes (CELM).
+- **Security-venue sweep:** USENIX Security, CCS, NDSS, RAID, DIMVA, ACSAC, IEEE S&P, DSN, Computers & Security, TDSC, TIFS and TOPS were queried by name in combination with federated/collaborative malware terms and, for Computers & Security, with a journal filter. The indexes do not expose conference proceedings reliably: the sweep surfaced one RAID 2024 paper (cross-regional malware detection, Botacin et al.), FEDroid (TIFS 2023), M2FD (Computers & Security 2025), and an NDSS 2022 federated-intrusion paper cited by Bi et al. (not read). No proceedings from USENIX Security, CCS, S&P, ACSAC, DIMVA or TDSC/TOPS were retrieved by these queries; absence from the search results is not evidence of absence from those venues.
 
 ## 2. Collision matrix
 
-Columns: FL = federated setting; Miss = missing or rare classes; Rem = controlled target-class removal; Abs = matched class-absent-everywhere control; Dec = separates generic pooling from complementary class knowledge; Dose = manipulates peer samples of the missing class; Own = own-domain evaluation of the missing class at the target client; Wst = worst-client analysis; Nat = natural-scarcity validation of an artificial intervention; Full = full-exposure ceiling; ExpRep = exposure-versus-representation analysis. "n" = not found in what was read; "p" = partial; "y" = present. Reading depth in the last column.
+Columns: Miss = missing/vacant/incomplete/disjoint classes at clients; Rem = controlled removal of a specific class from a specific client, rest matched; Match = total sample size matched; Abs = class removed from all clients as matched control; Dec = pooling-versus-class-knowledge decomposition; Dose = peer-sample dose of the missing class; Own = own-domain evaluation of the missing class at the target client; Wst = worst-client analysis; Nat = artificial intervention validated against natural scarcity; Full = full-exposure or centralized reference; ExpRep = exposure-versus-representation diagnosis. y / p (partial) / n (not found in what was read). "n" for an abstract-only paper means "not visible in the abstract" and is weak evidence.
 
-| Paper | Year | Domain | FL | Miss | Rem | Abs | Dec | Dose | Own | Wst | Nat | Full | ExpRep | Collision | Read |
-|---|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Exploring Vacant Classes in Label-Skewed FL (FedVLS), Guo et al. | 2024 | image classification | yes | y (vacant classes) | n (label-skew splits) | n | n | n | p (local-vs-global on vacant classes) | n | n | n | n | PARTIAL | abstract |
-| FL with Heterogeneous and Private Label Sets, Breitholtz, Listo Zec, Johansson | 2025 | image classification | yes | y (labels per client swept, sample count fixed) | p (label-set size manipulated) | n | n | p (labels per client, not peer samples of a class) | n | n | n | n | n | PARTIAL | full text |
-| Objective Mismatch in FL under Missing Class Support, Otani et al. | 2026 | fall detection / synthetic | yes | y (rare class absent at most clients) | n | n | n (proves irreducible bias) | n | n | n | n | n | n | PARTIAL | abstract |
-| MAP: Model Aggregation and Personalization in FL with Incomplete Classes, Li et al. | 2024 | image classification | yes | y | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| FedExIT, Saha et al. | 2025 | image / medical | yes | y | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| FedP3E: prototype exchange for non-IID IoT malware detection, Darwish et al. | 2025 | IoT malware (N-BaIoT) | yes | y (rare/disjoint malware classes) | n | n | n | n | n | n | n | n | n | ADJACENT | abstract + intro |
-| FEDroid: comprehensive Android malware detection with FL, Fang et al. | 2023 | Android malware | yes | n (variants via evolution) | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| A method for real-world privacy-preserving Android malware detection through Federated ML, Ciaramella et al. | 2025 | Android malware, 71 families | yes | n (IID vs non-IID) | n | n | n | n | n | n | n | p (centralized reference) | n | ADJACENT | abstract |
-| FL for Malware Image Classification under Data Heterogeneity, Taiwo et al. | 2026 | malware images | yes | p (class entropy per round) | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| Class-wise Contribution Estimation via Logit Maximization (CELM), Ukaye et al. | 2026 | image classification | yes | p (class coverage) | n | n | n (weights by class evidence) | n | n | n | n | n | n | ADJACENT | abstract + intro |
-| Contribution estimation and data valuation in FL (Wei et al. 2020; Zhu et al. 2021; Chen et al., VLDB 2024; Li et al. 2023) | 2020–24 | generic | yes | n | n | n | n | n | n | n | n | n | n | ADJACENT | abstracts |
-| Federated Class-Incremental Learning (Dong et al. 2022; TPAMI 2023) | 2022–23 | image classification | yes | y (new classes at some clients) | n | n | n | n | n | n | n | n | n | ADJACENT | abstracts |
-| FedProto and prototype-based FL (Tan et al. 2021; FedSA; FedHCL) | 2021–25 | generic | yes | p | n | n | n | n | n | n | n | n | n | ADJACENT | abstracts |
-| FedCollab: optimizing the collaboration structure (negative transfer), Bao et al. | 2023 | generic | yes | n | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| Who to Trust? Aggregating client predictions in federated distillation (class mismatch) | 2025 | image classification | yes | y | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| FL-MalDrift; M2FD (concept drift, Android malware FL) | 2025 | Android malware | yes | n | n | n | n | n | n | n | n | n | n | ADJACENT | abstracts |
-| Non-IID Android malware FL feasibility study, Lee | 2023 | Android malware | yes | n | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| FAMCF few-shot Android malware family classification, Zhou et al. | 2024 | Android malware (not FL) | no | y (few-shot families) | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators | 2026 | threat intelligence | yes | n | n | n | n | n | n | n | n | n | n | ADJACENT | abstract |
-| LAMDA: longitudinal Android malware benchmark, Haque et al. | 2025 | Android malware dataset | no | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | NONE (data source) | abstract |
-| Dynamic-weighted FL for Android malware (Chaudhuri et al.; Wajahat et al.) | 2022–25 | Android malware | yes | n | n | n | n | n | n | n | n | n | n | NONE | abstracts |
-| Fair comparison of Android malware detectors (Molina-Coronado et al.) | 2022 | Android malware (not FL) | no | n | n | n | n | n | n | n | n | n | n | NONE | abstract |
+| Paper | Year | Venue | Domain | Miss | Rem | Match | Abs | Dec | Dose | Own | Wst | Nat | Full | ExpRep | Collision | Reading depth |
+|---|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Exploring Vacant Classes in Label-Skewed FL (FedVLS), Guo et al. | 2025 | AAAI (arXiv 2401.02329) | images, text | y (Dirichlet/shard skew) | n | n | n | n | n | n | p (client-3 confusion, client-0 table) | n | p (initial global model as teacher/reference) | p (logit/loss-level cause) | PARTIAL | FULL TEXT |
+| FL with Heterogeneous and Private Label Sets, Breitholtz et al. | 2025 | arXiv preprint | images | y (labels per client swept) | p (label-set size manipulated) | y (samples per client fixed at 2,000) | n | n | p (labels per client, not peer samples of a class) | n | n | n | n | n | PARTIAL | FULL TEXT |
+| Objective Mismatch in FL under Missing Class Support, Otani et al. | 2026 | IEICE Trans. Fundamentals | fall detection, synthetic | y (rare class absent at most clients) | n | n | n | n (theory: irreducible bias) | n | n | n | n | n | n | PARTIAL | ABSTRACT ONLY |
+| Enabling Privacy-Preserving Cyber Threat Detection with FL, Bi et al. | 2024 | arXiv preprint | Android malware (Drebin+AndroZoo), SMS spam | y (k families per client, by design) | n | n | n | n | n | n | n | n | y (centralized comparison) | n | PARTIAL | FULL TEXT |
+| MAP: Model Aggregation and Personalization in FL with Incomplete Classes, Li et al. | 2024 | IEEE TKDE (arXiv 2404.09232) | images | y | p (centralized targeted-class experiment) | p (same targeted samples, not total) | n | n | p (sweeps number of targeted classes) | n | p (per-client change histogram) | p (FEMNIST natural vs random assignment, no like-for-like) | p | p (classifier-proxy collapse) | ADJACENT | FULL TEXT |
+| Federated Class-Incremental Learning (GLFC), Dong et al. | 2022 | CVPR (arXiv 2203.11473) | images | y (60% classes per client, new classes over time) | n | n | n | n | n | n | n | n | n | p (last-layer gradient explanation) | ADJACENT | FULL TEXT |
+| CELM: class-wise contribution estimation, Ukaye et al. | 2026 | arXiv preprint | images, dermatology | y (PLS/SLS/Dirichlet/Maverick) | n | p (PLS totals fixed) | n | n | n | n | n | p (FedISIC natural vs synthetic splits, no like-for-like) | p (IID sanity check) | p (logit probes) | ADJACENT | FULL TEXT |
+| FedP3E: prototype exchange, non-IID IoT malware, Darwish et al. | 2025 | arXiv preprint | IoT malware (N-BaIoT), 3 clients | y (disjoint/rare variants by design) | n | n | n | n | n | n | n | n | p (IID scenario) | n | ADJACENT | FULL TEXT |
+| FEDroid: comprehensive Android malware detection with FL, Fang et al. | 2023 | IEEE TIFS | Android malware | n (variants via evolution) | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| A method for real-world privacy-preserving Android malware detection through FL, Ciaramella et al. | 2025 | Inf. Softw. Technol. | Android malware, 71 families | n (IID vs non-IID) | n | n | n | n | n | n | n | n | y (centralized comparison) | n | ADJACENT | ABSTRACT ONLY |
+| FedRS: FL with restricted softmax for label-distribution non-IID data, Li & Zhan | 2021 | KDD | images | y | n | n | n | n | n | n | n | n | n | p | ADJACENT | described only in MAP/FedVLS/CELM (primary not read) |
+| FL for Malware Image Classification under Data Heterogeneity, Taiwo et al. | 2026 | preprint/journal (not stated) | malware images | p (class entropy) | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| Cross-Regional Malware Detection via Model Distilling and FL, Botacin et al. | 2024 | RAID | AV-company malware, 3 regions | n | n | n | n | n | n | n | n | n | y (global combined) | n | ADJACENT | ABSTRACT ONLY |
+| FL for Malware Detection in IoT Devices, Rey et al. | 2021 | Computer Networks | IoT malware (N-BaIoT) | p (seen vs unseen devices) | n | n | n | n | n | n | n | n | y (local vs centralized vs FL) | n | ADJACENT | ABSTRACT ONLY |
+| FedHGCDroid; FedDRC; uitAnDiNeFed; DW-FedAvg; Lee (Sensors); Kushwaha | 2022–25 | Entropy; CSCWD; Wireless Netw.; CCPE; Sensors; ICICV | Android malware | n | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FL-MalDrift; M2FD; FALCON; COR-FL; SCFM-FedRL; drift-aware federated continual learning (2026) | 2025–26 | Sci. Rep.; Comput. Secur.; IEEE TMC; conferences; IEEE Access | Android malware, drift | n | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| Cross-silo FL in SOCs (Xenos et al.); FL in malware detection (Serpanos et al.); CTI sharing via FL (Sarhan et al.) | 2021–25 | Int. J. Inf. Secur.; ETFA; J. Netw. Syst. Manage. | malware/intrusion, organizations | n | n | n | n | n | n | n | n | n | y | n | ADJACENT | ABSTRACT ONLY |
+| Federated Attack Campaign Detection via Contrastive Encoding of Threat Indicators | 2026 | arXiv preprint | threat intelligence | n | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FedExIT, Saha et al. | 2025 | Information Fusion | images, medical | y | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| Who to Trust? Aggregating client predictions in federated distillation (class mismatch) | 2025 | arXiv preprint | images | y | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FedAwS (positive labels only); FedGELA / FedMR (partially class-disjoint data); FedROD | 2020–24 | ICML; NeurIPS; ICLR | images | y | n | n | n | n | n | n | n | n | n | n | ADJACENT | not read (cited in read papers) |
+| Contribution estimation / data valuation in FL (Wei et al.; Zhu et al.; Chen et al., VLDB 2024; Li et al. CVPR 2024) | 2020–24 | various | generic | n | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FedCollab (negative transfer, collaboration structure), Bao et al. | 2023 | arXiv preprint | generic | n | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FedProto and prototype FL (Tan et al.; FedSA; FedHCL) | 2021–25 | AAAI-era/various | generic | p | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| FAMCF; EC2; Meta-MAMC (few-shot / zero-day Android family classification, non-FL) | 2020–24 | Comput. Secur.; IEEE TDSC; ACM TOSEM | Android malware | y (few-shot families) | n | n | n | n | n | n | n | n | n | n | ADJACENT | ABSTRACT ONLY |
+| LAMDA, Haque et al. (primary data source) | 2025 | arXiv preprint | Android malware dataset | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | NONE (data) | ABSTRACT ONLY |
+| KronoDroid; MH-1M; Maloid-DS; AMD; CICMalDroid; CCCS-CIC-AndMal-2020 (datasets) | 2018–25 | various | datasets | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | NONE (data) | ABSTRACT ONLY |
+| Fair comparison of Android malware detectors, Molina-Coronado et al. | 2022 | Comput. Secur. | Android malware (non-FL) | n | n | n | n | n | n | n | n | n | n | n | NONE | ABSTRACT ONLY |
 
-Totals over the 22 rows (a row may group several closely related papers): **0 DIRECT, 3 PARTIAL, 16 ADJACENT, 3 NONE**.
+Counts over the rows above (a row may group several closely related papers): **0 DIRECT, 4 PARTIAL, 20 ADJACENT, 3 NONE**.
 
-Explanation of the PARTIAL collisions:
+Papers by depth: **7 full text** (FedVLS, Breitholtz et al., MAP, Bi et al., GLFC, CELM, FedP3E); **0 methods-and-results-only**; **0 abstract-and-intro** (the earlier audit's "abstract + intro" entries for CELM and FedP3E are upgraded to full text); **about 25 abstract only**; a further group not read (FedRS, FedAwS, FedGELA, FedMR, FedROD, cited in read papers).
 
-- **FedVLS (Guo et al.)** evaluates vacant classes (absent at a client) and compares local models with the global model on them, which is the same evaluation motif as our local-versus-collaborative comparison on locally unseen classes. It is not a controlled decomposition: label skew is generated by partitioning, vacant classes remain present at peers by construction, there is no class-absent-everywhere control, no pooling-versus-class-knowledge split, no dose, no own-domain or worst-client analysis.
-- **Breitholtz et al.** manipulates the number of labels each client has while holding samples per client fixed. This is conceptually close to our matched-size control (exposure changes, data volume does not) and to a dose over label-set size. It measures global accuracy, not a locally hidden family, and does not isolate a class-specific component.
-- **Otani et al.** proves that a class absent from most clients leaves an irreducible bias under FedAvg-type objectives. It is a theoretical statement about missing class support, consistent with our finding that plain FedAvg has a known-family/unseen-family trade-off, but it has no matched-control decomposition or malware evaluation.
+## 3. Explanation of every PARTIAL collision
 
-## 3. What the closest designs do and do not cover
+- **FedVLS (full text).** Vacant classes (absent from a client's Dirichlet or shard draw) are its subject; it compares class-wise accuracy of the initial global model and of the locally updated model on vacant classes (Fig. 1, Table 12), and explains the local decay at the logit/loss level. It is not a controlled design: absence is "incidental" to the partition, there is no matched removal, no matched sample count, no class-absent-everywhere control, no peer dose, no own-domain population, and headline evaluation is global test accuracy. Overlap: the evaluation motif (locally absent classes, local versus global recall) and a mechanism-level explanation.
+- **Breitholtz et al. (full text).** Manipulates the number of labels each client holds while fixing samples per client (2,000), which is close to our matched-size principle, and sweeps label-set size (a coarse dose over label diversity). It measures global accuracy of aggregation methods, not recall on a locally hidden class, and has no absent-everywhere control or decomposition. Overlap: exposure manipulated at fixed sample volume.
+- **Otani et al. (abstract only).** Proves an irreducible bias for rare classes absent from most clients under FedAvg-type objectives. Consistent with our FedAvg known-family/unseen-family trade-off. Because only the abstract was accessible, its experimental design (synthetic and one real fall-detection dataset) is unverified; classified PARTIAL on stated topic, with high uncertainty.
+- **Bi et al. (full text).** Android malware FL on Drebin (179 families, 133 after filtering) and AndroZoo benign, with a "family-based non-IID" setting where each client holds only k families (k in {1..4} cross-device, {5..30} cross-silo), and a centralized reference. It finds unstable training as k shrinks and no clear performance pattern. Overlap: same domain, families absent from clients by design, centralized reference. Non-overlap: only a global held-out test set (no per-family or per-client recall), no controlled removal, no matched control, no decomposition, no dose (only skew parameters), binary detection task.
 
-Two design families are closest: (a) label-skew and label-set-heterogeneity studies (FedVLS, Breitholtz, MAP, FedRS-type methods, Otani), which create locally missing classes and measure accuracy; (b) Android and IoT malware FL papers (FEDroid, Ciaramella, FedP3E, Taiwo, Lee), which apply FL to malware under non-IID partitions. The first group has the missing-class evaluation but not the causal decomposition or malware families; the second group has malware data but treats heterogeneity as a nuisance to be mitigated and reports aggregate accuracy, not per-hidden-family counterfactuals. Contribution-valuation work (Shapley-based, CELM) attributes value to clients or class evidence for weighting, not the marginal effect of a class held by peers on a target client's recall for that class.
+## 4. What the closest full-text designs do not do
 
-Coverage of the eleven ingredients of the measurement design:
+Across the seven full-text papers none has: a specific class deliberately removed from a specific client with the rest of training matched; a class removed from all clients as a control; a measurement isolating the effect of peers holding the class for the client lacking it; a sweep of how many samples of that class peers hold; own-domain or worst-client evaluation of the missing class; a like-for-like natural versus artificial comparison of the same estimand; a decomposition of collaboration benefit into generic pooling and class-specific knowledge. Partial overlaps that must be acknowledged: MAP's centralized targeted-class experiment (Fig. 7) and its observation that extra classes can hurt a client's own-class accuracy (compatible with our negative pooling); MAP and CELM report natural (FEMNIST, FedISIC) and synthetic splits side by side; FedP3E has fully disjoint malware class sets across three clients; Bi et al. has families absent from clients on Android malware; FedVLS and MAP give logit/proxy-level explanations of missing-class failure.
 
-| Ingredient | Found in audited literature? |
+Ingredient coverage:
+
+| Ingredient | Verdict from audited literature |
 |---|---|
-| 1. locally missing family/class at one client | yes (label-skew and incomplete-class papers) |
-| 2. otherwise matched collaborative training | not found as a designed matched control |
-| 3. target family present at peers | implicit in every missing-class setting |
-| 4. target family absent from all clients as matched control | **not found** |
-| 5. full-exposure reference | partly (centralized reference in some papers) |
-| 6. decomposition into total, generic pooling, complementary class knowledge | **not found** |
-| 7. own-domain evaluation of the hidden class | not found |
-| 8. worst-client evaluation | standard fairness idea; not combined with class-specific decomposition in what was read |
-| 9. peer-sample dose response for the missing class | not found (label-count sweeps exist) |
-| 10. natural-scarcity validation of the artificial intervention | not found |
-| 11. exposure-versus-representation failure analysis | not found |
+| locally missing family/class at a client | present (FedVLS, MAP, Bi, FedP3E, CELM, GLFC) |
+| matched controlled removal | not found (MAP centralized analogue only) |
+| target class present at peers | implicit everywhere; not isolated |
+| class absent from all clients as matched control | not found |
+| full-exposure reference | partial (centralized comparisons in Bi, Ciaramella; IID references) |
+| decomposition total / pooling / complementary | not found |
+| own-domain evaluation of the hidden class | not found |
+| worst-client evaluation | partial per-client diagnostics (FedVLS, MAP); no worst-client CTK |
+| peer-sample dose | not found (label-count and class-count sweeps exist) |
+| natural-scarcity check of the same estimand | not found (natural and synthetic splits reported side by side in MAP, CELM) |
+| exposure-versus-representation diagnosis | partial mechanism explanations; no full-exposure plus cross-model diagnosis |
 
-## 4. Independent verdicts
-
-Verdict scale: STRONG DIFFERENTIATOR, PLAUSIBLE DIFFERENTIATOR, PARTIAL COLLISION, DIRECT COLLISION, NOT ENOUGH EVIDENCE. Because the search was bounded, no candidate is rated STRONG.
+## 5. Reassessed candidate contributions
 
 | Candidate | Verdict | Reason |
 |---|---|---|
-| N1 controlled-exposure decomposition (matched family-absent-everywhere control separating pooling from complementary knowledge) | PLAUSIBLE DIFFERENTIATOR | No audited paper implements the class-absent-everywhere counterfactual; nearest are FedVLS/Breitholtz (missing-class evaluation, label-set manipulation). |
-| N2 malware-family CTK in Android FL | PLAUSIBLE DIFFERENTIATOR | Android FL papers report aggregate accuracy under non-IID splits; none found isolating family-specific complementary knowledge. |
-| N3 own-domain decomposition | PLAUSIBLE DIFFERENTIATOR | Own-domain versus federation-wide evaluation of a hidden class was not found; the idea is a specific evaluation choice rather than a method. |
-| N4 worst-client CTK | PLAUSIBLE DIFFERENTIATOR (weak) | Worst-client reporting is standard fairness practice; the differentiation is only its combination with the class-specific decomposition. |
-| N5 natural-scarcity validation | PLAUSIBLE DIFFERENTIATOR | An artificial-removal design validated against natural scarcity under the same decomposition was not found. It is within-dataset (same corpus), not external. |
-| N6 dose-response over peer samples of the missing class | PARTIAL COLLISION | Exposure manipulation exists (label-count sweeps, data-size studies); linking peer-sample count of the missing class to the incremental benefit was not found. |
-| N7 exposure-versus-representation diagnosis | PLAUSIBLE DIFFERENTIATOR | Full exposure plus independent model classes to separate exposure-limited from representation-limited families was not found in the audited papers. |
-| N8 combined framework | PLAUSIBLE DIFFERENTIATOR | No paper found providing essentially the same complete measurement framework; individual ingredients are known. |
+| N1 controlled-exposure decomposition (matched family-absent-everywhere control separating pooling from complementary knowledge) | PLAUSIBLE DIFFERENTIATOR | Not found in seven full-text reads; MAP's centralized inclusion experiment is the nearest analogue and is not federated or decomposed. |
+| N2 malware-family CTK in Android FL | PLAUSIBLE DIFFERENTIATOR | Bi et al., FedP3E and Ciaramella et al. are the nearest Android/IoT FL papers; none measures per-family counterfactual recall for a locally missing family. |
+| N3 own-domain decomposition | PLAUSIBLE DIFFERENTIATOR | Not found; FedVLS's local-model diagnostics evaluate vacant classes but on a global test set. |
+| N4 worst-client CTK | PLAUSIBLE DIFFERENTIATOR (weak) | Per-client diagnostics exist (FedVLS, MAP); worst-client class-specific complementary effect not found. Worst-client fairness is generic, so this is a combination claim only; fairness-in-FL literature (q-FFL-type) was not audited in depth. |
+| N5 natural-scarcity validation | PARTIAL COLLISION | Reporting natural and synthetic partitions together is established (MAP with FEMNIST, CELM with FedISIC); what was not found is a check that a controlled-removal decomposition reproduces at the same magnitude under natural scarcity. Downgraded from the first audit. |
+| N6 peer-sample dose response | PARTIAL COLLISION | Sweeps of classes per client (MAP) and labels per client (Breitholtz et al.) and Dirichlet skew (FedVLS, CELM) exist; a sweep of peer samples of the missing class linked to the incremental benefit for a client was not found. |
+| N7 exposure-versus-representation diagnosis | PLAUSIBLE DIFFERENTIATOR | Mechanism explanations exist (MAP proxy collapse, FedVLS logits, GLFC last-layer gradients); a full-exposure plus independent-model-class diagnosis of family-level failures was not found. |
+| N8 combined framework | PLAUSIBLE DIFFERENTIATOR | No paper found providing essentially the same measurement framework; most ingredients individually have partial precedent. |
 
-## 5. Strongest defensible positioning
+## 6. Strongest defensible positioning (narrowed)
 
-Allowed wording, given this audit:
+Prior work already establishes that classes absent from a client are poorly recognized (FedVLS, MAP, Otani et al.), studies Android and IoT malware FL under non-IID partitions including families held by only some clients (Bi et al., FedP3E, FEDroid, Ciaramella et al.), and reports natural and synthetic partitions side by side (MAP, CELM). Wording supported by the audit:
 
-> In the audited literature we found no closely matching study that combines a controlled hidden-family design, a matched family-absent-everywhere collaborative control, a full-exposure reference, a decomposition into total, generic-pooling and complementary family-knowledge components, own-domain and worst-client evaluation, a peer-exposure dose analysis and a natural-scarcity check on Android malware families. Individual ingredients (locally missing classes, malware FL under non-IID splits, per-client fairness reporting, exposure sweeps) are established. The contribution is the measurement design and its empirical decomposition on one corpus, not a new learning algorithm.
+> In the audited literature we found no closely matching study that isolates, for a client that lacks a malware family, the effect of peers holding that family by combining a controlled hidden-family design with a matched family-absent-everywhere collaborative control and a full-exposure reference, and that uses this to decompose collaboration gain into generic pooling and complementary family knowledge with own-domain and worst-client evaluation on Android malware. Locally missing classes, family-skewed Android malware FL, exposure sweeps and natural-versus-synthetic partitions each have precedent; our contribution is their combination into a measurement design and its empirical decomposition on one corpus, not a new learning algorithm.
 
-Not allowed: "first", "novel", "the only", "state of the art", or any claim that generalizes beyond the LAMDA/AndroZoo corpus.
+The earlier list-style statement (which also named the peer-exposure dose analysis and the natural-scarcity check as part of what was not found together) is retained only in this combined form; dose and natural-scarcity are individually partially anticipated and are not presented as independent novelty.
 
-## 6. Already covered by prior work versus differentiated
+## 7. Lost and gained differentiation after the deeper audit
 
-Already covered (do not present as new): federated Android malware detection under non-IID data; the observation that classes absent from a client are poorly recognized (FedVLS, Otani); missing-class-aware aggregation and personalization (FedRS, MAP); prototype exchange for rare malware classes (FedP3E); contribution valuation; per-client and worst-client reporting; concept-drift benchmarks (LAMDA) as the data source; FedProx and fine-tuning baselines.
+- **Lost or weakened:** N5 (natural scarcity) and N6 (dose) are now PARTIAL COLLISION; "Android malware FL with families absent from clients" is not new (Bi et al.); disjoint malware classes across clients are not new (FedP3E); mechanism-level explanations of missing-class failure are not new.
+- **More clearly differentiated:** N1 and N8. Seven full-text reads did not find a class-absent-everywhere control, a controlled per-client removal, or a decomposition, and the closest malware FL papers evaluate only global test metrics.
 
-Differentiated (subject to the search limits): the matched absent-everywhere counterfactual and the resulting pooling-versus-complementary decomposition; its application to labelled malware families with own-domain and worst-client views; the natural-scarcity validation of the intervention; the effective-exposure dose analysis; the exposure-versus-representation diagnosis with full-exposure and cross-model checks.
+## 8. Limits
 
-## 7. Limits of this audit
+- Only seven papers were read in full. About 25 relevant papers were abstract-only; an abstract-only "n" is weak evidence of absence. FEDroid, Ciaramella et al., Otani et al., Taiwo et al. and Botacin et al. are the most important unread primary sources; Otani et al. and FedRS could not be retrieved from open sources.
+- The security-conference proceedings (USENIX Security, CCS, S&P, ACSAC, DIMVA, NDSS) are not reliably indexed by the tools; the sweep cannot rule out relevant papers there.
+- Forward citations were obtained only partially (Semantic Scholar rate limits; very recent papers have few citations).
+- Fairness-in-FL (worst-client) and negative-transfer literatures were sampled, not audited in depth.
+- Before any manuscript novelty claim: full-text reading of FEDroid, Ciaramella et al., Otani et al., FedRS, FedGELA and Taiwo et al.; a proceedings-level sweep of the security venues; forward-citation retrieval for FedVLS, FedRS, FedP3E and Bi et al.; and a re-run of this audit at submission time.
 
-- Search tools index mainly arXiv/Semantic Scholar/Scopus-style sources. Venue-specific sources for security (USENIX Security, CCS, NDSS, RAID, DIMVA), ACM/IEEE proceedings not indexed by these tools, and Google Scholar cited-by were not searched.
-- Only one paper was read in full and two through abstract and introduction; the others were assessed from abstracts. A paper whose method section contains a hidden-class control could have been missed.
-- Terminology gaps: synonyms (label deficiency, semantic heterogeneity, class complementarity) were included in queries, but semantic search can miss exact experimental designs described in unusual words.
-- Recommended before any novelty claim in a manuscript: a second pass with forward-citation search on FedVLS, Breitholtz et al., FedRS/MAP, FedP3E, the Android FL papers above and LAMDA; a targeted security-venue sweep; and full-text reading of all PARTIAL and the top ADJACENT papers (FedVLS, Otani, FedP3E, CELM, FEDroid, MAP).
+## 9. Closest ten papers
 
-## 8. Closest five papers
-
-1. Exploring Vacant Classes in Label-Skewed Federated Learning (FedVLS), 2024.
-2. Federated Learning with Heterogeneous and Private Label Sets, 2025.
-3. Objective Mismatch in Federated Learning under Missing Class Support, 2026.
-4. FedP3E: Privacy-Preserving Prototype Exchange for Non-IID IoT Malware Detection, 2025.
-5. Comprehensive Android Malware Detection Based on Federated Learning Architecture (FEDroid), 2023 (nearest Android-specific FL paper, with a real-variants evaluation but no missing-family decomposition); MAP/FedRS (incomplete classes) are the next.
+1. Exploring Vacant Classes in Label-Skewed FL (FedVLS), AAAI 2025 — PARTIAL, full text.
+2. FL with Heterogeneous and Private Label Sets (Breitholtz et al.), 2025 — PARTIAL, full text.
+3. Enabling Privacy-Preserving Cyber Threat Detection with FL (Bi et al.), 2024 — PARTIAL, full text (Android malware, family-skewed clients).
+4. Objective Mismatch in FL under Missing Class Support (Otani et al.), 2026 — PARTIAL, abstract only.
+5. MAP: Model Aggregation and Personalization in FL with Incomplete Classes, IEEE TKDE 2024 — ADJACENT, full text.
+6. FedP3E, 2025 — ADJACENT, full text (disjoint malware classes across clients).
+7. CELM, 2026 — ADJACENT, full text.
+8. FedRS (KDD 2021) — ADJACENT, primary not read.
+9. FEDroid, IEEE TIFS 2023 — ADJACENT, abstract only.
+10. Federated Class-Incremental Learning (GLFC), CVPR 2022 — ADJACENT, full text.

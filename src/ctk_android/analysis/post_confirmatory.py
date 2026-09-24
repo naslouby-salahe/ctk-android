@@ -751,8 +751,8 @@ def _column_mean(frame: ArmSeries, column: Column) -> Effect | None:
     return present.mean().item() if present.size else None
 
 
-def _interval(summary: SeedSummary, formal: Passed) -> Interval | None:
-    if not formal or summary.ci_low is None or summary.ci_high is None:
+def _interval(summary: SeedSummary) -> Interval | None:
+    if summary.ci_low is None or summary.ci_high is None:
         return None
     return Interval(low=summary.ci_low, high=summary.ci_high)
 
@@ -770,7 +770,6 @@ def client_ctk_analysis(
 ) -> ClientCtkTable:
     alpha = config.experiments.operating.primary_alpha
     own_minimum = config.data.eligibility[EligibilityProfile.PRIMARY].own_domain_min_test
-    formal_seeds = config.statistics.gates.ctk_min_positive_seeds
     rows: list[ClientCtkRow] = []
     for client in ClientId:
         for learner in (Learner.FEDAVG, Learner.FEDPROX, Learner.CENTRAL):
@@ -811,17 +810,12 @@ def client_ctk_analysis(
                 ctk = _summary(peer - absent, config.statistics)
                 if total is None or pooling is None or ctk is None:
                     continue
-                formal = wide.height >= formal_seeds
                 total_ci, pooling_ci, ctk_ci = (
-                    _interval(total, formal),
-                    _interval(pooling, formal),
-                    _interval(ctk, formal),
+                    _interval(total),
+                    _interval(pooling),
+                    _interval(ctk),
                 )
-                known_ci = (
-                    None
-                    if known_change is None
-                    else _interval(known_change, known.height >= formal_seeds)
-                )
+                known_ci = None if known_change is None else _interval(known_change)
                 rows.append(
                     ClientCtkRow(
                         evidence_class=EvidenceClass.POST_CONFIRMATORY,
@@ -856,9 +850,9 @@ def client_ctk_analysis(
                         hidden_family_trials_per_seed=_column_mean(wide, Column.TRIALS) or 0.0,
                         contributing_seeds=wide.height,
                         eligible_pairs=_pair_count(families, client, population, alpha),
-                        interval_status=IntervalStatus.FORMAL
-                        if formal
-                        else IntervalStatus.DESCRIPTIVE,
+                        interval_status=IntervalStatus.OMITTED_NOT_COMPUTABLE
+                        if ctk_ci is None
+                        else IntervalStatus.EXPLORATORY_BCA,
                     )
                 )
     return _ordered(records_to_frame(rows), Column.CLIENT, Column.POPULATION, Column.LEARNER)

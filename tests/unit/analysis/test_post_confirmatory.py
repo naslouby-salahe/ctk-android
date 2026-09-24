@@ -201,7 +201,31 @@ def test_client_ctk_is_decomposed_per_client_with_its_own_arms_and_support() -> 
     assert abs(row["realised_fpr"] - 0.05) < 1e-9
 
 
-def test_a_client_with_too_few_seeds_is_reported_descriptively_without_an_interval() -> None:
+def test_a_client_with_constant_seed_effects_has_no_computable_interval() -> None:
     table = client_ctk_analysis(_client_clients(), _client_families(), CONFIG)
-    assert set(table["interval_status"]) == {IntervalStatus.DESCRIPTIVE}
+    assert set(table["interval_status"]) == {IntervalStatus.OMITTED_NOT_COMPUTABLE}
     assert table["ctk_ci_low"].null_count() == table.height
+
+
+def test_a_client_with_few_varying_seeds_gets_an_exploratory_interval_not_a_threshold() -> None:
+    clients = _client_clients()
+    jitter = (pl.col(Column.SEED) - 100) * 2
+    varied = clients.with_columns(
+        pl.when(
+            (pl.col(Column.LEARNER) == Learner.FEDAVG)
+            & (pl.col(Column.CONDITION) == PEER)
+            & (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+        )
+        .then(pl.col(Column.HITS) + jitter)
+        .otherwise(pl.col(Column.HITS))
+        .alias(Column.HITS)
+    )
+    table = client_ctk_analysis(varied, _client_families(), CONFIG)
+    row = table.filter(
+        (pl.col(Column.CLIENT) == WORSE)
+        & (pl.col(Column.LEARNER) == Learner.FEDAVG)
+        & (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+    ).row(0, named=True)
+    assert row["contributing_seeds"] == 4
+    assert row["interval_status"] == IntervalStatus.EXPLORATORY_BCA
+    assert row["ctk_ci_low"] is not None

@@ -822,8 +822,8 @@ class EvidenceClass(StrEnum):
 
 
 class IntervalStatus(StrEnum):
-    FORMAL = "formal-bca-interval"
-    DESCRIPTIVE = "descriptive-too-few-seeds"
+    EXPLORATORY_BCA = "exploratory-bca-interval"
+    OMITTED_NOT_COMPUTABLE = "interval-omitted-not-computable"
 
 
 class TradeoffComparison(StrEnum):
@@ -978,7 +978,7 @@ class PlotText(StrEnum):
     NATURAL_LABEL = "Natural scarcity"
     CLIENT_TITLE = (
         "Post-confirmatory client-level analysis, FedAvg federation-wide (class C; "
-        "play-late has too few seeds for a formal interval)"
+        "exploratory small-n BCa intervals, seeds per client differ)"
     )
     CLIENT_KNOWN_TITLE = "Known-family recall change versus local, by client and arm"
     ESTIMAND_TOTAL = "Total gain"

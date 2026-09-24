@@ -20,8 +20,8 @@ Every number below is read from the machine-readable artifacts in `results/` (pr
 7. **Feature novelty is unresolved, not disproven [A].** Spearman rho 0.57 (7 families) and 0.33 (8 families), directionally consistent, intervals span zero. The stored gate status remains "rejected" for provenance.
 8. **No headroom for a new federated mechanism [A].** The best simple baselines leave 0.049 to 0.094 mean and 0.029 to 0.081 worst-client recall below the full-exposure reference, under the 0.10 and 0.15 triggers. Several families stay poorly recalled even under full exposure (representation-limited).
 9. **Gate counts after correction: 9 promoted, 0 narrowed, 3 rejected, 0 insufficient** (the original promotion recorded 8 promoted, 1 narrowed, 3 rejected).
-10. **Client-level [C]:** the CTK gain is positive for all four clients (+0.073 to +0.082 with formal intervals for three; +0.328 descriptive for play-late), but anzhi's net FedAvg gain is about zero because pooling is negative there, and FedAvg's known-family cost is concentrated at anzhi and play-late (section 14).
-11. Novelty: no direct collision found in a bounded literature audit (0 direct, 3 partial); no priority claim, positioning only (section 29, `docs/Novelty Audit.md`).
+10. **Client-level [C]:** the CTK gain is positive for all four clients (+0.073 to +0.082 for three clients; +0.328 for play-late on 6 seeds; all intervals exploratory small-n BCa), but anzhi's net FedAvg gain is about zero because pooling is negative there, and FedAvg's known-family cost is concentrated at anzhi and play-late (section 14).
+11. Novelty: no direct collision in a deeper but still bounded literature audit (0 direct, 4 partial); the dose analysis and the natural-scarcity check are partially anticipated; no priority claim, positioning only (section 29, `docs/Novelty Audit.md`).
 
 ## 2. Evidence Provenance
 
@@ -163,16 +163,16 @@ The gate `representation-limited-family` is promoted with scoped wording: 3 of 4
 
 ## 14. Client-Level Results [C]
 
-Post-confirmatory, evidence-preserving, descriptive and exploratory; it creates no gate, uses stored client metrics only (`client-ctk-analysis.csv`, `client-ctk-analysis.png`) and changes no original outcome. Federation-wide population, MLP, 5% FPR. For each client the decomposition is computed per seed and averaged; a BCa interval is shown only when the client contributes at least 8 seeds (the existing positive-seed requirement reused as a minimum count); otherwise the row is descriptive and has no interval. Client identities differ from the anchored worst client of section 9. Support: local malware rows and prevalence from the client audit; hidden-family test trials per seed and eligible (seed, family) pairs from the run metrics.
+Post-confirmatory, evidence-preserving, descriptive and exploratory; it creates no gate, uses stored client metrics only (`client-ctk-analysis.csv`, `client-ctk-analysis.png`) and changes no original outcome. Federation-wide population, MLP, 5% FPR. For each client the decomposition is computed per seed and averaged; every client is reported, with its number of contributing seeds. Intervals are **exploratory small-n BCa intervals** over the contributing seeds (10, 10, 8 and 6 seeds); they are shown whenever the existing BCa helper can compute one (it needs at least 3 seeds and a non-constant effect) and are omitted otherwise. No seed-count threshold is used, and the 8-of-10 positive-seed rule of the complementary-knowledge gate has nothing to do with interval validity. With 6 to 10 seeds and unequal support the intervals are unstable and understate uncertainty from unequal per-seed support; read them as descriptive. Client identities differ from the anchored worst client of section 9. Support: local malware rows and prevalence from the client audit; hidden-family test trials per seed and eligible (seed, family) pairs from the run metrics.
 
 | Client | Malware rows (prevalence) | Seeds | Pairs | Hidden trials/seed | Local | No-family | Peer | Full | Total gain | Pooling gain | CTK gain | CTK seeds positive |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | anzhi | 90,801 (87%) | 8 | 17 | 3,899 | 0.513 | 0.439 | 0.517 | 0.558 | +0.005 (-0.056, 0.086) | **-0.074 (-0.141, -0.022)** | +0.078 (0.032, 0.141) | 7/8 |
 | appchina | 73,578 (83%) | 10 | 24 | 4,493 | 0.397 | 0.419 | 0.492 | 0.521 | +0.095 (0.054, 0.139) | +0.022 (-0.012, 0.085) | +0.073 (0.031, 0.119) | 8/10 |
 | play-early | 75,985 (24%) | 10 | 18 | 3,890 | 0.621 | 0.706 | 0.788 | 0.845 | +0.166 (0.092, 0.255) | +0.084 (-0.003, 0.198) | +0.082 (0.043, 0.199) | 10/10 |
-| play-late | 17,200 (5.4%) | 6 | 11 | 1,802 | 0.493 | 0.484 | 0.812 | 0.862 | +0.319 (descriptive) | -0.009 (descriptive) | +0.328 (descriptive) | 6/6 |
+| play-late | 17,200 (5.4%) | 6 | 11 | 1,802 | 0.493 | 0.484 | 0.812 | 0.862 | +0.319 (0.192, 0.424) | -0.009 (-0.152, 0.073) | +0.328 (0.224, 0.431) | 6/6 |
 
-Known-family recall change versus local, federation-wide (all 10 seeds contribute; interval formal) and realised benign FPR of the FedAvg arm:
+Known-family recall change versus local, federation-wide (all 10 seeds contribute; exploratory BCa intervals) and realised benign FPR of the FedAvg arm:
 
 | Client | FedAvg | FedProx | Centralized | Realised FPR (FedAvg) |
 |---|---|---|---|---|
@@ -185,15 +185,15 @@ Bold entries exceed the ±0.02 tolerance used by the known-family gate (a gate d
 
 Answers, all descriptive:
 
-1. **Largest CTK:** play-late (+0.328, descriptive, 6 seeds); among clients with formal intervals the CTK gains are similar (+0.073 to +0.082, all intervals above zero and above +0.03).
+1. **Largest CTK:** play-late (+0.328, exploratory interval 0.224 to 0.431, 6 seeds); the other three clients are similar (+0.073 to +0.082, intervals above zero, lower bounds at or just above +0.03).
 2. **Little CTK:** none is zero or negative. Own-domain CTK is small for anzhi (+0.029, interval -0.001 to 0.073, 4/8 seeds) and appchina (+0.025, 0.002 to 0.050, 6/10).
 3. **Benefit mostly from generic pooling:** none; play-early has the largest pooling gain (+0.084, interval -0.003 to 0.198), about half its total gain, with a wide interval.
-4. **Negative pooling:** anzhi (-0.074, formal), and own-domain pooling is negative for all four clients (largest for play-late, -0.286, descriptive on about 107 trials per seed). Anzhi's net FedAvg gain is about zero (+0.005, interval spans zero): its CTK gain is offset by negative pooling. Centralized and FedProx are slightly negative there (-0.021, -0.031).
+4. **Negative pooling:** anzhi (-0.074, exploratory interval -0.141 to -0.022), and own-domain pooling is negative for all four clients (largest for play-late, -0.286, exploratory interval -0.535 to -0.081, on only about 107 trials per seed). Anzhi's net FedAvg gain is about zero (+0.005, interval spans zero): its CTK gain is offset by negative pooling. Centralized and FedProx are slightly negative there (-0.021, -0.031).
 5. **Known-family cost:** FedAvg exceeds the tolerance for anzhi (-0.065) and play-late (-0.037); appchina and play-early are near it (-0.015, -0.014). FedProx removes the anzhi and play-late losses but loses -0.029 on play-early; centralized is within tolerance everywhere except a +0.024 gain on play-early.
 6. **Is the cost concentrated in one client?** For FedAvg it is largest at anzhi and second largest at play-late, so it is not a single-client artefact; the mean of the four changes (-0.033) reproduces the arm mean. For FedProx the residual cost moves to a different client (play-early). The cost is therefore arm-by-client specific, and averages hide it.
-7. **Less local malware support, more CTK?** The lowest-support client (play-late, 17,200 malware rows) has the largest CTK but with only 6 seeds and about half the hidden-family test trials; the three formal clients (74k to 91k malware rows) show no gradation. Descriptively suggestive, not resolved.
+7. **Less local malware support, more CTK?** The lowest-support client (play-late, 17,200 malware rows) has the largest CTK but with only 6 seeds and about half the hidden-family test trials; the other three clients (74k to 91k malware rows) show no gradation. Descriptively suggestive, not resolved.
 8. **Prevalence:** the two Google Play clients (24% and 5.4% malware) have larger total gains (+0.166, +0.319) than the two third-party markets (+0.005, +0.095). With four clients this is descriptively associated with prevalence and market type, not evidence of a relationship, and it is confounded with support and seed availability.
-9. **Late Google Play:** it behaves differently (largest total gain and CTK, lowest support) but its estimates rest on 6 of 10 seeds and 11 pairs; treat as descriptive.
+9. **Late Google Play:** it behaves differently (largest total gain and CTK, lowest support) but its estimates rest on 6 of 10 seeds and 11 pairs, so its exploratory intervals should be treated as descriptive.
 10. **Support imbalance:** anzhi loses 2 seeds (no federation-wide hidden-family test rows in those seeds) and play-late 4; own-domain rows for play-late average about 107 trials per seed. Patterns that involve play-late are plausibly driven partly by support imbalance; this analysis cannot separate the two.
 
 Realised FPR differs by client: anzhi 0.060 versus 0.044 to 0.050 for the others, within the 0.02 realised-FPR tolerance but a reminder that per-client operating points are noisier than the pooled one. Causal language is not warranted with four clients.
@@ -315,11 +315,13 @@ Class C additions, all from stored runs: per-client CTK analysis (section 14), l
 
 ## 29. Novelty Assessment [D, positioning only]
 
-Full audit: `docs/Novelty Audit.md` (14 search calls in this task, about 100 records screened, 22 matrix rows: **0 direct, 3 partial, 16 adjacent, 3 none** collisions). One paper was read in full and two through abstract and introduction; the rest from abstracts. The audit is bounded: no forward-citation search and no security-venue sweep, so **no priority claim is made**.
+Full audit: `docs/Novelty Audit.md` (second, deeper pass). About 25 search or discovery calls plus arXiv and citation-graph lookups, roughly 200 records screened across both audits, 35 matrix rows: **0 direct, 4 partial, 20 adjacent, 3 none** collisions. Seven papers were read in full (FedVLS, Breitholtz et al., MAP, Bi et al., GLFC, CELM, FedP3E); about 25 were assessed from abstracts only; the primary sources of FedRS, FEDroid, Ciaramella et al. and Otani et al. were not read. Forward citation chaining was partial and the security-venue sweep was name-based (proceedings of USENIX Security, CCS, S&P, ACSAC, DIMVA are not reliably indexed by the tools). **No priority claim is made.**
 
-Closest papers: FedVLS (vacant classes in label-skewed FL, 2024), Breitholtz et al. (heterogeneous and private label sets, 2025), Otani et al. (objective mismatch under missing class support, 2026), FedP3E (prototype exchange for non-IID IoT malware, 2025), FEDroid (Android malware FL, 2023); MAP and FedRS-type incomplete-class methods next.
+Closest ten: FedVLS (AAAI 2025), Breitholtz et al. (2025), Bi et al. (Android malware FL with family-skewed clients, 2024), Otani et al. (2026), MAP (IEEE TKDE 2024), FedP3E (2025), CELM (2026), FedRS (KDD 2021), FEDroid (IEEE TIFS 2023), GLFC (CVPR 2022). Partial collisions: FedVLS, Breitholtz et al., Otani et al., Bi et al.
 
-Verdicts: N1 controlled-exposure decomposition, N2 malware-family CTK, N3 own-domain decomposition, N5 natural-scarcity validation, N7 exposure-versus-representation diagnosis and N8 the combined framework are **plausible differentiators**; N4 worst-client CTK is a weak plausible differentiator (worst-client reporting is standard); N6 dose-response over peer samples is a **partial collision** (label-count and data-size sweeps exist). Wording allowed: "we found no closely matching study in the audited literature that combines ... " for the combined measurement design; the contribution is the measurement design and its empirical decomposition on one corpus, not a new algorithm. Already established elsewhere and not claimed as new: federated Android malware detection under non-IID data, poor recognition of locally vacant classes, missing-class-aware aggregation, prototype exchange for rare malware classes, contribution valuation and per-client reporting.
+Verdicts: N1 controlled-exposure decomposition, N2 malware-family CTK, N3 own-domain decomposition, N7 exposure-versus-representation diagnosis and N8 the combined framework are **plausible differentiators**; N4 worst-client CTK is a weak plausible differentiator; N5 natural-scarcity validation and N6 peer-sample dose are **partial collisions** (natural and synthetic partitions are reported together in MAP and CELM; class-count, label-count and skew sweeps exist). Compared with the first audit, N5 and N6 lost differentiation and N1 and N8 became clearer (no class-absent-everywhere control, controlled per-client removal or decomposition in any full-text paper; the closest malware FL papers evaluate only global test metrics).
+
+Allowed wording: "In the audited literature we found no closely matching study that isolates, for a client that lacks a malware family, the effect of peers holding that family by combining a controlled hidden-family design with a matched family-absent-everywhere collaborative control and a full-exposure reference, and that uses this to decompose collaboration gain into generic pooling and complementary family knowledge with own-domain and worst-client evaluation on Android malware." Locally missing classes, family-skewed Android malware FL, exposure sweeps and natural-versus-synthetic partitions each have precedent; the contribution is the combined measurement design and its empirical decomposition on one corpus, not a new algorithm.
 
 ## 30. Remaining Evidence Gaps
 
@@ -327,10 +329,11 @@ Verdicts: N1 controlled-exposure decomposition, N2 malware-family CTK, N3 own-do
 - Feature novelty unresolved with 7 to 8 families.
 - Dose: the criterion is reached only at the top levels, effective dose is far below requested dose, and no saturation region was observed, so the diminishing-returns half of H5 is unresolved.
 - Own-domain permutation control unresolved; worst-client estimates unstable at 1% FPR.
-- Per-client analysis is descriptive: two of four clients have fewer than 10 seeds, play-late has no formal interval, four clients cannot support causal or gradient claims.
+- Per-client analysis is descriptive: two of four clients have fewer than 10 seeds, per-client intervals are exploratory small-n BCa intervals, four clients cannot support causal or gradient claims.
 - Trees have no federated arm; cross-model checks cover the primary family set only.
 - Ten seeds only; model-general CTK-versus-pooling dominance not established.
-- Literature audit is bounded (section 29).
+- Literature audit is deeper but still bounded (section 29): seven papers in full text, unread primary sources, no proceedings-level security-venue sweep.
+- Independent-dataset replication: a desk assessment (`docs/Second Dataset Feasibility.md`) found no publicly verified independent corpus that meets all design requirements; see 31.1.
 
 ## 31. Possible Future Extensions and Decision Support [D]
 
@@ -338,8 +341,8 @@ No result exists for any item; none was run. Existing internal robustness is alr
 
 | Possible next step | Scientific gap addressed | Existing evidence | Literature collision status | Incremental value | Cost | Recommendation |
 |---|---|---|---|---|---|---|
-| No-new-run publication work (literature second pass with forward citations and security venues; per-client and family write-up) | Novelty positioning; interpretation | Complete stored artifacts | Audit bounded; 0 direct, 3 partial | High per unit cost | Low | Do first |
-| Independent Android dataset replication | External validity of the decomposition | Only internal replication (same corpus) | No prior design found that it would duplicate | Highest | High (client construction, family labels, static features, per-family support; new fresh-seed protocol) | **RECOMMENDED** (see 31.1) |
+| No-new-run publication work (read the remaining primary sources, proceedings-level security-venue sweep, forward citations, per-client and family write-up) | Novelty positioning; interpretation | Complete stored artifacts | Deeper audit done; 0 direct, 4 partial | High per unit cost | Low | Do first |
+| Independent Android dataset replication | External validity of the decomposition | Only internal replication (same corpus); no verified suitable public corpus | No prior design found that it would duplicate | Highest if a suitable corpus exists | High (client construction, family labels, per-family support; new fresh-seed protocol) | **OPTIONAL, feasibility-gated** (see 31.1) |
 | Exact-effective-dose follow-up | Saturation and dose thresholds; H5 second half | Increase supported; effective exposure far below requested; no plateau | Dose over missing-class peer samples not found in prior work (partial collision with label-count sweeps) | Medium, only if a dose or saturation claim matters | Medium (new experiment, fresh seeds) | OPTIONAL |
 | Larger-family feature-novelty study | Why CTK varies by family | rho 0.57 and 0.33 on 7 to 8 families; underpowered | Explanatory analyses not found | Medium | Medium to high (more families per set, predeclared descriptor) | OPTIONAL, only with predeclared descriptor and family count |
 | Broader CTK-versus-pooling dominance study | Model-general dominance claim | Dominance for primary MLP controlled only; linear, low support and natural design differ | N1 differentiator unaffected | Low to medium | Medium | LOW VALUE unless a general claim is wanted |
@@ -348,11 +351,16 @@ No result exists for any item; none was run. Existing internal robustness is alr
 | More internal sensitivities | Unspecified | Extensive | none | Low | Medium | **Do not pursue** unless a specific threat is named |
 | Additional descriptor searches on the same families | Novelty explanation | Underpowered | none | Low (multiplicity risk) | Low | **Do not pursue** |
 
-### 31.1 Is a second independent Android dataset worth it? RECOMMENDED
+### 31.1 Is a second independent Android dataset worth it? OPTIONAL, feasibility-gated
 
-- **Why not merely optional.** The current evidence supports the decomposition inside one corpus; the novelty rests on the measurement design and its measured values, and a reviewer can reasonably ask whether the pooling-versus-complementary split is a property of LAMDA/AndroZoo or of the phenomenon. Internal robustness cannot answer that; only an independent corpus can.
-- **Why not strongly recommended.** The design rests on the corpus first (novelty does not depend on generalization), internal replication is already strong, and the experiment is costly: it needs family labels with enough support (the design requires per-client and per-family minimum fit and test counts of the order used here), a defensible client or domain construction (markets, time or source), a usable static feature set, and it must replicate the *decomposition* (matched family-absent-everywhere control, full exposure, dose) rather than repeat classification. Small public sets with few labelled samples per family may not meet the support rules. Candidate datasets were not checked or downloaded in this task; suitability must be verified before commitment.
-- **Requirements if pursued:** freeze a new protocol and a fresh seed range first; reuse the same estimands and gates; report failure to replicate as readily as success.
+Updated after `docs/Second Dataset Feasibility.md` (desk assessment; nothing downloaded or run). The previous "RECOMMENDED" is downgraded because the candidate datasets examined do not verifiably meet the design requirements.
+
+- **Why a second corpus would still matter:** it is the only check on corpus dependence; internal robustness cannot answer that.
+- **Candidate findings:** KronoDroid (240 families, benign present, 2008 to 2020 timestamps, 200 static features) is the best on paper but average family support is about 172 samples, label provenance and per-family distribution are not stated, and clients would be era windows that confound families with time; CCCS-CIC-AndMal-2020 (191 families, 200,000 malware) has support but no client, time or market axis and its benign apps come from AndroZoo; MH-1M and McNdroid are AndroZoo-derived and overlap LAMDA (MH-1M also lacks real families); AndroTruth has expert-quality labels but no benign samples and only about 4 to 7 families with at least 250 samples; Drebin, AMD, MalGenome and CICMalDroid are too small, malware-only, discontinued or lack families; Maloid-DS, OmniDroid and the Ciaramella et al. dataset need access before judgement.
+- **A bad second dataset is worse than none:** thin support or invented clients would make a failed replication uninterpretable.
+- **Gate before any commitment (no training):** tabulate KronoDroid family support per era client and the number of families with at least 250 de-duplicated samples present at two or more clients; proceed only if about 14 families (7 primary plus 7 replication, a pragmatic cut-off) qualify at three or more clients; otherwise record "NOT FEASIBLE WITH CURRENT PUBLIC DATA" and keep the single-corpus scope.
+- **Cheaper related check:** a representation replication on McNdroid (same source family, three feature modalities) could test whether poorly detected families such as hiddad and gappusin are rescued by dynamic or graph features (N7); it is not independent of LAMDA and needs a SHA-256 overlap check.
+- **If pursued:** freeze a new protocol and a fresh seed range first; reuse the same estimands and gates; report failure to replicate as readily as success. Estimated difficulty: medium; the result would be a conceptual, not an exact, replication.
 
 ### 31.2 Publication-story audit
 
@@ -385,7 +393,7 @@ Reviewer-safe version:
 - PDF figures are not byte-deterministic.
 - Natural scarcity is within-dataset validation on the same corpus, not external validation.
 - Dose promotion supports an increase with effective exposure; it does not establish saturation.
-- Per-client results are descriptive: play-late has 6 contributing seeds and no formal interval; four clients cannot support causal claims.
+- Per-client results are descriptive: play-late has 6 contributing seeds and only an exploratory small-n interval; four clients cannot support causal claims.
 - The novelty audit is bounded and licenses no priority claim.
 
 ## 33. Complete Artifact Index
@@ -398,4 +406,5 @@ Reviewer-safe version:
 - Tables (CSV, 17): client-ctk-analysis, dataset-client-audit, primary-arm-comparison, collaboration-decomposition, peer-dose-response, family-level, claim-gates, robustness, and the nine class B/C tables above.
 - Figures (PDF and PNG, 11): collaboration-decomposition, mean-versus-worst-client, own-domain-versus-federation-wide, peer-dose-response, family-rescue-map, feature-novelty-versus-ctk-gain, known-versus-unseen-tradeoff, ctk-robustness-forest, federated-arm-tradeoff, natural-versus-controlled, client-ctk-analysis.
 - Provenance: `code.json`, `protocol.json`, `source-data.json`, `environment.json`.
+- Positioning and feasibility (class D): `docs/Novelty Audit.md`, `docs/Second Dataset Feasibility.md`.
 - Protocol and decisions: `docs/Roadmap.md` (31.3 post-confirmatory clarifications), `docs/decisions/protocol-amendments.md`, `docs/decisions/implementation-decisions.md`.
