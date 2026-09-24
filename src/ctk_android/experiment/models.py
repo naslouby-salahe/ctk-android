@@ -39,7 +39,7 @@ def build_network(family: ModelFamily, features: FeatureCount, config: TrainingC
 
 
 def _tensor(features: ByteMatrix, rows: IntArray, device: Device) -> torch.Tensor:
-    return torch.from_numpy(np.asarray(features[rows], dtype=np.float32)).to(device.value)
+    return torch.from_numpy(np.asarray(features[rows], dtype=np.float32)).to(device)
 
 
 def fit_epochs(
@@ -56,8 +56,8 @@ def fit_epochs(
 ) -> None:
     generator = torch.Generator().manual_seed(seed)
     inputs = _tensor(features, rows, device)
-    targets = torch.from_numpy(labels[rows].astype(np.float32)).to(device.value)
-    network.to(device.value).train()
+    targets = torch.from_numpy(labels[rows].astype(np.float32)).to(device)
+    network.to(device).train()
     optimizer = torch.optim.Adam(
         network.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay
     )
@@ -66,7 +66,7 @@ def fit_epochs(
     )
     loss_fn = nn.BCEWithLogitsLoss()
     for _ in range(epochs):
-        order = torch.randperm(rows.size, generator=generator).to(device.value)
+        order = torch.randperm(rows.size, generator=generator).to(device)
         for start in range(0, rows.size, config.batch_size):
             batch = order[start : start + config.batch_size]
             optimizer.zero_grad()
@@ -86,7 +86,7 @@ def average_states(states: list[StateDict], weights: FloatArray) -> StateDict:
     normalised = torch.from_numpy((weights / weights.sum()).astype(np.float32))
     return {
         name: sum(
-            state[name].to("cpu") * normalised[index] for index, state in enumerate(states)
+            state[name].to(Device.CPU) * normalised[index] for index, state in enumerate(states)
         )
         for name in states[0]
     }
@@ -109,7 +109,7 @@ def scorer_logits(scorer: Scorer, features: ByteMatrix, rows: IntArray) -> Float
         return scorer.trees.decision_function(np.asarray(features[rows])).astype(np.float64)
     if scorer.network is None:
         raise ValueError("scorer has neither network nor trees")
-    scorer.network.to(scorer.device.value).eval()
+    scorer.network.to(scorer.device).eval()
     outputs: list[Float32Array] = []
     with torch.no_grad():
         for start in range(0, rows.size, 8192):

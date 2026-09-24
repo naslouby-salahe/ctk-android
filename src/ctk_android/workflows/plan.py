@@ -147,7 +147,7 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
             "mode": mode,
             "config_fingerprint": config.fingerprint(),
             "runs": len(planned),
-            "infeasible": sum(run.status is RunStatus.INFEASIBLE for run in planned),
+            RunStatus.INFEASIBLE: sum(run.status is RunStatus.INFEASIBLE for run in planned),
             "seeds": list(config.project.seeds.for_mode(mode)),
         },
     )

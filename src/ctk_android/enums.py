@@ -156,6 +156,8 @@ class ValidationCheck(StrEnum):
     SHA_UNIQUENESS = "sha-uniqueness"
     LABEL_RULE = "label-rule"
     LINKAGE_COMPLETE = "linkage-complete"
+    CLIENTS_COMPLETE = "clients-complete"
+    FAMILY_SETS_DISJOINT = "family-sets-disjoint"
     PARTITION_SHA_DISJOINT = "partition-sha-disjoint"
     PARTITION_COMPONENT_DISJOINT = "partition-component-disjoint"
     PARTITION_FEATURE_DISJOINT = "partition-feature-disjoint"

@@ -18,6 +18,7 @@ from ctk_android.enums import (
     Grouping,
     Learner,
     ModelFamily,
+    NoveltyDescriptor,
 )
 from ctk_android.types import (
     Alpha,
@@ -166,6 +167,8 @@ class OperatingConfig(Frozen):
 
 class NoveltyConfig(Frozen):
     min_active_prevalence: Fraction
+    min_known_family_rows: SupportCount
+    primary_descriptor: NoveltyDescriptor
 
 
 class FairnessGrids(Frozen):
@@ -221,6 +224,8 @@ class GateConfig(Frozen):
     mechanism_worst_gap: Fraction
     permutation_null_max: Fraction
     operating_point_tolerance: Fraction
+    dose_monotone_tolerance: Fraction
+    heterogeneity_min: Fraction
 
 
 class StatisticsConfig(Frozen):

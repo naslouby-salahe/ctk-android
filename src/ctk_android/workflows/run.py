@@ -8,6 +8,7 @@ import polars as pl
 import structlog
 import torch
 
+from ctk_android.analysis.novelty import family_descriptors
 from ctk_android.config import Config, ExperimentSpec, TrainingConfig
 from ctk_android.data import partitions
 from ctk_android.data.cache import (
@@ -30,6 +31,7 @@ from ctk_android.enums import (
     FailureReason,
     Learner,
     LogEvent,
+    Metric,
     OperatingPointStatus,
     RunStatus,
     SplitRole,
@@ -190,7 +192,7 @@ def _operating_validation(
     summary: pl.DataFrame, config: Config
 ) -> ValidationRecord:
     fpr = summary.filter(
-        (pl.col(Column.METRIC) == "realised-fpr")
+        (pl.col(Column.METRIC) == Metric.REALISED_FPR)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
         & (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.VALID)
     )
@@ -332,6 +334,10 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     structural = [v for v in validations if v.check is not ValidationCheck.OPERATING_POINT_REALISED]
     status = RunStatus.COMPLETED if all(v.passed for v in structural) else RunStatus.FAILED_VALIDATION
 
+    write_table(
+        family_descriptors(study, targets, masks, config.experiments.novelty),
+        directory / "novelty.parquet",
+    )
     write_table(exposure_table, directory / "exposure.parquet")
     write_table(operating, directory / "thresholds.parquet")
     write_table(summary, directory / "metrics" / "summary.parquet")

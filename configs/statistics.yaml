@@ -21,3 +21,5 @@ gates:
   mechanism_worst_gap: 0.15
   permutation_null_max: 0.01
   operating_point_tolerance: 0.02
+  dose_monotone_tolerance: 0.02
+  heterogeneity_min: 0.10

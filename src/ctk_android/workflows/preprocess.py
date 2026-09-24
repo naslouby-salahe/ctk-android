@@ -19,12 +19,14 @@ from ctk_android.data.cache import (
     write_provenance,
 )
 from ctk_android.enums import (
+    ClientId,
     Column,
     DatasetName,
     FailureReason,
     FamilySetName,
     LogEvent,
     Stage,
+    ValidationCheck,
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
@@ -202,14 +204,12 @@ def clients_stage(paths: Paths, config: Config, upstream: StageReport, code: Fin
     assignments.with_row_index(Column.ROW).write_parquet(paths.clients / ASSIGNMENTS_FILE)
     support = clients.client_support(assignments)
     support.write_parquet(paths.clients / "support.parquet")
-    clients_present = set(support[Column.CLIENT].to_list())
-    from ctk_android.enums import ClientId, ValidationCheck
-
+    clients_present = {ClientId(name) for name in support[Column.CLIENT].to_list()}
     _record(
         [
             ValidationRecord(
-                check=ValidationCheck.LINKAGE_COMPLETE,
-                passed=clients_present == {client.value for client in ClientId},
+                check=ValidationCheck.CLIENTS_COMPLETE,
+                passed=clients_present == set(ClientId),
                 detail=f"clients={sorted(clients_present)}",
             )
         ],
@@ -253,12 +253,10 @@ def families_stage(paths: Paths, config: Config, upstream: StageReport, code: Fi
     for name, members in sets.items():
         write_json(paths.family_set_file(name), {"families": list(members)})
     overlap = set(sets[FamilySetName.PRIMARY]) & set(sets[FamilySetName.REPLICATION])
-    from ctk_android.enums import ValidationCheck
-
     _record(
         [
             ValidationRecord(
-                check=ValidationCheck.LINKAGE_COMPLETE,
+                check=ValidationCheck.FAMILY_SETS_DISJOINT,
                 passed=not overlap and all(len(members) > 0 for members in sets.values()),
                 detail=f"disjoint family sets, overlap={sorted(overlap)}",
             )
