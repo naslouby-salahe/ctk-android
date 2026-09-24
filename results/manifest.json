@@ -27,7 +27,7 @@
     },
     {
       "name": "evidence/robustness.parquet",
-      "digest": "1b90605f4a050f12d695e9decdfdccfec447e87590944b807569b15addd08465"
+      "digest": "237ef20265b5c01fec6f836259e9d0148591abe1fe87d0527be366f2ce3af2f8"
     },
     {
       "name": "evidence/anchored-worst-client.parquet",
@@ -43,7 +43,7 @@
     },
     {
       "name": "evidence/ctk-robustness-synthesis.parquet",
-      "digest": "d4c9062bd55e44593739b46b0b735cebac77436b3d345c81994613545b890a1c"
+      "digest": "f03e78fe65e951e235d28c7fb20844c47cd798524e7e09594423dc63e98f119d"
     },
     {
       "name": "evidence/family-mechanism-patterns.parquet",
@@ -95,7 +95,7 @@
     },
     {
       "name": "tables/ctk-robustness-synthesis.csv",
-      "digest": "87fb6f9e4093cbce28c1980bd1207b32ecfeecafa2ef7644d953df8317dd5639"
+      "digest": "929a23944159023adc90717abf4251cfbcc3383f742d6b5c3d5b23c857adf8ca"
     },
     {
       "name": "tables/family-mechanism-patterns.csv",
@@ -147,7 +147,7 @@
     },
     {
       "name": "figures/collaboration-decomposition.pdf",
-      "digest": "4497f5438186e60945179c3e5f18478a0faa04ac903a6572d0a1744532fc0390"
+      "digest": "e9e6af77e4c9f198ffa3e662d63286f6a5e0cf19f617b843cc72bbe40269fd60"
     },
     {
       "name": "figures/collaboration-decomposition.png",
@@ -155,7 +155,7 @@
     },
     {
       "name": "figures/mean-versus-worst-client.pdf",
-      "digest": "88d711860a26e32c964e571249a0681f2f4132e468d00643c60dc0d6dba5abb2"
+      "digest": "1708f52aa6151e6b0c458af9d48d4a7c266d25d7aa0a50a187a7415ed9eaddb6"
     },
     {
       "name": "figures/mean-versus-worst-client.png",
@@ -163,7 +163,7 @@
     },
     {
       "name": "figures/own-domain-versus-federation-wide.pdf",
-      "digest": "952d020f3baecaf9a59750271539dadaf93c8ab168491b9d1842f457ead23ecc"
+      "digest": "c88b7f3dc4472c7ec4f9d241b1a7f856212224f2a34ea9a8bf049cfb5babc58f"
     },
     {
       "name": "figures/own-domain-versus-federation-wide.png",
@@ -171,15 +171,15 @@
     },
     {
       "name": "figures/peer-dose-response.pdf",
-      "digest": "b7bb2c0d92ac2b979c34755f932554c7793b3ea2503beb0c7ecd31eb578190dc"
+      "digest": "0fd9864f204fe9a455abba8169f40e9498db79e7c8ff7010bfd2e944e2f8814e"
     },
     {
       "name": "figures/peer-dose-response.png",
-      "digest": "372bb8c744c0ecb263855ce495c732621811698f66a12ca20ec5f716cb463076"
+      "digest": "3110f3f6f40cecddb27875d2644e341accf14c9318ac439b384326bb4638e46b"
     },
     {
       "name": "figures/family-rescue-map.pdf",
-      "digest": "ca95a9b620e83a91f7afd3ec43074113f67db42768e64be5cf67c15202856906"
+      "digest": "86f71b51b91c98f031e51b3b120f9ffa34d88b0b92e61e43b24fb6516c727cec"
     },
     {
       "name": "figures/family-rescue-map.png",
@@ -187,7 +187,7 @@
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.pdf",
-      "digest": "355c1472f42babf6e3faf94ebc1880ead9736eac4bc2a9c0049b60da14edad6d"
+      "digest": "55eb06f114fc752e908cecd2adc59a917c96777095d2891bb02fb2a9101e2097"
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.png",
@@ -195,7 +195,7 @@
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.pdf",
-      "digest": "97b5efbeb3f810cc84b3af81d0a2021719b86c1823f0a79ffd7f7978a4e725cc"
+      "digest": "413dbcd95ea3599ce5df8c4554907687cddbf621cd326e2cb87d3bf3c8928f0e"
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.png",
@@ -203,7 +203,7 @@
     },
     {
       "name": "figures/ctk-robustness-forest.pdf",
-      "digest": "c5aec29d99ff3c387d54868151c8300575533c045bd265788deb68f7a3838116"
+      "digest": "0cf211208dacff52bc0ebe0f3754a6fdab7d53ec7debcd0aefff3ceca5e9fefc"
     },
     {
       "name": "figures/ctk-robustness-forest.png",
@@ -211,7 +211,7 @@
     },
     {
       "name": "figures/federated-arm-tradeoff.pdf",
-      "digest": "631623d49036c594a5639a2902e8dea43785969b86103755006c611a87f689c6"
+      "digest": "ba389d0db638cfdcd1dc256a6f4496cd80b93291f74d03a0d412f09afb12e9a8"
     },
     {
       "name": "figures/federated-arm-tradeoff.png",
@@ -219,7 +219,7 @@
     },
     {
       "name": "figures/natural-versus-controlled.pdf",
-      "digest": "25f9a85766a28c032bb926e426dcd65e36f7516215061b95d26a5aa923be0e8d"
+      "digest": "0a32bb6c0a5ef8c39f24c659b541a537d8a8062f8c1fc3af11982618f6dede45"
     },
     {
       "name": "figures/natural-versus-controlled.png",
