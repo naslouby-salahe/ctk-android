@@ -45,7 +45,7 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated after Stage D and t
 | Identity components, clients, deterministic support-constrained partitions | PASS | unit tests + real run |
 | Family sets, controlled and natural pairs, deterministic target assignment | PASS | |
 | Controlled exposure, no-family, full exposure, dose, sample-size matching | PASS | `test_exposure.py` |
-| Local, central, FedAvg, FedProx, fine-tune, blend, MLP/linear/trees | PASS | all exercised end to end in development (baseline-fairness grid runs all learners; linear/trees via replication experiments' smoke tests) |
+| Local, central, FedAvg, FedProx, fine-tune, blend, MLP/linear/trees | PASS | all exercised end to end in development (baseline-fairness grid runs all learners; linear, MLP and trees separate a synthetic rule in `test_models.py`) |
 | Thresholds, own-domain / federation-wide / known-family metrics | PASS | `test_thresholds.py`, `test_metrics.py` |
 | Feature-novelty descriptors | PASS | computed per run; Spearman association in `analysis/novelty.py`, tested |
 | Development baseline-fairness grids | PASS | frozen in Roadmap 16.3; see Stage D row |

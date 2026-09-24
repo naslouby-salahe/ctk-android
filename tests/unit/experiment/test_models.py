@@ -3,9 +3,15 @@ import torch
 
 from ctk_android.config import load_config
 from ctk_android.enums import Device, ModelFamily
-from ctk_android.experiment.models import build_network, fit_epochs, resolve_device
+from ctk_android.experiment.models import (
+    build_network,
+    fit_epochs,
+    fit_trees,
+    resolve_device,
+    scorer_logits,
+)
 from ctk_android.paths import Paths
-from ctk_android.types import ProximalAnchor
+from ctk_android.types import ProximalAnchor, Scorer
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT)).experiments.smoke_training
@@ -44,3 +50,25 @@ def test_fedprox_trains_on_the_configured_device_and_stays_closer_to_its_anchor(
     free = _distance(anchor_state, 0.0)
     proximal = _distance(anchor_state, STRENGTH)
     assert proximal < free
+
+
+def test_every_model_family_learns_a_separable_rule() -> None:
+    features, labels, rows = _data()
+    torch.default_generator.manual_seed(SEED)
+    linear = build_network(ModelFamily.LINEAR, FEATURES, CONFIG)
+    fit_epochs(linear, features, labels, rows, 30, CONFIG, SEED, DEVICE, None)
+    mlp = build_network(ModelFamily.MLP, FEATURES, CONFIG)
+    fit_epochs(mlp, features, labels, rows, 30, CONFIG, SEED, DEVICE, None)
+    scorers = [
+        Scorer(family=ModelFamily.LINEAR, network=linear, trees=None, device=DEVICE),
+        Scorer(family=ModelFamily.MLP, network=mlp, trees=None, device=DEVICE),
+        Scorer(
+            family=ModelFamily.GRADIENT_BOOSTED_TREES,
+            network=None,
+            trees=fit_trees(features, labels, rows, CONFIG, SEED),
+            device=DEVICE,
+        ),
+    ]
+    for scorer in scorers:
+        logits = scorer_logits(scorer, features, rows)
+        assert logits[labels == 1].mean() > logits[labels == 0].mean()
