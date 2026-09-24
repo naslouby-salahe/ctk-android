@@ -189,6 +189,8 @@ The complementary component is heterogeneous across malware families rather than
 
 Complementary benefit increases with effective peer exposure and shows diminishing returns after sufficient target-family support.
 
+H5 is compound. The dose-response gate (31.2) tests only the first part (benefit grows with effective peer exposure); it does not test diminishing returns. The confirmatory evidence supports the increase; a saturation or diminishing-returns regime was not observed within the tested exposure range, so that part is unresolved (see 31.3 M).
+
 ### H6 — Worst-client benefit
 
 Complementary threat knowledge improves the worst-client outcome in at least some controlled-exposure settings, even when generic pooling alone does not.
@@ -671,7 +673,7 @@ This analysis validates whether the controlled-exposure phenomenon appears in na
 
 Its effect magnitude is **not** numerically pooled with the controlled-exposure effect because the estimands differ.
 
-Natural scarcity is nevertheless the principal external check of the controlled-exposure phenomenon: agreement in sign, practical magnitude and seed consistency of the complementary component under naturally imbalanced exposure supports the view that the controlled intervention is not an artefact of artificial removal. It is reported side by side with, never merged into, the controlled estimate, and it is not a confirmatory gate unless a gate says so.
+Natural scarcity is nevertheless the principal within-dataset (ecological) validation of the controlled-exposure phenomenon; it uses the same LAMDA/AndroZoo corpus and is not independent-dataset or external validation: agreement in sign, practical magnitude and seed consistency of the complementary component under naturally imbalanced exposure supports the view that the controlled intervention is not an artefact of artificial removal. It is reported side by side with, never merged into, the controlled estimate, and it is not a confirmatory gate unless a gate says so.
 
 ---
 
@@ -1076,7 +1078,7 @@ Every reported result is labelled as exactly one of: **A** original confirmatory
 
 **B. Evidence-preserving analyses.** Local-baseline-anchored worst-client robustness (the worst client under the local baseline is frozen per seed and followed through every arm; this does not replace the predeclared worst-client gate, and total and pooling gains against local are subject to selection on the local baseline, so the complementary gain is the cleaner contrast); federated-arm trade-off analysis (descriptive; no composite score or winner is defined); a canonical complementary-knowledge robustness synthesis; and family-level mechanism patterns (descriptive, no rigid taxonomy).
 
-**C. Natural scarcity** is elevated as validation of the controlled-exposure phenomenon, as described in 21; estimands are not merged.
+**C. Natural scarcity** is elevated as within-dataset (natural-exposure) validation of the controlled-exposure phenomenon, as described in 21. It reproduces the effect under naturally imbalanced family exposure in the same corpus; it is not external validation and does not replace independent-dataset replication. Estimands are not merged.
 
 **D. Robustness** is as clarified in 28.
 
@@ -1091,6 +1093,12 @@ Every reported result is labelled as exactly one of: **A** original confirmatory
 **I. Own-domain caveat.** The federation-wide permutation control is the gated negative control. Own-domain and worst-client permutation behaviour is reported separately; where its interval is not inside the equivalence band, causal wording for that population is limited. No own-domain permutation gate is added retrospectively.
 
 **J. Family-dependence scope.** The family-dependence claim is evaluated on the two frozen family sets only (primary and replication), not on arbitrary experiment pooling.
+
+**L. Per-client CTK analysis (class C).** For each of the four clients, the decomposition (local, no-family, peer-family and same-arm full-exposure recall; total, pooling and CTK gain; known-family change; realised FPR; support; contributing seeds; eligible family pairs) is computed from stored client-level metrics for FedAvg, FedProx and centralized arms at the primary operating point, federation-wide and own-domain. It uses existing results only, creates no gate, is descriptive and exploratory, and does not alter any original confirmatory outcome. A BCa interval is reported only when the client contributes at least as many seeds as the existing complementary-knowledge positive-seed requirement (8); otherwise the row is labelled descriptive and has no interval. With four clients, associations with client properties are descriptive and not causal.
+
+**M. Dose interpretation.** The promoted dose gate supports that recall improves as effective peer exposure increases. It does not establish saturation or diminishing returns: recall is still rising at the largest effective exposure. Both statements must be kept apart wherever H5 is cited.
+
+**N. Novelty positioning.** After the bounded literature audit in `docs/Novelty Audit.md`, the residual contribution is stated as a measurement design and empirical decomposition on one corpus, with "no closely matching study found in the audited literature" wording. The audit is limited (no forward citation search, mostly abstract-level reading) and does not license priority language.
 
 **K. Aggregation naming.** The seed-paired macro complementary gain and the micro-pooled hits/trials complementary gain are different estimands and carry different names in every artifact; partition salts are reported separately, never as extra seeds.
 
@@ -1156,7 +1164,7 @@ The defensible residual contribution is the combination of:
 - family-level rescue/failure characterization;
 - feature-space explanation of family-dependent collaboration value.
 
-The strongest neighboring bodies of work include federated rare-class transfer, class-incremental intrusion detection, prototype exchange for disjoint/rare classes, and Android malware FL under non-IID or drift.
+The strongest neighboring bodies of work include federated rare-class transfer, class-incremental intrusion detection, prototype exchange for disjoint/rare classes, and Android malware FL under non-IID or drift. A bounded collision audit (`docs/Novelty Audit.md`) found no direct collision and three partial ones (vacant-class evaluation in label-skewed FL, label-set-size manipulation with fixed sample counts, a theory of missing class support); it does not replace the pre-submission citation-chaining audit.
 
 Before submission, perform a final citation-chaining audit of the closest works published through the submission date.
 
@@ -1678,7 +1686,7 @@ Four simulated clients are sufficient for the controlled question but do not rep
 
 ### Limited external replication
 
-The confirmatory design relies primarily on one Android benchmark. Internal replication across family sets, model classes, natural scarcity, and split choices does not replace independent external validation.
+The confirmatory design relies primarily on one Android benchmark. Internal replication across family sets, model classes, natural scarcity (a within-dataset validation on the same corpus), and split choices does not replace independent external validation.
 
 ### Family support
 

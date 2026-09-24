@@ -47,3 +47,19 @@ Scope statement: no original confirmatory arm, threshold, seed, family set, hype
 | 38 Stage L, 39 | Publication figures | Includes post-confirmatory class C tables and figures; forest plot replaces the overlapping robustness figure | Reporting | No | No | No |
 
 New class C analyses (evidence-preserving, existing runs only): local-baseline-anchored worst client, federated-arm trade-off, canonical robustness synthesis, family-level mechanism patterns, natural-scarcity side-by-side, permutation-control audit by population and alpha, mechanism headroom table, operating-point fidelity table.
+
+## 2026-09-24 - Wording corrections, per-client analysis and novelty positioning (Roadmap H5, 20, 21, 31.3, 33, 42)
+
+Scope statement: wording and class C additions only. No original confirmatory arm, threshold, seed, family set, hyperparameter or gate was changed; no original confirmatory number changed; no model was trained; no new seeds are required. Each row below: scientific degree of freedom changed: no; original result changed: no; fresh seeds: no.
+
+| Section | Previous wording | New wording | Reason | Evidence source |
+|---|---|---|---|---|
+| 21 (and the 2026-09-24 amendment row for 21) | Natural scarcity is "the principal external check" of the controlled-exposure phenomenon | Principal within-dataset (ecological) validation; same LAMDA/AndroZoo corpus; not independent-dataset or external validation | Natural scarcity uses the same corpus; calling it external overstated it | `natural-scarcity-comparison.csv` (numbers unchanged) |
+| 31.3 C | "elevated as validation of the controlled-exposure phenomenon" | "elevated as within-dataset (natural-exposure) validation ... not external validation" | Same | same |
+| 42 Limited external replication | natural scarcity listed among internal replications | annotated as within-dataset | Same | none needed |
+| H5 | single sentence: increase and diminishing returns | H5 declared compound; the dose gate tests only the increase; saturation unresolved | The promoted gate does not establish saturation; recall still rises at the largest effective exposure | `peer-dose-response.csv` (recall 0.437 to 0.562, no plateau) |
+| 31.3 M (new) | none | Dose interpretation: increase supported, saturation not established | Keep the two parts of H5 apart | same |
+| 31.3 L (new) | none | Per-client CTK analysis, class C, descriptive, no gate, interval only with at least 8 contributing seeds | Missing client-level evidence | `client-ctk-analysis.csv` from stored client metrics |
+| 31.3 N (new), 33 | Pre-submission citation-chaining audit only | Bounded audit performed; no direct collision, three partial; "no closely matching study found in the audited literature" wording only; audit limits stated | Literature collision audit | `docs/Novelty Audit.md` |
+
+The formal-interval rule in the per-client analysis reuses the existing `ctk_min_positive_seeds` value (8) as a minimum contributing-seed count; no new threshold is introduced, and rows below it are reported descriptively without an interval.
