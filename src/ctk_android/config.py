@@ -186,7 +186,6 @@ class GateConfig(Frozen):
     heterogeneity_min: Fraction
     mechanism_mean_gap: Fraction
     mechanism_worst_gap: Fraction
-    permutation_null_max: Fraction
 
 
 class StatisticsConfig(Frozen):

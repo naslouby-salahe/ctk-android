@@ -850,3 +850,9 @@ class AnalysisStage(StrEnum):
     ROBUSTNESS = "robustness"
     CLUSTER_BOOTSTRAP = "cluster-bootstrap"
     CLAIM_GATES = "claim-gates"
+
+
+class PermutationOutcome(StrEnum):
+    EQUIVALENT = "equivalent"
+    EXCEEDS_BAND = "exceeds-band"
+    UNRESOLVED = "unresolved"

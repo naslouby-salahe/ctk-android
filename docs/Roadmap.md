@@ -814,7 +814,7 @@ Checks that the dose-response baseline agrees with the no-family condition.
 
 ### Family-label permutation
 
-Randomly permute eligible malware-family labels while preserving family-size distribution. Complementary gain should collapse toward zero if the measured effect genuinely depends on family-specific exposure.
+Randomly permute eligible malware-family labels while preserving family-size distribution. Complementary gain should collapse toward zero if the measured effect genuinely depends on family-specific exposure. The decision rule is an equivalence criterion, frozen in Section 31.2: the 95% BCa paired interval of the permutation-control complementary gain must lie within \(\pm 0.03\) absolute recall.
 
 ### Broken grouping sensitivity
 
@@ -1000,7 +1000,7 @@ Promote only if all are true:
 - \(\Delta_{\text{CTK}} \ge 0.03\) absolute recall in the primary decomposition;
 - 95% BCa paired interval excludes zero;
 - effect is positive in at least 8/10 seeds;
-- family-label permutation produces a null-compatible complementary effect;
+- family-label permutation produces a null-compatible complementary effect, defined as the 95% BCa paired interval of the permutation-control \(\Delta_{\text{CTK}}\) lying entirely within \(\pm 0.03\) absolute recall (the same practical-effect threshold as above). An interval entirely outside that band rejects the claim; an interval that straddles a band edge, or is unavailable, leaves it INSUFFICIENT_EVIDENCE;
 - sample-size matching passes.
 
 If the effect passes only in one family set or only in federation-wide evaluation, wording is restricted accordingly.

@@ -89,3 +89,23 @@ def test_novelty_descriptors_use_only_training_rows() -> None:
         and node.value.id == "SplitRole"
     }
     assert roles == {"FIT"}
+
+
+def test_the_permutation_band_is_the_predeclared_ctk_threshold() -> None:
+    path = SRC_ROOT / "analysis" / "gates.py"
+    function = next(
+        node
+        for node in ast.walk(parse(path))
+        if isinstance(node, ast.FunctionDef) and node.name == "complementary_knowledge"
+    )
+    calls = [
+        node
+        for node in ast.walk(function)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "permutation_outcome"
+    ]
+    assert len(calls) == 1
+    band = calls[0].args[1]
+    assert isinstance(band, ast.Attribute)
+    assert band.attr == "ctk_min_gain"

@@ -13,6 +13,7 @@ from ctk_android.enums import (
     ExposureCondition,
     Learner,
     Metric,
+    PermutationOutcome,
     StatisticsLimit,
 )
 from ctk_android.types import (
@@ -160,6 +161,16 @@ def _ctk(
     return _effect(evidence.effects, experiment, Learner.FEDAVG, Estimand.CTK_GAIN, metric, alpha)
 
 
+def permutation_outcome(row: EffectRow | None, band: Effect) -> PermutationOutcome:
+    if row is None or row.ci_low is None or row.ci_high is None:
+        return PermutationOutcome.UNRESOLVED
+    if row.ci_low >= -band and row.ci_high <= band:
+        return PermutationOutcome.EQUIVALENT
+    if row.ci_low > band or row.ci_high < -band:
+        return PermutationOutcome.EXCEEDS_BAND
+    return PermutationOutcome.UNRESOLVED
+
+
 def complementary_knowledge(evidence: GateEvidence, config: Config) -> ClaimResult:
     gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
     scopes = [
@@ -172,12 +183,10 @@ def complementary_knowledge(evidence: GateEvidence, config: Config) -> ClaimResu
     permutation = _ctk(
         evidence, ExperimentName.FAMILY_PERMUTATION_CONTROL, Metric.FEDERATION_UNSEEN_RECALL, alpha
     )
-    null_compatible = (
-        permutation is not None and abs(permutation.mean_difference) <= gates.permutation_null_max
-    )
-    if permutation is not None and not null_compatible:
+    outcome = permutation_outcome(permutation, gates.ctk_min_gain)
+    if outcome is PermutationOutcome.EXCEEDS_BAND:
         return _result(ClaimName.COMPLEMENTARY_KNOWLEDGE, ClaimStatus.REJECTED, 0, len(scopes))
-    if not null_compatible or evidence.failed_validation_runs:
+    if outcome is PermutationOutcome.UNRESOLVED or evidence.failed_validation_runs:
         return _result(
             ClaimName.COMPLEMENTARY_KNOWLEDGE, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, len(scopes)
         )

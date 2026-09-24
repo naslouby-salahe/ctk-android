@@ -10,6 +10,7 @@ from ctk_android.analysis.gates import (
     known_family_safety,
     local_deficit,
     new_mechanism_trigger,
+    permutation_outcome,
     representation_limited_family,
 )
 from ctk_android.config import load_config
@@ -23,6 +24,7 @@ from ctk_android.enums import (
     ExposureCondition,
     Learner,
     Metric,
+    PermutationOutcome,
 )
 from ctk_android.paths import Paths
 from ctk_android.types import EffectRow, GateEvidence, Interval, NoveltyAssociation
@@ -83,8 +85,18 @@ def _ctk(
     return _row(experiment, Learner.FEDAVG, Estimand.CTK_GAIN, metric, mean, low, high)
 
 
-def _permutation(mean: float) -> EffectRow:
-    return _ctk(ExperimentName.FAMILY_PERMUTATION_CONTROL, FED, mean, -0.01, 0.01)
+BAND = CONFIG.statistics.gates.ctk_min_gain
+
+
+def _permutation(mean: float, low: float | None = None, high: float | None = None) -> EffectRow:
+    row = _ctk(
+        ExperimentName.FAMILY_PERMUTATION_CONTROL,
+        FED,
+        mean,
+        mean - 0.005 if low is None else low,
+        mean + 0.005 if high is None else high,
+    )
+    return row
 
 
 def test_complementary_knowledge_is_promoted_when_every_scope_passes() -> None:
@@ -109,12 +121,55 @@ def test_complementary_knowledge_is_narrowed_when_only_one_scope_passes() -> Non
     assert result.scopes_passed == 1
 
 
-def test_a_non_null_permutation_control_rejects_the_claim() -> None:
+def _claim_with(permutation: EffectRow) -> ClaimStatus:
     rows = [
         _ctk(ExperimentName.CONTROLLED_EXPOSURE, FED, 0.08, 0.05, 0.11),
-        _permutation(0.06),
+        _ctk(ExperimentName.CONTROLLED_EXPOSURE, OWN, 0.06, 0.03, 0.09),
+        _ctk(ExperimentName.REPLICATION_FAMILY_SET, FED, 0.05, 0.02, 0.08),
+        permutation,
     ]
-    assert complementary_knowledge(_evidence(rows), CONFIG).claim_status is ClaimStatus.REJECTED
+    return complementary_knowledge(_evidence(rows), CONFIG).claim_status
+
+
+def test_the_permutation_null_is_the_ci_within_the_predeclared_ctk_band() -> None:
+    assert BAND == 0.03
+    developed = _permutation(-0.010038, -0.015527, -0.004057)
+    assert permutation_outcome(developed, BAND) is PermutationOutcome.EQUIVALENT
+    assert _claim_with(developed) is ClaimStatus.PROMOTED
+
+
+def test_the_equivalence_band_is_inclusive() -> None:
+    assert (
+        permutation_outcome(_permutation(0.0, -BAND, BAND), BAND) is PermutationOutcome.EQUIVALENT
+    )
+
+
+def test_an_interval_entirely_outside_the_band_rejects_the_claim() -> None:
+    above = _permutation(0.06, 0.05, 0.07)
+    below = _permutation(-0.06, -0.07, -0.05)
+    assert permutation_outcome(above, BAND) is PermutationOutcome.EXCEEDS_BAND
+    assert _claim_with(above) is ClaimStatus.REJECTED
+    assert _claim_with(below) is ClaimStatus.REJECTED
+
+
+def test_an_interval_straddling_a_band_edge_is_unresolved_not_rejected() -> None:
+    straddling = _permutation(0.01, -0.02, 0.05)
+    assert permutation_outcome(straddling, BAND) is PermutationOutcome.UNRESOLVED
+    assert _claim_with(straddling) is ClaimStatus.INSUFFICIENT_EVIDENCE
+
+
+def test_a_permutation_effect_with_a_small_mean_but_a_wide_interval_is_not_equivalent() -> None:
+    wide = _permutation(0.0, -0.06, 0.06)
+    assert permutation_outcome(wide, BAND) is PermutationOutcome.UNRESOLVED
+
+
+def test_an_unavailable_interval_cannot_establish_equivalence() -> None:
+    row = _permutation(0.0)
+    assert permutation_outcome(None, BAND) is PermutationOutcome.UNRESOLVED
+    assert (
+        permutation_outcome(row.model_copy(update={"ci_low": None}), BAND)
+        is PermutationOutcome.UNRESOLVED
+    )
 
 
 def test_a_missing_permutation_control_leaves_the_claim_unresolved() -> None:

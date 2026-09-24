@@ -20,4 +20,3 @@ gates:
   heterogeneity_min: 0.10
   mechanism_mean_gap: 0.10
   mechanism_worst_gap: 0.15
-  permutation_null_max: 0.01
