@@ -50,3 +50,6 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Feature-novelty descriptors | PARTIAL | computed per run; association analysis not written |
 | Development baseline-fairness grids | MISSING | |
 | Doctor / preprocess / plan / smoke / run / status | PASS | e2e smoke idempotency test |
+
+| Clean-clone verification | PASS | fresh clone + `uv sync`: Ruff, Pyright strict, Semgrep (8 rules, 0 findings) clean; 164 passed, 10 skipped (tests needing local data/dev runs skip explicitly) |
+| Graphify | PASS (code only) | AST graph of `src/`: 829 nodes, 3830 edges, 24 communities, no import cycles; docs not semantically extracted |
