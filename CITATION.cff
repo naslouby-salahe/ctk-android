@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this repository, please cite it as below."
+title: "Complementary Threat Knowledge in Federated Android Malware Detection: A Controlled-Exposure Decomposition"
+abstract: "Controlled-exposure study of how much collaborative Android malware detection gains from generic pooling versus complementary malware-family knowledge held by peers."
+type: software
+authors:
+  - family-names: Naslouby
+    given-names: Salaheddine
+license: MIT
+keywords:
+  - CTK-Android

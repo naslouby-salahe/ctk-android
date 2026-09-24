@@ -1,0 +1,11 @@
+# local research/audit workspace (never tracked)
+poc/
+
+# data and generated artifacts
+data/raw
+data/cache/
+outputs/
+__pycache__/
+*.pyc
+.venv/
+.env
