@@ -136,9 +136,7 @@ def exposure_counts(
     return records_to_frame(
         [
             ExposureRow(
-                learner=arm.learner,
-                condition=arm.condition,
-                dose=arm.dose,
+                **arm.columns().model_dump(),
                 client=client,
                 family=family,
                 rows=mask[selected].sum().item(),

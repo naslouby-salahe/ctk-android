@@ -8,7 +8,7 @@ import torch
 
 from ctk_android import logs
 from ctk_android.analysis.novelty import family_descriptors
-from ctk_android.config import Config, TrainingConfig
+from ctk_android.config import Config, FairnessGrids
 from ctk_android.data import partitions
 from ctk_android.data.cache import (
     fingerprint_model,
@@ -38,6 +38,7 @@ from ctk_android.enums import (
     RunStatus,
     SplitRole,
     TrackedPackage,
+    TunedParameter,
     ValidationCheck,
 )
 from ctk_android.experiment import evaluation, exposure, metrics, training
@@ -52,12 +53,14 @@ from ctk_android.types import (
     CtkError,
     DoseRequest,
     EnvironmentRecord,
+    Epochs,
     ExperimentSpec,
     ExposureSetting,
     File,
     LogFields,
     Overwrite,
     PartitionKey,
+    ProximalStrength,
     ResultsByArm,
     RowCount,
     RunKey,
@@ -67,9 +70,9 @@ from ctk_android.types import (
     Seed,
     StudyData,
     SummaryTable,
-    TargetPair,
     TrainingByArm,
     TrainingRows,
+    TuningPoint,
     ValidationDocument,
     ValidationRecord,
 )
@@ -89,6 +92,9 @@ def learner_stream(learner: Learner) -> Seed:
 
 
 def planned_arm_count(spec: ExperimentSpec, config: Config) -> RowCount:
+    if spec.fairness_grid:
+        grids = config.experiments.fairness_grids
+        return 1 + len(grids.local_epochs) + len(grids.fedprox_mu) + len(grids.finetune_epochs)
     local = 1 if Learner.LOCAL in spec.learners else 0
     shared = sum(learner is not Learner.LOCAL for learner in spec.learners)
     return local + shared * len(settings_for(spec, config))
@@ -103,13 +109,9 @@ def _run_fields(key: RunKey) -> LogFields:
     }
 
 
-def training_config(config: Config, mode: ExecutionMode) -> TrainingConfig:
-    if mode is ExecutionMode.SMOKE:
-        return config.experiments.smoke_training
-    return config.experiments.training
-
-
 def settings_for(spec: ExperimentSpec, config: Config) -> list[ExposureSetting]:
+    if spec.fairness_grid:
+        return []
     if spec.dose_sweep:
         doses: list[DoseRequest] = list(config.experiments.dose_levels)
         if config.experiments.dose_include_all_available:
@@ -118,6 +120,43 @@ def settings_for(spec: ExperimentSpec, config: Config) -> list[ExposureSetting]:
             ExposureSetting(condition=ExposureCondition.PEER_PRESENT, dose=dose) for dose in doses
         ]
     return [ExposureSetting(condition=condition, dose=None) for condition in spec.conditions]
+
+
+def _federated_arm(
+    context: training.TrainingContext,
+    rows: TrainingRows,
+    learner: Learner,
+    strength: ProximalStrength,
+    study: StudyData,
+    pools: ClientPools,
+) -> ArmResult:
+    scorer = training.train_federated(context, rows, learner, strength, learner_stream(learner))
+    return ArmResult(
+        scores=evaluation.score_shared(scorer, study, pools),
+        scorers=dict.fromkeys(ClientId, scorer),
+    )
+
+
+def _finetune_arm(
+    context: training.TrainingContext,
+    federated: ArmResult,
+    rows: TrainingRows,
+    epochs: Epochs,
+    study: StudyData,
+    pools: ClientPools,
+) -> ArmResult:
+    stream = learner_stream(Learner.FEDAVG_FINETUNE)
+    tuned = {
+        client: training.finetune(
+            context,
+            federated.scorers[client],
+            rows[client],
+            epochs,
+            training.derive_seed(stream, index),
+        )
+        for index, client in enumerate(ClientId)
+    }
+    return ArmResult(scores=evaluation.score_per_client(tuned, study, pools), scorers=tuned)
 
 
 def _train_learner(
@@ -140,27 +179,14 @@ def _train_learner(
             scorers=dict.fromkeys(ClientId, scorer),
         )
     if learner in (Learner.FEDAVG, Learner.FEDPROX):
-        scorer = training.train_federated(context, rows, learner, stream)
-        return ArmResult(
-            scores=evaluation.score_shared(scorer, study, pools),
-            scorers=dict.fromkeys(ClientId, scorer),
-        )
+        return _federated_arm(context, rows, learner, config.fedprox_mu, study, pools)
     if federated is None:
         raise CtkError(
             FailureReason.NOT_APPLICABLE_MODEL_FAMILY,
             ErrorMessage.NEEDS_FEDERATED.format(learner=learner),
         )
     if learner is Learner.FEDAVG_FINETUNE:
-        tuned = {
-            client: training.finetune(
-                context,
-                federated.scorers[client],
-                rows[client],
-                training.derive_seed(stream, index),
-            )
-            for index, client in enumerate(ClientId)
-        }
-        return ArmResult(scores=evaluation.score_per_client(tuned, study, pools), scorers=tuned)
+        return _finetune_arm(context, federated, rows, config.finetune_epochs, study, pools)
     if local is None:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.NEEDS_LOCAL)
     return ArmResult(
@@ -174,12 +200,13 @@ def _train_local(
     rows: TrainingRows,
     study: StudyData,
     pools: ClientPools,
+    epochs: Epochs,
 ) -> ArmResult:
     scorers = {
         client: training.train_scorer(
             context,
             rows[client],
-            context.config.local_epochs,
+            epochs,
             training.derive_seed(learner_stream(Learner.LOCAL), index),
         )
         for index, client in enumerate(ClientId)
@@ -187,23 +214,67 @@ def _train_local(
     return ArmResult(scores=evaluation.score_per_client(scorers, study, pools), scorers=scorers)
 
 
+def _log_arm(key: RunKey, arm: ArmKey, rows: TrainingRows, watch: Stopwatch) -> None:
+    logs.info(
+        LogEvent.ARM_TRAINED,
+        {
+            **_run_fields(key),
+            LogField.ARM: arm.label(),
+            LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
+
+
+def _train_grid(
+    context: training.TrainingContext,
+    rows: TrainingRows,
+    study: StudyData,
+    pools: ClientPools,
+    grids: FairnessGrids,
+    key: RunKey,
+) -> ResultsByArm:
+    condition = ExposureCondition.PEER_PRESENT
+    results: ResultsByArm = {}
+    watch = Stopwatch()
+    baseline = ArmKey(learner=Learner.FEDAVG, condition=condition, dose=None)
+    federated = _federated_arm(context, rows, Learner.FEDAVG, 0.0, study, pools)
+    results[baseline] = federated
+    _log_arm(key, baseline, rows, watch)
+    for epochs in grids.local_epochs:
+        watch = Stopwatch()
+        point = TuningPoint(parameter=TunedParameter.LOCAL_EPOCHS, level=epochs)
+        arm = ArmKey(learner=Learner.LOCAL, condition=condition, dose=None, tuning=point)
+        results[arm] = _train_local(context, rows, study, pools, epochs)
+        _log_arm(key, arm, rows, watch)
+    for strength in grids.fedprox_mu:
+        watch = Stopwatch()
+        point = TuningPoint(parameter=TunedParameter.FEDPROX_STRENGTH, level=strength)
+        arm = ArmKey(learner=Learner.FEDPROX, condition=condition, dose=None, tuning=point)
+        results[arm] = _federated_arm(context, rows, Learner.FEDPROX, strength, study, pools)
+        _log_arm(key, arm, rows, watch)
+    for epochs in grids.finetune_epochs:
+        watch = Stopwatch()
+        point = TuningPoint(parameter=TunedParameter.FINETUNE_EPOCHS, level=epochs)
+        arm = ArmKey(learner=Learner.FEDAVG_FINETUNE, condition=condition, dose=None, tuning=point)
+        results[arm] = _finetune_arm(context, federated, rows, epochs, study, pools)
+        _log_arm(key, arm, rows, watch)
+    return results
+
+
 def _pool_validations(
     attributes: evaluation.RowAttributes,
     pools: ClientPools,
-    targets: tuple[TargetPair, ...],
+    evaluations: list[evaluation.ArmEvaluation],
 ) -> list[ValidationRecord]:
     calibration_ok = True
-    hidden_test_only = True
     for client, rows in pools.items():
         roles = attributes.roles[rows]
-        labels = attributes.labels[rows]
         own = attributes.clients[rows] == client
         calibration = roles == SplitRole.CALIBRATION
-        calibration_ok &= (own[calibration] & (labels[calibration] == 0)).all().item()
-        unseen = np.zeros(rows.size, dtype=bool)
-        for family in evaluation.target_families(targets, client):
-            unseen |= attributes.masks[family][rows]
-        hidden_test_only &= (roles[unseen] == SplitRole.TEST).all().item()
+        calibration_ok &= own[calibration].all().item()
+    hidden = np.concatenate([item.hidden_rows for item in evaluations])
+    hidden_test_only = (attributes.roles[hidden] == SplitRole.TEST).all().item()
     return [
         ValidationRecord(
             check=ValidationCheck.THRESHOLD_FROM_BENIGN_CALIBRATION,
@@ -281,7 +352,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         write_provenance(paths.provenance_file(directory), provenance)
         return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
     spec = config.experiments.experiments[key.experiment]
-    train_config = training_config(config, key.mode)
+    train_config = config.training_for(key.mode)
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
@@ -323,7 +394,21 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     results: ResultsByArm = {}
     trainings: TrainingByArm = {}
     fit_pool = orders
-    need_local = Learner.LOCAL in spec.learners or Learner.BLEND in spec.learners
+    need_local = not spec.fairness_grid and (
+        Learner.LOCAL in spec.learners or Learner.BLEND in spec.learners
+    )
+    if spec.fairness_grid:
+        grid_rows = exposure.select_training(
+            orders,
+            masks,
+            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
+            {},
+            budget,
+        )
+        results.update(
+            _train_grid(context, grid_rows, study, pools, config.experiments.fairness_grids, key)
+        )
+        trainings.update(dict.fromkeys(results, grid_rows))
     local: ArmResult | None = None
     if need_local:
         local_rows = exposure.select_training(
@@ -334,7 +419,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
             budget,
         )
         arm_watch = Stopwatch()
-        local = _train_local(context, local_rows, study, pools)
+        local = _train_local(context, local_rows, study, pools, context.config.local_epochs)
         logs.info(
             LogEvent.ARM_TRAINED,
             {
@@ -422,7 +507,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         *exposure.validate_exposure(
             study, trainings, masks, targets, spec.exposure_mode, rule.peer_min_fit, fit_pool
         ),
-        *_pool_validations(attributes, pools, targets),
+        *_pool_validations(attributes, pools, evaluations),
     ]
     validations.append(_operating_validation(summary, config))
     for record in validations:
@@ -464,6 +549,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
                 *metrics.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
             ),
             on=[*metrics.arm_columns(), Column.CLIENT, Column.ALPHA],
+            nulls_equal=True,
         ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
         paths.run_metric_file(key, Artifact.OPERATING_POINTS),
     )
@@ -499,7 +585,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
             arms=tuple(results),
             budget=budget,
             training=fingerprint_model(train_config),
-            config=config.fingerprint(),
+            config=config.run_fingerprint(spec, key.mode),
             provenance=provenance,
             environment=_environment(device),
             status=status,

@@ -10,6 +10,7 @@ from ctk_android.enums import (
     Learner,
     Metric,
     OperatingPointStatus,
+    SplitRole,
 )
 from ctk_android.experiment.metrics import summarize
 from ctk_android.types import ClientCountRow, DiscriminationRow, FamilyCountRow, OperatingRow
@@ -80,9 +81,19 @@ def _summary() -> pl.DataFrame:
                 condition=ExposureCondition.PEER_PRESENT,
                 dose=None,
                 client=ClientId.ANZHI,
+                split=SplitRole.TEST,
                 auroc=0.9,
                 auprc=0.8,
-            )
+            ),
+            DiscriminationRow(
+                learner=Learner.CENTRAL,
+                condition=ExposureCondition.PEER_PRESENT,
+                dose=None,
+                client=ClientId.ANZHI,
+                split=SplitRole.CALIBRATION,
+                auroc=0.7,
+                auprc=0.6,
+            ),
         ]
     )
     return summarize(clients, families, discrimination, operating, 1)
@@ -107,3 +118,4 @@ def test_own_domain_known_family_and_family_macro_definitions() -> None:
     assert _value(summary, Metric.KNOWN_FAMILY_RECALL) == pytest.approx(0.9)
     assert _value(summary, Metric.FAMILY_MACRO_UNSEEN_RECALL) == pytest.approx(0.8)
     assert _value(summary, Metric.AUROC) == pytest.approx(0.9)
+    assert _value(summary, Metric.CALIBRATION_AUROC) == pytest.approx(0.7)

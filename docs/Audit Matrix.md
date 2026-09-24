@@ -31,8 +31,10 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Statistics, decomposition, dose response, novelty association, robustness (top-family removal), claim gates, tables, figures, `report` command | PASS | run on real development evidence (`test_report_workflow.py`: outputs regenerate, claims deterministic, all 12 claims get an outcome) |
 | Promotion to `results/` | PASS | blocked outside confirmatory mode and writes nothing (tested); confirmatory path untested by design |
 | Deduplication sensitivity (Roadmap 28) | MISSING | not implemented |
-| Baseline-fairness grids (Roadmap 16.3, Stage D) | MISSING | `baseline-fairness` currently runs one setting; local-epoch, fine-tune-epoch and FedProx-mu grids not implemented, hyperparameters not frozen |
-| Permutation-control null definition (Roadmap 31.2 gives no number) | BLOCKED | needs a user decision; development control gives FedAvg complementary gain -0.010 (CI -0.016 to -0.004) vs +0.162 real, just outside the placeholder 0.01 |
+| Baseline-fairness grids (Roadmap 16.3, Stage D) | PASS | 10 arms per development seed; selection by mean own-domain calibration-partition AUROC (test never used), ties to smaller; frozen: local epochs 10, fine-tune epochs 2, FedProx 0.1; all on grid edges (recorded); `test_fairness.py`, `test_frozen_hyperparameters.py` |
+| Run provenance granularity | PASS | fingerprints only data, resolved training config, budget, operating, novelty and the experiment spec (`test_run_fingerprint.py`); stale runs are excluded from analysis and logged |
+| Calibration-set discrimination and hidden-row validation on evaluated rows | PASS | `test_evaluation.py` |
+| Permutation-control null definition | PASS | frozen: 95% BCa interval within +/-ctk_min_gain (0.03); development control -0.0075 (CI -0.013 to -0.001) is equivalent; tests in `test_gates.py` |
 | Graphify before/after reachability | MISSING | not yet run |
 
 ## Scientific pipeline

@@ -7,13 +7,17 @@ from ctk_android.enums import (
     ClaimName,
     Column,
     ExecutionMode,
+    FailureReason,
     FileSuffix,
     PromotionBlock,
     PromotionState,
     ReportFigure,
     ReportTable,
+    RunStatus,
 )
 from ctk_android.paths import Paths
+from ctk_android.reporting.records import collect_evidence
+from ctk_android.types import CtkError
 from ctk_android.workflows.report import run_analysis, run_report
 from tests.architecture.source_index import REPO_ROOT
 
@@ -59,3 +63,26 @@ def test_promotion_is_blocked_outside_confirmatory_mode_and_writes_no_results() 
     assert decision.state is PromotionState.BLOCKED
     assert decision.blocks == (PromotionBlock.NOT_CONFIRMATORY,)
     assert not (REPO_ROOT / "results").exists()
+
+
+def test_runs_made_under_a_different_configuration_are_stale_and_never_analysed() -> None:
+    _require_development_runs()
+    config = load_config(PATHS)
+    changed = config.model_copy(
+        update={
+            "experiments": config.experiments.model_copy(
+                update={
+                    "training": config.experiments.training.model_copy(
+                        update={"local_epochs": config.experiments.training.local_epochs + 1}
+                    )
+                }
+            )
+        }
+    )
+    evidence = collect_evidence(PATHS, changed, MODE, fairness=False)
+    completed = evidence.index.filter(pl.col(Column.STATUS) == RunStatus.COMPLETED).height
+    assert completed == 0
+    assert evidence.index.filter(pl.col(Column.STATUS) == RunStatus.STALE).height > 0
+    with pytest.raises(CtkError) as failure:
+        run_analysis(PATHS, changed, MODE)
+    assert failure.value.reason is FailureReason.NO_COMPLETED_RUNS

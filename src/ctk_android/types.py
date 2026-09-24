@@ -46,7 +46,9 @@ from ctk_android.enums import (
     ReportTable,
     RunStatus,
     Sensitivity,
+    SplitRole,
     Stage,
+    TunedParameter,
     ValidationCheck,
 )
 
@@ -72,6 +74,8 @@ TreeDepth = PositiveInt
 VtCount = NonNegativeInt
 Rank = NonNegativeInt
 DoseSweep = bool
+FairnessGrid = bool
+TuningValue = NonNegativeFloat
 Axis = NonNegativeInt
 ExceedanceCount = PositiveInt
 
@@ -184,6 +188,7 @@ Priorities = FloatArray
 WeightVector = FloatArray
 LogitChunk = Float32Array
 PlotVector = FloatArray
+SelectionTable = pl.DataFrame
 
 Directory = Path
 LamdaReleaseFiles = list[Path]
@@ -281,15 +286,40 @@ DoseRequest = NonNegativeInt | None
 TrainingRows = dict[ClientId, IntArray]
 
 
+class ArmRow(FrozenRecord):
+    learner: Learner
+    condition: ExposureCondition
+    dose: DoseRequest
+    parameter: TunedParameter | None = None
+    tuning_value: TuningValue | None = None
+
+
+class TuningPoint(FrozenRecord):
+    parameter: TunedParameter
+    level: TuningValue
+
+
 class ArmKey(FrozenRecord):
     learner: Learner
     condition: ExposureCondition
     dose: DoseRequest
+    tuning: TuningPoint | None = None
 
     def label(self) -> str:
         dose = NameFragment.ALL_DOSE if self.dose is None else f"{self.dose}"
-        parts = (self.learner, self.condition, f"{NameFragment.DOSE}{dose}")
+        parts = [self.learner, self.condition, f"{NameFragment.DOSE}{dose}"]
+        if self.tuning is not None:
+            parts.append(f"{self.tuning.parameter}{NameFragment.SEPARATOR}{self.tuning.level}")
         return NameFragment.ARM_SEPARATOR.join(parts)
+
+    def columns(self) -> ArmRow:
+        return ArmRow(
+            learner=self.learner,
+            condition=self.condition,
+            dose=self.dose,
+            parameter=None if self.tuning is None else self.tuning.parameter,
+            tuning_value=None if self.tuning is None else self.tuning.level,
+        )
 
 
 class StudyData(FrozenRecord):
@@ -346,12 +376,6 @@ class DoctorResult(FrozenRecord):
     detail: Message
 
 
-class ArmRow(FrozenRecord):
-    learner: Learner
-    condition: ExposureCondition
-    dose: DoseRequest
-
-
 class OperatingRow(ArmRow):
     client: ClientId
     alpha: Alpha
@@ -374,6 +398,7 @@ class FamilyCountRow(ClientCountRow):
 
 class DiscriminationRow(ArmRow):
     client: ClientId
+    split: SplitRole
     auroc: Rate
     auprc: Rate
 
@@ -684,6 +709,7 @@ class ExperimentSpec(FrozenRecord):
     learners: tuple[Learner, ...]
     conditions: tuple[ExposureCondition, ...]
     dose_sweep: DoseSweep
+    fairness_grid: FairnessGrid
 
 
 class ArmResult(FrozenRecord):
@@ -746,3 +772,9 @@ ExperimentSpecs = dict[ExperimentName, ExperimentSpec]
 
 LogValue = str | int | float | bool | None
 LogFields = dict[str, LogValue]
+
+
+class FrozenHyperparameters(FrozenRecord):
+    local_epochs: TuningValue
+    finetune_epochs: TuningValue
+    fedprox_mu: TuningValue

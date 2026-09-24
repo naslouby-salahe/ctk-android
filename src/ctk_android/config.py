@@ -13,6 +13,7 @@ from ctk_android.enums import (
     LibraryOption,
     LogLevel,
     NoveltyDescriptor,
+    Separator,
     SourceFamilyLabel,
     TextEncoding,
     Tolerance,
@@ -28,6 +29,7 @@ from ctk_android.types import (
     EligibilityRules,
     Epochs,
     ExceedanceCount,
+    ExperimentSpec,
     ExperimentSpecs,
     Fingerprint,
     Fraction,
@@ -150,6 +152,12 @@ class OperatingConfig(Frozen):
     realised_fpr_tolerance: Fraction
 
 
+class FairnessGrids(Frozen):
+    local_epochs: tuple[Epochs, ...]
+    finetune_epochs: tuple[Epochs, ...]
+    fedprox_mu: tuple[ProximalStrength, ...]
+
+
 class NoveltyConfig(Frozen):
     min_active_prevalence: Fraction
     min_known_family_rows: SupportCount
@@ -165,6 +173,7 @@ class ExperimentsConfig(Frozen):
     dose_levels: tuple[SupportCount, ...]
     dose_include_all_available: IncludeAllDose
     top_family_removal_count: SupportCount
+    fairness_grids: FairnessGrids
     permutation_seed_offset: Seed
     experiments: ExperimentSpecs
 
@@ -202,6 +211,26 @@ class Config(Frozen):
     data: DataConfig
     experiments: ExperimentsConfig
     statistics: StatisticsConfig
+
+    def training_for(self, mode: ExecutionMode) -> TrainingConfig:
+        if mode is ExecutionMode.SMOKE:
+            return self.experiments.smoke_training
+        return self.experiments.training
+
+    def run_fingerprint(self, spec: ExperimentSpec, mode: ExecutionMode) -> Fingerprint:
+        experiments = self.experiments
+        parts = (
+            self.data.model_dump_json(),
+            self.training_for(mode).model_dump_json(),
+            spec.model_dump_json(),
+            experiments.operating.model_dump_json(),
+            experiments.novelty.model_dump_json(),
+            experiments.fairness_grids.model_dump_json(),
+            f"{experiments.budgets[spec.budget]}",
+            f"{experiments.dose_levels}{experiments.dose_include_all_available}",
+            f"{experiments.permutation_seed_offset}",
+        )
+        return hashlib.sha256(Separator.NEWLINE.join(parts).encode()).hexdigest()
 
     def fingerprint(self) -> Fingerprint:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()

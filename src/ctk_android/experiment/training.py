@@ -29,6 +29,7 @@ from ctk_android.types import (
     FeatureMatrix,
     LabelVector,
     ProximalAnchor,
+    ProximalStrength,
     RowIndices,
     Scorer,
     Seed,
@@ -97,7 +98,11 @@ def pooled_rows(training: TrainingRows) -> RowIndices:
 
 
 def train_federated(
-    context: TrainingContext, training: TrainingRows, learner: Learner, stream: Seed
+    context: TrainingContext,
+    training: TrainingRows,
+    learner: Learner,
+    strength: ProximalStrength,
+    stream: Seed,
 ) -> Scorer:
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.PARAMETRIC_ONLY)
@@ -108,7 +113,7 @@ def train_federated(
     for round_index in range(context.config.federated_rounds):
         anchor = ProximalAnchor(
             state={k: v.detach().clone() for k, v in global_net.state_dict().items()},
-            strength=context.config.fedprox_mu,
+            strength=strength,
         )
         states: list[StateDict] = []
         for client_index, client in enumerate(ClientId):
@@ -133,7 +138,9 @@ def train_federated(
     return Scorer(family=context.family, network=global_net, trees=None, device=context.device)
 
 
-def finetune(context: TrainingContext, scorer: Scorer, rows: RowIndices, stream: Seed) -> Scorer:
+def finetune(
+    context: TrainingContext, scorer: Scorer, rows: RowIndices, epochs: Epochs, stream: Seed
+) -> Scorer:
     if scorer.network is None:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.FINETUNE_NETWORK)
     network = copy.deepcopy(scorer.network)
@@ -142,7 +149,7 @@ def finetune(context: TrainingContext, scorer: Scorer, rows: RowIndices, stream:
         context.features,
         context.labels,
         rows,
-        context.config.finetune_epochs,
+        epochs,
         context.config,
         derive_seed(context.seed, stream),
         context.device,

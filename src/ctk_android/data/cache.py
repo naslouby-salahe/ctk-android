@@ -88,14 +88,19 @@ def write_table(frame: Table, path: File) -> None:
     frame.write_parquet(path)
 
 
-def normalise_dose(frame: Table) -> Table:
-    return frame.cast({Column.DOSE: pl.Int64}) if Column.DOSE in frame.columns else frame
+def normalise_arm_columns(frame: Table) -> Table:
+    typed = {Column.DOSE: pl.Int64, Column.PARAMETER: pl.String, Column.TUNING_VALUE: pl.Float64}
+    missing = [
+        name for name in typed if name not in frame.columns and Column.CONDITION in frame.columns
+    ]
+    padded = frame.with_columns(*(pl.lit(None, dtype=typed[name]).alias(name) for name in missing))
+    return padded.cast({name: dtype for name, dtype in typed.items() if name in padded.columns})
 
 
 def records_to_frame(rows: Records) -> Table:
     if not rows:
         return pl.DataFrame()
-    return normalise_dose(pl.DataFrame([row.model_dump() for row in rows]))
+    return normalise_arm_columns(pl.DataFrame([row.model_dump() for row in rows]))
 
 
 def run_provenance(
@@ -116,7 +121,7 @@ def run_provenance(
     inputs = RunInputs(
         key=key,
         partition=partition,
-        config=config.fingerprint(),
+        config=config.run_fingerprint(spec, key.mode),
         targets=targets,
     )
     return Provenance(stage=Stage.RUNS, inputs=fingerprint_model(inputs))

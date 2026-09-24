@@ -5,12 +5,12 @@ training:
   weight_decay: 0.0
   hidden_units: [256, 64]
   dropout: 0.1
-  local_epochs: 20
+  local_epochs: 10
   central_epochs: 20
   federated_rounds: 20
   federated_local_epochs: 2
-  fedprox_mu: 0.01
-  finetune_epochs: 5
+  fedprox_mu: 0.1
+  finetune_epochs: 2
   blend_weight: 0.5
   trees:
     max_iter: 100
@@ -29,6 +29,10 @@ novelty:
 dose_levels: [0, 1, 10, 50, 100, 500, 1000]
 dose_include_all_available: true
 top_family_removal_count: 3
+fairness_grids:
+  local_epochs: [10, 20, 40]
+  finetune_epochs: [2, 5, 10]
+  fedprox_mu: [0.001, 0.01, 0.1]
 permutation_seed_offset: 7919
 smoke_training:
   batch_size: 128
@@ -59,6 +63,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   baseline-fairness:
     modes: [development]
     model_family: mlp
@@ -69,9 +74,10 @@ experiments:
     budget: primary
     eligibility: primary
     salts: [0]
-    learners: [local, fedavg, fedprox, fedavg-finetune, blend]
+    learners: [local, fedavg, fedprox, fedavg-finetune]
     conditions: [peer-present]
     dose_sweep: false
+    fairness_grid: true
   controlled-exposure:
     modes: [development, confirmatory]
     model_family: mlp
@@ -85,6 +91,7 @@ experiments:
     learners: [local, central, fedavg, fedprox, fedavg-finetune, blend]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   peer-dose-response:
     modes: [development, confirmatory]
     model_family: mlp
@@ -98,6 +105,7 @@ experiments:
     learners: [central, fedavg, fedavg-finetune]
     conditions: [peer-present]
     dose_sweep: true
+    fairness_grid: false
   natural-scarcity:
     modes: [development, confirmatory]
     model_family: mlp
@@ -111,6 +119,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere]
     dose_sweep: false
+    fairness_grid: false
   family-permutation-control:
     modes: [development, confirmatory]
     model_family: mlp
@@ -124,6 +133,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere]
     dose_sweep: false
+    fairness_grid: false
   replication-family-set:
     modes: [confirmatory]
     model_family: mlp
@@ -137,6 +147,7 @@ experiments:
     learners: [local, central, fedavg, fedprox, fedavg-finetune, blend]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   model-family-replication-linear:
     modes: [confirmatory]
     model_family: linear
@@ -150,6 +161,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   model-family-replication-trees:
     modes: [confirmatory]
     model_family: gradient-boosted-trees
@@ -163,6 +175,7 @@ experiments:
     learners: [local, central]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   training-support-sensitivity:
     modes: [confirmatory]
     model_family: mlp
@@ -176,6 +189,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   partition-salt-sensitivity:
     modes: [confirmatory]
     model_family: mlp
@@ -189,6 +203,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   family-support-sensitivity-low:
     modes: [confirmatory]
     model_family: mlp
@@ -202,6 +217,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   family-support-sensitivity-high:
     modes: [confirmatory]
     model_family: mlp
@@ -215,6 +231,7 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false
   package-only-grouping:
     modes: [confirmatory]
     model_family: mlp
@@ -228,3 +245,4 @@ experiments:
     learners: [local, central, fedavg]
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
+    fairness_grid: false

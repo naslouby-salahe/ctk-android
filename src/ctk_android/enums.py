@@ -123,6 +123,7 @@ class RunStatus(StrEnum):
     FAILED_VALIDATION = "failed-validation"
     INFEASIBLE = "infeasible"
     INCOMPLETE = "incomplete"
+    STALE = "stale"
 
 
 class FailureReason(StrEnum):
@@ -173,6 +174,7 @@ class Metric(StrEnum):
     FAMILY_RECALL_DISPERSION = "family-recall-dispersion"
     FPR_DISPERSION = "fpr-dispersion"
     MICRO_UNSEEN_RECALL = "micro-unseen-recall"
+    CALIBRATION_AUROC = "calibration-auroc"
 
 
 class ContrastFamily(StrEnum):
@@ -266,6 +268,7 @@ class Artifact(StrEnum):
     PAIRED_EFFECTS = "paired-effects.parquet"
     CLUSTER_BOOTSTRAP = "cluster-bootstrap.parquet"
     CLAIM_GATES = "claim-gates.parquet"
+    FAIRNESS_SELECTION = "fairness-selection.parquet"
 
 
 class Device(StrEnum):
@@ -328,6 +331,11 @@ class Column(StrEnum):
     LOW = "low"
     HIGH = "high"
     LINKED_VT = "linked_vt_detection"
+    PARAMETER = "parameter"
+    TUNING_VALUE = "tuning_value"
+    SPLIT = "split"
+    SELECTED = "selected"
+    CALIBRATION_AUROC = "calibration_auroc"
     SCOPES_PASSED = "scopes_passed"
     SCOPES_TOTAL = "scopes_total"
     MEDIAN_DIFFERENCE = "median_difference"
@@ -387,8 +395,12 @@ class LogEvent(StrEnum):
     RUN_FINISHED = "run-finished"
     STATUS_SUMMARIZED = "status-summarized"
     EVIDENCE_COLLECTED = "evidence-collected"
+    RUN_STALE = "run-stale"
     ANALYSIS_STAGE_FINISHED = "analysis-stage-finished"
     CLAIM_EVALUATED = "claim-evaluated"
+    HYPERPARAMETER_SELECTED = "hyperparameter-selected"
+    FREEZE_DRIFT = "freeze-drift"
+    FAIRNESS_UNAVAILABLE = "fairness-unavailable"
     TABLES_WRITTEN = "tables-written"
     FIGURES_WRITTEN = "figures-written"
     REPORT_WRITTEN = "report-written"
@@ -446,6 +458,9 @@ class LogField(StrEnum):
     ARMS = "arms"
     ERROR = "error"
     THROUGHPUT = "throughput"
+    PARAMETER = "parameter"
+    VALUE = "value"
+    CALIBRATION_AUROC = "calibration_auroc"
 
 
 class CliCommand(StrEnum):
@@ -632,7 +647,9 @@ class DetailMessage(StrEnum):
     ABSENT_EVERYWHERE = "target families absent from every client in the absent-everywhere arms"
     SIZES = "per-client training sizes {sizes}"
     FIT_ONLY = "all training rows belong to the fit role"
-    CALIBRATION_ROWS = "calibration rows are own-client benign calibration rows"
+    CALIBRATION_ROWS = (
+        "calibration rows are own-client rows; thresholds use only their benign subset"
+    )
     HIDDEN_TEST_ONLY = "evaluated hidden-family rows belong to the test partition"
     OPERATING_DEVIATION = "max |realised FPR - alpha| = {deviation}"
     FILE_COUNT = "{count} files, {missing} missing"
@@ -856,3 +873,9 @@ class PermutationOutcome(StrEnum):
     EQUIVALENT = "equivalent"
     EXCEEDS_BAND = "exceeds-band"
     UNRESOLVED = "unresolved"
+
+
+class TunedParameter(StrEnum):
+    LOCAL_EPOCHS = "local-epochs"
+    FINETUNE_EPOCHS = "finetune-epochs"
+    FEDPROX_STRENGTH = "fedprox-strength"

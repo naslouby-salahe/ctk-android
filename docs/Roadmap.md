@@ -500,6 +500,10 @@ Before confirmatory runs, development-only ablations must verify that major conc
 
 Hyperparameters are frozen before confirmatory seeds are run.
 
+**Stage D grids and selection rule (frozen).** The predeclared grids are local training epochs {10, 20, 40}, fine-tuning epochs {2, 5, 10}, and FedProx proximal strength {0.001, 0.01, 0.1}, each evaluated on the development seeds with every other setting fixed and all grid points sharing seeds and partitions. For each grid the value with the highest mean own-domain **calibration-partition** AUROC across development seeds and clients is selected; ties go to the smaller value. Test rows never enter this selection, and no tolerance or additional threshold is used. The selected values are written to the validated configuration and are the only values used by confirmatory runs. The grids are not extended after their results are seen.
+
+Selected on development seeds 1-5 (mean calibration AUROC of the selected value): local epochs 10 (0.929), fine-tuning epochs 2 (0.918), FedProx strength 0.1 (0.931). Longer local or fine-tuning training lowered calibration AUROC, so no arm is under-trained; all three selected values lie on a grid edge, and the FedProx differences are small (0.9307 at 0.01 versus 0.9314 at 0.1). FedAvg rounds (20) and local epochs (2) are fixed at their configured values, and pooled centralized training keeps its configured 20 epochs; neither was searched.
+
 ### 16.4 No test-driven arm creation
 
 No new arm, hybrid, mixture, gate, threshold rule, or peer-selection rule may be introduced because it looks favorable on confirmatory test outcomes.

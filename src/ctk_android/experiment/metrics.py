@@ -6,6 +6,7 @@ from ctk_android.enums import (
     LibraryOption,
     Metric,
     OperatingPointStatus,
+    SplitRole,
 )
 from ctk_android.types import (
     ClientCountsTable,
@@ -20,7 +21,7 @@ from ctk_android.types import (
 
 
 def arm_columns() -> list[Column]:
-    return [Column.LEARNER, Column.CONDITION, Column.DOSE]
+    return [Column.LEARNER, Column.CONDITION, Column.DOSE, Column.PARAMETER, Column.TUNING_VALUE]
 
 
 def group_columns() -> list[Column]:
@@ -94,23 +95,22 @@ def summarize(
             )
         )
     if discrimination.height:
-        auroc = discrimination.group_by(arm_columns()).agg(
-            pl.col(Column.AUROC).mean().alias(Column.VALUE)
-        )
-        auprc = discrimination.group_by(arm_columns()).agg(
-            pl.col(Column.AUPRC).mean().alias(Column.VALUE)
-        )
         alphas = clients.select(Column.ALPHA).unique()
-        parts.append(
-            auroc.join(alphas, how=LibraryOption.JOIN_CROSS).with_columns(
-                pl.lit(Metric.AUROC).alias(Column.METRIC)
+        for split, column, metric in (
+            (SplitRole.TEST, Column.AUROC, Metric.AUROC),
+            (SplitRole.TEST, Column.AUPRC, Metric.AUPRC),
+            (SplitRole.CALIBRATION, Column.AUROC, Metric.CALIBRATION_AUROC),
+        ):
+            macro = (
+                discrimination.filter(pl.col(Column.SPLIT) == split)
+                .group_by(arm_columns())
+                .agg(pl.col(column).mean().alias(Column.VALUE))
             )
-        )
-        parts.append(
-            auprc.join(alphas, how=LibraryOption.JOIN_CROSS).with_columns(
-                pl.lit(Metric.AUPRC).alias(Column.METRIC)
+            parts.append(
+                macro.join(alphas, how=LibraryOption.JOIN_CROSS).with_columns(
+                    pl.lit(metric).alias(Column.METRIC)
+                )
             )
-        )
     status = operating.group_by(group_columns()).agg(
         pl.when(
             (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE).any()

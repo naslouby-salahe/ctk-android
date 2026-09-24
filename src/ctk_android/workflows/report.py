@@ -5,6 +5,7 @@ from ctk_android import logs
 from ctk_android.analysis import novelty
 from ctk_android.analysis.decomposition import decompose, family_effects, family_seed_effects
 from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
+from ctk_android.analysis.fairness import frozen_drift, select_hyperparameters
 from ctk_android.analysis.gates import evaluate_claims
 from ctk_android.analysis.robustness import robustness_table
 from ctk_android.analysis.statistics import cluster_bootstrap_difference, paired_effect_table
@@ -54,6 +55,7 @@ from ctk_android.types import (
     RunEvidence,
     RunKey,
     RunManifest,
+    SelectionTable,
 )
 
 
@@ -166,7 +168,7 @@ def _stage_finished(stage: AnalysisStage, watch: Stopwatch) -> None:
 
 
 def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTable:
-    evidence = collect_evidence(paths, config, mode)
+    evidence = collect_evidence(paths, config, mode, fairness=False)
     logs.info(
         LogEvent.EVIDENCE_COLLECTED,
         {
@@ -287,6 +289,7 @@ def run_report(
 ) -> PromotionDecision | None:
     watch = Stopwatch()
     run_analysis(paths, config, mode)
+    run_fairness(paths, config, mode)
     tables = build_tables(paths, config, mode)
     for name, table in tables.items():
         target = paths.report_table_file(name)
@@ -310,3 +313,28 @@ def run_report(
         )
     logs.info(LogEvent.REPORT_WRITTEN, {LogField.MODE: mode, LogField.SECONDS: watch.seconds()})
     return decision
+
+
+def run_fairness(paths: Paths, config: Config, mode: ExecutionMode) -> SelectionTable | None:
+    evidence = collect_evidence(paths, config, mode, fairness=True)
+    if evidence.summary.height == 0:
+        return None
+    watch = Stopwatch()
+    selection = select_hyperparameters(evidence.summary, config.experiments.operating.primary_alpha)
+    for row in selection.filter(pl.col(Column.SELECTED)).iter_rows(named=True):
+        logs.info(
+            LogEvent.HYPERPARAMETER_SELECTED,
+            {
+                LogField.PARAMETER: row[Column.PARAMETER],
+                LogField.VALUE: row[Column.TUNING_VALUE],
+                LogField.CALIBRATION_AUROC: row[Column.CALIBRATION_AUROC],
+                LogField.SECONDS: watch.seconds(),
+            },
+        )
+    if selection.height == 0:
+        logs.warning(LogEvent.FAIRNESS_UNAVAILABLE, {LogField.MODE: mode})
+        return None
+    for parameter in frozen_drift(selection, config.experiments.training):
+        logs.warning(LogEvent.FREEZE_DRIFT, {LogField.PARAMETER: parameter})
+    write_table(selection, paths.analysis_file(mode, Artifact.FAIRNESS_SELECTION))
+    return selection
