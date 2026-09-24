@@ -60,7 +60,7 @@ Setup, then one command per experiment. Every `run` regenerates the analysis, ta
 | `uv run ctk-android plan <mode>` | write the run matrix | 0.1 s (6 s for the confirmatory plan) |
 | `uv run ctk-android smoke` | end-to-end smoke run | 13 s |
 | `uv run ctk-android status --mode <mode>` | summarise run status | under 0.1 s |
-| `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 16 tables, 10 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
+| `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 17 tables, 11 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
 
 Experiments (`--seed N` runs a single seed; durations are wall-clock per run on one RTX 5060 Ti, measured from the run logs):
 

@@ -530,6 +530,7 @@ ctk-android/
     │   ├── claim-gates.csv
     │   ├── robustness.csv                  (micro-pooled aggregation, per salt)
     │   ├── ctk-robustness-synthesis.csv    (seed-paired and micro-pooled, labelled)
+    │   ├── client-ctk-analysis.csv         (class C, per-client, descriptive)
     │   ├── anchored-worst-client.csv       (class C, post-confirmatory)
     │   ├── anchored-client-selection.csv   (class C)
     │   ├── federated-arm-tradeoff.csv      (class C, descriptive)
@@ -568,7 +569,10 @@ ctk-android/
         ├── federated-arm-tradeoff.png
         │
         ├── natural-versus-controlled.pdf
-        └── natural-versus-controlled.png
+        ├── natural-versus-controlled.png
+        │
+        ├── client-ctk-analysis.pdf
+        └── client-ctk-analysis.png
 ```
 
 ### 4.1 Tree interpretation
