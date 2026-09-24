@@ -15,6 +15,7 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.workflows.plan import experiments_for, run_plan
+from ctk_android.workflows.report import run_analysis
 from ctk_android.workflows.run import run_experiment
 from ctk_android.workflows.smoke import run_smoke
 from tests.architecture.source_index import REPO_ROOT
@@ -83,3 +84,16 @@ def test_every_smoke_planned_experiment_executes_and_passes_validation() -> None
         )
         assert reports
         assert all(report.status is RunStatus.COMPLETED for report in reports), experiment
+
+
+def test_analysis_handles_single_seed_smoke_evidence_from_every_experiment() -> None:
+    if not PATHS.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS).is_file():
+        pytest.skip("preprocessing outputs are not available; run `ctk-android preprocess`")
+    config = load_config(PATHS)
+    run_plan(PATHS, config, ExecutionMode.SMOKE)
+    for experiment in experiments_for(config, ExecutionMode.SMOKE):
+        run_experiment(
+            PATHS, config, experiment, ExecutionMode.SMOKE, config.project.seeds.smoke, False
+        )
+    claims = run_analysis(PATHS, config, ExecutionMode.SMOKE)
+    assert claims.height > 0

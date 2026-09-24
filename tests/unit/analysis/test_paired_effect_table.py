@@ -85,3 +85,14 @@ def test_shares_are_ratios_of_seed_means() -> None:
     pooling = _row(Learner.FEDAVG, Estimand.POOLING_SHARE)
     assert ctk.mean_difference == pytest.approx(0.20 / 0.40, abs=0.05)
     assert ctk.mean_difference + pooling.mean_difference == pytest.approx(1.0)
+
+
+def test_zero_total_gain_leaves_shares_undefined_instead_of_failing() -> None:
+    flat = _summary().with_columns(pl.lit(0.4).alias(Column.VALUE))
+    table = paired_effect_table(decompose(flat), CONFIG)
+    assert table.height > 0
+    shares = table.filter(
+        (pl.col(Column.ESTIMAND) == Estimand.CTK_SHARE)
+        | (pl.col(Column.ESTIMAND) == Estimand.POOLING_SHARE)
+    )
+    assert shares.height == 0

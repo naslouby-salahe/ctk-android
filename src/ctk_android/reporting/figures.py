@@ -166,13 +166,13 @@ def mean_versus_worst_client(paths: Paths, config: Config, mode: ExecutionMode) 
         ),
         (fnr_axes, PlotText.FNR, Metric.FEDERATION_UNSEEN_RECALL, Metric.WORST_CLIENT_FNR),
     ):
-        mean = np.array(
+        mean = _values(
             [
                 _mean(summary, learner, ExposureCondition.PEER_PRESENT, mean_metric)
                 for learner in learners
             ]
         )
-        worst = np.array(
+        worst = _values(
             [
                 _mean(summary, learner, ExposureCondition.PEER_PRESENT, worst_metric)
                 for learner in learners

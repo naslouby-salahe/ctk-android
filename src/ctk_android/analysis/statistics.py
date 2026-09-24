@@ -41,7 +41,7 @@ def _finite_interval(low: Effect, high: Effect) -> Interval | None:
 
 
 def bca_interval(values: SeedEffects, config: StatisticsConfig) -> Interval | None:
-    if values.size < StatisticsLimit.BCA_SEEDS:
+    if values.size < StatisticsLimit.BCA_SEEDS or np.ptp(values) == 0:
         return None
     result = stats.bootstrap(
         (values,),
@@ -205,6 +205,8 @@ def _share_rows(decomposition: DecompositionTable, config: Config) -> list[Effec
             (Estimand.POOLING_SHARE, Estimand.POOLING_GAIN),
         ):
             numerator = seeds(part)
+            if total.mean() == 0:
+                continue
             interval = ratio_interval(
                 numerator, total, config.statistics.share_min_total_gain, config.statistics
             )
