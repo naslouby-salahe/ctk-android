@@ -14,9 +14,11 @@ from ctk_android.enums import (
     LogEvent,
     LogField,
     PythonRequirement,
+    SourceFile,
+    WorkspaceDirectory,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import DoctorResult
+from ctk_android.types import Clean, DoctorResult, GitArguments, GitOutput, Message, Moment
 
 
 def git_revision(paths: Paths) -> DoctorResult:
@@ -36,6 +38,38 @@ def git_revision(paths: Paths) -> DoctorResult:
         check=DoctorCheck.GIT_REVISION,
         passed=completed.returncode == 0,
         detail=completed.stdout.strip() or DetailMessage.NOT_A_CHECKOUT,
+    )
+
+
+def _git(paths: Paths, arguments: GitArguments) -> GitOutput:
+    completed = subprocess.run(
+        [GitArgument.GIT, GitArgument.DIRECTORY, f"{paths.root}", *arguments],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.stdout.strip()
+
+
+def revision_at_or_before(paths: Paths, moment: Moment) -> Message:
+    return (
+        _git(
+            paths,
+            [
+                GitArgument.REV_LIST,
+                GitArgument.LATEST,
+                GitArgument.BEFORE.format(moment=moment.isoformat()),
+                GitArgument.HEAD,
+            ],
+        )
+        or DetailMessage.NOT_A_CHECKOUT
+    )
+
+
+def sources_are_clean(paths: Paths) -> Clean:
+    tracked = [WorkspaceDirectory.SOURCE, WorkspaceDirectory.CONFIGS, SourceFile.PROJECT_MARKER]
+    return not _git(
+        paths, [GitArgument.STATUS, GitArgument.PORCELAIN, GitArgument.PATHSPEC, *tracked]
     )
 
 

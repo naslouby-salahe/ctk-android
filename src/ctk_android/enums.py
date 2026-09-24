@@ -224,6 +224,15 @@ class AndroZooColumn(StrEnum):
 
 
 class Artifact(StrEnum):
+    ANCHORED_WORST_CLIENT = "anchored-worst-client.parquet"
+    ANCHORED_CLIENT_SELECTION = "anchored-client-selection.parquet"
+    ARM_TRADEOFF = "federated-arm-tradeoff.parquet"
+    ROBUSTNESS_SYNTHESIS = "ctk-robustness-synthesis.parquet"
+    FAMILY_PATTERNS = "family-mechanism-patterns.parquet"
+    NATURAL_COMPARISON = "natural-scarcity-comparison.parquet"
+    PERMUTATION_AUDIT = "permutation-control-audit.parquet"
+    MECHANISM_HEADROOM = "mechanism-headroom.parquet"
+    OPERATING_FIDELITY = "operating-point-fidelity.parquet"
     PROVENANCE = "provenance.json"
     AUDIT = "audit.json"
     MANIFEST = "manifest.json"
@@ -364,6 +373,31 @@ class Column(StrEnum):
     FULL_RECALL = "full_recall"
     LOCAL_RECALL = "local_recall"
     PEER_RECALL = "peer_recall"
+    DOSE_LEVEL = "dose_level"
+    LEVEL_EFFECTIVE_DOSE = "level_effective_dose"
+    MEETS_DOSE_CRITERION = "meets_dose_criterion"
+    MICRO_POOLED_CTK_GAIN = "micro_pooled_ctk_gain"
+    EVIDENCE_CLASS = "evidence_class"
+    SCOPE_ORDER = "scope_order"
+    COMPARISON = "comparison"
+    MEASURE = "measure"
+    SCOPE = "scope"
+    SEEDS_SELECTED = "seeds_selected"
+    MEAN_LOCAL_RECALL = "mean_local_recall"
+    POOLING_GAIN = "pooling_gain"
+    TOTAL_GAIN = "total_gain"
+    FAMILIES = "families"
+    CLIENTS = "clients"
+    MEAN_FPR = "mean_realised_fpr"
+    WORST_FPR = "mean_worst_client_fpr"
+    FPR_DEVIATION = "mean_fpr_deviation_from_target"
+    VALID_RUNS = "valid_operating_runs"
+    RUNS = "runs"
+    LINEAR_FULL_RECALL = "linear_full_recall"
+    TREES_FULL_RECALL = "trees_full_recall"
+    AGGREGATION = "aggregation"
+    OBSERVATIONS = "observations"
+    OBSERVATIONS_MET = "observations_meeting_criterion"
 
 
 class LogEvent(StrEnum):
@@ -500,6 +534,7 @@ class WorkspaceDirectory(StrEnum):
     STATISTICS = "statistics"
     REPORT = "report"
     RESULTS = "results"
+    SOURCE = "src"
     TABLES = "tables"
     FIGURES = "figures"
     METRICS = "metrics"
@@ -610,6 +645,12 @@ class GitArgument(StrEnum):
     DIRECTORY = "-C"
     REV_PARSE = "rev-parse"
     HEAD = "HEAD"
+    REV_LIST = "rev-list"
+    LATEST = "-1"
+    BEFORE = "--before={moment}"
+    STATUS = "status"
+    PORCELAIN = "--porcelain"
+    PATHSPEC = "--"
 
 
 class ErrorMessage(StrEnum):
@@ -688,6 +729,12 @@ class LibraryOption:
     BBOX_TIGHT: Final = "tight"
     LINE_DASHED: Final = "--"
     MARKER_CIRCLE: Final = "o"
+    MARKER_SQUARE: Final = "s"
+    NEUTRAL_COLOR: Final = "grey"
+    AXIS_X: Final = "x"
+    AXIS_Y: Final = "y"
+    UPPER_CENTER: Final = "upper center"
+    THRESHOLD_COLOR: Final = "black"
     SCALE_SYMLOG: Final = "symlog"
     ASPECT_AUTO: Final = "auto"
     TIMESTAMP_ISO: Final = "iso"
@@ -749,9 +796,54 @@ class ClaimStatus(StrEnum):
 
 class AllowedWording(StrEnum):
     PROMOTED = "supported in every evaluated scope"
+    STRONGEST_ARM_ONLY = (
+        "supported for the strongest federated arm only; report every arm's known-family change"
+    )
     NARROWED = "supported only in the scopes that passed; state the restriction"
     INSUFFICIENT_EVIDENCE = "not resolved by the confirmatory evidence; report descriptively"
     REJECTED = "not supported; report the measured components without the claim"
+
+
+class EvidenceClass(StrEnum):
+    ORIGINAL_CONFIRMATORY = "A-original-confirmatory"
+    CONFIRMATORY_SENSITIVITY = "B-confirmatory-sensitivity"
+    POST_CONFIRMATORY = "C-post-confirmatory-evidence-preserving"
+
+
+class TradeoffComparison(StrEnum):
+    VERSUS_LOCAL = "versus-local"
+    VERSUS_FEDAVG = "versus-fedavg"
+
+
+class TradeoffMeasure(StrEnum):
+    FEDERATION_UNSEEN_RECALL_CHANGE = "federation-unseen-recall-change"
+    OWN_DOMAIN_UNSEEN_RECALL_CHANGE = "own-domain-unseen-recall-change"
+    WORST_CLIENT_UNSEEN_RECALL_CHANGE = "worst-client-unseen-recall-change"
+    CTK_GAIN = "paired-seed-ctk-gain"
+    POOLING_GAIN = "paired-seed-pooling-gain"
+    KNOWN_FAMILY_RECALL_CHANGE = "known-family-recall-change"
+    REALISED_FPR_CHANGE = "realised-fpr-change"
+    FULL_EXPOSURE_GAP = "full-exposure-gap"
+    ORACLE_GAP_RECOVERY = "oracle-gap-recovery"
+
+
+class RobustnessScope(StrEnum):
+    PRIMARY_FAMILY_SET = "primary-family-set"
+    REPLICATION_FAMILY_SET = "replication-family-set"
+    LINEAR_MODEL = "linear-model"
+    TREE_MODEL = "gradient-boosted-tree-model"
+    LOWER_TRAINING_SUPPORT = "lower-training-support"
+    LOW_FAMILY_SUPPORT = "low-family-support"
+    HIGH_FAMILY_SUPPORT = "high-family-support"
+    PARTITION_SALT = "partition-salt"
+    PACKAGE_ONLY_GROUPING = "package-only-grouping"
+    NATURAL_SCARCITY = "natural-scarcity"
+    PERMUTATION_CONTROL = "family-label-permutation-control"
+
+
+class CtkAggregation(StrEnum):
+    PAIRED_SEED_MACRO = "paired-seed-macro"
+    MICRO_POOLED = "micro-pooled"
 
 
 class Sensitivity(StrEnum):
@@ -761,6 +853,15 @@ class Sensitivity(StrEnum):
 
 
 class ReportTable(StrEnum):
+    ANCHORED_WORST_CLIENT = "anchored-worst-client"
+    ANCHORED_CLIENT_SELECTION = "anchored-client-selection"
+    ARM_TRADEOFF = "federated-arm-tradeoff"
+    ROBUSTNESS_SYNTHESIS = "ctk-robustness-synthesis"
+    FAMILY_PATTERNS = "family-mechanism-patterns"
+    NATURAL_COMPARISON = "natural-scarcity-comparison"
+    PERMUTATION_AUDIT = "permutation-control-audit"
+    MECHANISM_HEADROOM = "mechanism-headroom"
+    OPERATING_FIDELITY = "operating-point-fidelity"
     DATASET_CLIENT_AUDIT = "dataset-client-audit"
     PRIMARY_ARM_COMPARISON = "primary-arm-comparison"
     COLLABORATION_DECOMPOSITION = "collaboration-decomposition"
@@ -778,12 +879,19 @@ class ReportFigure(StrEnum):
     FAMILY_RESCUE_MAP = "family-rescue-map"
     FEATURE_NOVELTY_VERSUS_CTK_GAIN = "feature-novelty-versus-ctk-gain"
     KNOWN_VERSUS_UNSEEN_TRADEOFF = "known-versus-unseen-tradeoff"
-    ROBUSTNESS_SUMMARY = "robustness-summary"
+    CTK_ROBUSTNESS_FOREST = "ctk-robustness-forest"
+    FEDERATED_ARM_TRADEOFF = "federated-arm-tradeoff"
+    NATURAL_VERSUS_CONTROLLED = "natural-versus-controlled"
 
 
 class FamilyOutcome(StrEnum):
     RESCUED = "rescued"
     POORLY_RESCUED = "poorly-rescued-under-full-exposure"
+    NOT_CLASSIFIABLE = "not-classifiable-without-full-exposure"
+
+
+class DoseLevel(StrEnum):
+    ALL_AVAILABLE = "all-available"
 
 
 class PlotGeometry(float, Enum):
@@ -793,11 +901,25 @@ class PlotGeometry(float, Enum):
     DPI = 200.0
     MARKER_SIZE = 60.0
     TICK_ROTATION = 45.0
+    FOREST_WIDTH = 12.0
+    FOREST_ROW_HEIGHT = 0.3
+    FOREST_MARGIN = 2.0
+    FOREST_LEFT = 0.45
+    PANEL_WIDTH = 13.0
+    PANEL_HEIGHT = 7.0
+    SMALL_FONT = 7.0
+    GRID_ALPHA = 0.3
+    PANEL_SPACE = 0.55
+    LEGEND_ANCHOR_X = 0.5
+    LEGEND_ANCHOR_Y = -0.05
 
 
 class SubplotGrid(IntEnum):
     ROWS = 1
     COLUMNS = 2
+    THREE_COLUMNS = 3
+    PANEL_ROWS = 2
+    PANEL_COLUMNS = 3
 
 
 class PlotText(StrEnum):
@@ -811,7 +933,7 @@ class PlotText(StrEnum):
     MEAN_VERSUS_WORST_TITLE = "Mean versus worst client"
     MEAN_CLIENT = "Mean client"
     WORST_CLIENT = "Worst client"
-    DOMAIN_TITLE = "Complementary gain: own-domain versus federation-wide"
+    DOMAIN_TITLE = "Seed-paired complementary gain: own-domain versus federation-wide"
     OWN_DOMAIN = "Own-domain"
     FEDERATION_WIDE = "Federation-wide"
     GAIN = "Gain in recall"
@@ -826,8 +948,23 @@ class PlotText(StrEnum):
     TRADEOFF_TITLE = "Known-family recall versus unseen-family recall"
     KNOWN_RECALL = "Known-family recall"
     UNSEEN_RECALL = "Unseen-family recall"
-    ROBUSTNESS_TITLE = "Robustness of the complementary gain (FedAvg)"
-    ROBUSTNESS_ROW = "{experiment} @{alpha}"
+    FOREST_TITLE = "Complementary-knowledge gain across every robustness scope"
+    FOREST_AXIS = "Complementary-knowledge recall gain (peer-family minus no-family)"
+    FOREST_ROW = "{scope} | {detail} | {learner} | alpha {alpha}"
+    FOREST_SALT = "{detail}, salt {salt}"
+    PRACTICAL_THRESHOLD = "Practical threshold (+0.03)"
+    PAIRED_SEED_LEGEND = "Seed-paired macro estimand (BCa 95% interval)"
+    MICRO_POOLED_LEGEND = "Micro-pooled hits/trials estimand (BCa 95% interval)"
+    NATURAL_TITLE = "Controlled exposure versus natural scarcity (FedAvg, separate estimands)"
+    CONTROLLED_LABEL = "Controlled exposure"
+    NATURAL_LABEL = "Natural scarcity"
+    ESTIMAND_TOTAL = "Total gain"
+    ESTIMAND_POOLING = "Pooling gain"
+    ESTIMAND_CTK = "CTK gain"
+    TRADEOFF_SUPTITLE = (
+        "Federated arms versus local (seed-paired, BCa 95% interval). "
+        "Descriptive trade-off; no score or ranking is defined"
+    )
 
 
 class ResultsDirectory(StrEnum):
@@ -866,6 +1003,7 @@ class PromotionState(StrEnum):
 class AnalysisStage(StrEnum):
     DECOMPOSITION = "decomposition"
     STATISTICS = "statistics"
+    POST_CONFIRMATORY = "post-confirmatory"
     FAMILY_EFFECTS = "family-effects"
     DOSE_RESPONSE = "dose-response"
     NOVELTY = "novelty"

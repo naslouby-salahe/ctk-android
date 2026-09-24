@@ -7,6 +7,17 @@ from ctk_android.analysis.decomposition import decompose, family_effects, family
 from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
 from ctk_android.analysis.fairness import frozen_drift, select_hyperparameters
 from ctk_android.analysis.gates import evaluate_claims
+from ctk_android.analysis.post_confirmatory import (
+    anchored_client_selection,
+    anchored_worst_client,
+    ctk_robustness_synthesis,
+    family_mechanism_patterns,
+    federated_arm_tradeoff,
+    mechanism_headroom,
+    natural_scarcity_comparison,
+    operating_point_fidelity,
+    permutation_control_audit,
+)
 from ctk_android.analysis.robustness import robustness_table
 from ctk_android.analysis.statistics import cluster_bootstrap_difference, paired_effect_table
 from ctk_android.config import Config
@@ -253,6 +264,43 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTab
                 LogField.SCOPES_TOTAL: claim[Column.SCOPES_TOTAL],
             },
         )
+    watch = Stopwatch()
+    write_table(
+        anchored_worst_client(evidence.clients, config),
+        paths.analysis_file(mode, Artifact.ANCHORED_WORST_CLIENT),
+    )
+    write_table(
+        anchored_client_selection(evidence.clients, config),
+        paths.analysis_file(mode, Artifact.ANCHORED_CLIENT_SELECTION),
+    )
+    write_table(
+        federated_arm_tradeoff(evidence.summary, config),
+        paths.analysis_file(mode, Artifact.ARM_TRADEOFF),
+    )
+    write_table(
+        ctk_robustness_synthesis(effects, robustness, config),
+        paths.analysis_file(mode, Artifact.ROBUSTNESS_SYNTHESIS),
+    )
+    write_table(
+        family_mechanism_patterns(family_table), paths.analysis_file(mode, Artifact.FAMILY_PATTERNS)
+    )
+    write_table(
+        natural_scarcity_comparison(effects, family_seed, config),
+        paths.analysis_file(mode, Artifact.NATURAL_COMPARISON),
+    )
+    write_table(
+        permutation_control_audit(effects, config),
+        paths.analysis_file(mode, Artifact.PERMUTATION_AUDIT),
+    )
+    write_table(
+        mechanism_headroom(evidence.summary, config),
+        paths.analysis_file(mode, Artifact.MECHANISM_HEADROOM),
+    )
+    write_table(
+        operating_point_fidelity(evidence.summary),
+        paths.analysis_file(mode, Artifact.OPERATING_FIDELITY),
+    )
+    _stage_finished(AnalysisStage.POST_CONFIRMATORY, watch)
     write_table(evidence.index, paths.analysis_file(mode, Artifact.RUN_INDEX))
     write_table(evidence.summary, paths.analysis_file(mode, Artifact.ARM_METRICS))
     write_table(decomposition, paths.analysis_file(mode, Artifact.COLLABORATION_DECOMPOSITION))

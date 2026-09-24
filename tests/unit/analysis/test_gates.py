@@ -276,6 +276,57 @@ def test_dose_response_is_promoted_for_a_rising_curve_not_driven_by_one_family()
     assert dose_response(evidence, CONFIG).claim_status is ClaimStatus.PROMOTED
 
 
+def _realised_dose_frame(levels: dict[int | None, tuple[float, float]]) -> pl.DataFrame:
+    rows = [
+        {
+            Column.LEARNER: Learner.FEDAVG,
+            Column.DOSE: dose,
+            Column.FAMILY: family,
+            Column.RECALL: 0.4 + gain,
+            Column.EFFECTIVE_DOSE: effective,
+            Column.CTK_GAIN: gain,
+        }
+        for dose, (effective, gain) in levels.items()
+        for family in ("alpha", "beta", "gamma")
+    ]
+    return pl.DataFrame(rows, schema_overrides={Column.DOSE: pl.Int64})
+
+
+def test_the_all_available_level_counts_when_its_effective_exposure_meets_the_criterion() -> None:
+    realised = {
+        0: (0.0, 0.0),
+        10: (1.0, 0.004),
+        100: (9.0, 0.02),
+        1000: (79.0, 0.06),
+        None: (296.0, 0.12),
+    }
+    evidence = _evidence([]).model_copy(update={"dose": _realised_dose_frame(realised)})
+    result = dose_response(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.PROMOTED
+    assert result.scopes_passed == result.scopes_total
+
+
+def test_a_requested_level_below_the_effective_criterion_never_satisfies_it() -> None:
+    realised: dict[int | None, tuple[float, float]] = {
+        0: (0.0, 0.0),
+        10: (1.0, 0.004),
+        100: (9.0, 0.09),
+        1000: (79.0, 0.09),
+    }
+    evidence = _evidence([]).model_copy(update={"dose": _realised_dose_frame(realised)})
+    result = dose_response(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.NARROWED
+    assert result.scopes_passed == 1
+
+
+def test_the_all_available_level_is_ordered_by_effective_exposure_for_monotonicity() -> None:
+    realised = {0: (0.0, 0.0), 1000: (79.0, 0.10), None: (296.0, 0.05)}
+    evidence = _evidence([]).model_copy(update={"dose": _realised_dose_frame(realised)})
+    result = dose_response(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.NARROWED
+    assert result.scopes_passed == 2
+
+
 def test_dose_response_is_rejected_for_a_flat_curve() -> None:
     evidence = _evidence([]).model_copy(
         update={"dose": _dose_frame({0: 0.0, 10: 0.0, 100: 0.0, 500: 0.0})}
@@ -374,7 +425,28 @@ def test_known_family_safety_is_promoted_when_the_strongest_arm_barely_moves_kno
         }
     )
     evidence = _evidence([]).model_copy(update={"summary": summary})
-    assert known_family_safety(evidence, CONFIG).claim_status is ClaimStatus.PROMOTED
+    result = known_family_safety(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.PROMOTED
+    assert result.wording is AllowedWording.STRONGEST_ARM_ONLY
+
+
+def test_known_family_safety_wording_names_the_strongest_arm_not_every_arm() -> None:
+    summary = _summary_rows(
+        {
+            (Learner.LOCAL, PEER, KNOWN): 0.72,
+            (Learner.LOCAL, PEER, FPR): 0.050,
+            (Learner.FEDAVG, PEER, FED): 0.60,
+            (Learner.FEDAVG, PEER, KNOWN): 0.68,
+            (Learner.FEDAVG, PEER, FPR): 0.051,
+            (Learner.FEDPROX, PEER, FED): 0.62,
+            (Learner.FEDPROX, PEER, KNOWN): 0.715,
+            (Learner.FEDPROX, PEER, FPR): 0.051,
+        }
+    )
+    evidence = _evidence([]).model_copy(update={"summary": summary})
+    result = known_family_safety(evidence, CONFIG)
+    assert result.claim_status is ClaimStatus.PROMOTED
+    assert "strongest federated arm only" in result.wording
 
 
 def test_known_family_safety_is_rejected_for_a_material_known_family_cost() -> None:
@@ -391,10 +463,17 @@ def test_known_family_safety_is_rejected_for_a_material_known_family_cost() -> N
     assert known_family_safety(evidence, CONFIG).claim_status is ClaimStatus.REJECTED
 
 
-def _family_seed(gains: dict[str, float]) -> pl.DataFrame:
+def _family_seed(
+    gains: dict[str, float], experiment: ExperimentName = ExperimentName.CONTROLLED_EXPOSURE
+) -> pl.DataFrame:
     return pl.DataFrame(
         [
-            {Column.LEARNER: Learner.FEDAVG, Column.FAMILY: family, Column.CTK_GAIN: gain}
+            {
+                Column.EXPERIMENT: experiment,
+                Column.LEARNER: Learner.FEDAVG,
+                Column.FAMILY: family,
+                Column.CTK_GAIN: gain,
+            }
             for family, gain in gains.items()
         ]
     )
@@ -405,6 +484,23 @@ def test_family_dependence_needs_a_material_spread_across_families() -> None:
     flat = _evidence([]).model_copy(update={"family_seed": _family_seed({"a": 0.10, "b": 0.11})})
     assert family_dependence(wide, CONFIG).claim_status is ClaimStatus.PROMOTED
     assert family_dependence(flat, CONFIG).claim_status is ClaimStatus.REJECTED
+
+
+def test_family_dependence_ignores_experiments_outside_the_frozen_family_sets() -> None:
+    frozen = _family_seed({"a": 0.10, "b": 0.11})
+    outside = _family_seed({"c": -0.20, "d": 0.40}, ExperimentName.NATURAL_SCARCITY)
+    permuted = _family_seed({"e": 0.90}, ExperimentName.FAMILY_PERMUTATION_CONTROL)
+    evidence = _evidence([]).model_copy(
+        update={"family_seed": pl.concat([frozen, outside, permuted])}
+    )
+    assert family_dependence(evidence, CONFIG).claim_status is ClaimStatus.REJECTED
+
+
+def test_family_dependence_spans_both_frozen_family_sets() -> None:
+    primary = _family_seed({"a": 0.10})
+    replication = _family_seed({"b": 0.30}, ExperimentName.REPLICATION_FAMILY_SET)
+    evidence = _evidence([]).model_copy(update={"family_seed": pl.concat([primary, replication])})
+    assert family_dependence(evidence, CONFIG).claim_status is ClaimStatus.PROMOTED
 
 
 def _association(rho: float, low: float, high: float) -> NoveltyAssociation:

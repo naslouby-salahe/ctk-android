@@ -100,7 +100,9 @@ def normalise_arm_columns(frame: Table) -> Table:
 def records_to_frame(rows: Records) -> Table:
     if not rows:
         return pl.DataFrame()
-    return normalise_arm_columns(pl.DataFrame([row.model_dump() for row in rows]))
+    return normalise_arm_columns(
+        pl.DataFrame([row.model_dump() for row in rows], infer_schema_length=None)
+    )
 
 
 def run_provenance(

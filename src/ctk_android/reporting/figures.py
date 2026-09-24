@@ -3,9 +3,11 @@ import polars as pl
 from matplotlib.figure import Figure
 
 from ctk_android.config import Config
+from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
     Artifact,
     Column,
+    CtkAggregation,
     Estimand,
     ExecutionMode,
     ExperimentName,
@@ -17,24 +19,34 @@ from ctk_android.enums import (
     PlotGeometry,
     PlotText,
     ReportFigure,
+    RobustnessScope,
     SubplotGrid,
+    TradeoffComparison,
+    TradeoffMeasure,
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    ComparisonTable,
     Directory,
     Effect,
     EffectsTable,
     FamilyRescueTable,
+    ForestRow,
+    ForestText,
     PlotAxes,
     PlotBand,
     PlotFigure,
+    PlotSize,
     PlotVector,
     SummaryTable,
+    SynthesisTable,
 )
 
 
-def _blank() -> PlotFigure:
-    return Figure(figsize=(PlotGeometry.WIDTH, PlotGeometry.HEIGHT))
+def _blank(
+    width: PlotSize = PlotGeometry.WIDTH, height: PlotSize = PlotGeometry.HEIGHT
+) -> PlotFigure:
+    return Figure(figsize=(width, height))
 
 
 def _axes(figure: PlotFigure) -> PlotAxes:
@@ -306,28 +318,246 @@ def known_versus_unseen_tradeoff(paths: Paths, config: Config, mode: ExecutionMo
     _save(figure, paths, mode, ReportFigure.KNOWN_VERSUS_UNSEEN_TRADEOFF)
 
 
-def robustness_summary(paths: Paths, mode: ExecutionMode) -> None:
-    table = pl.read_parquet(paths.statistics_file(mode, Artifact.PAIRED_EFFECTS)).filter(
-        (pl.col(Column.LEARNER) == Learner.FEDAVG)
-        & (pl.col(Column.ESTIMAND) == Estimand.CTK_GAIN)
-        & (pl.col(Column.METRIC) == Metric.FEDERATION_UNSEEN_RECALL)
+def _forest_selection(synthesis: SynthesisTable, config: Config) -> SynthesisTable:
+    primary = config.experiments.operating.primary_alpha
+    scope = pl.col(Column.SCOPE)
+    preferred = (pl.col(Column.LEARNER) == Learner.FEDAVG) | (
+        (scope == RobustnessScope.TREE_MODEL) & (pl.col(Column.LEARNER) == Learner.CENTRAL)
     )
-    figure = _blank()
+    federation = pl.col(Column.METRIC) == Metric.FEDERATION_UNSEEN_RECALL
+    at_primary = pl.col(Column.ALPHA) == primary
+    populations = is_one_of(Column.SCOPE, [RobustnessScope.PRIMARY_FAMILY_SET]) | is_one_of(
+        Column.SCOPE, [RobustnessScope.NATURAL_SCARCITY]
+    )
+    paired = synthesis.filter(
+        (pl.col(Column.AGGREGATION) == CtkAggregation.PAIRED_SEED_MACRO)
+        & preferred
+        & (
+            (federation & at_primary)
+            | (populations & at_primary)
+            | ((scope == RobustnessScope.PRIMARY_FAMILY_SET) & federation)
+        )
+    )
+    micro = synthesis.filter(
+        (pl.col(Column.AGGREGATION) == CtkAggregation.MICRO_POOLED)
+        & at_primary
+        & is_one_of(
+            Column.SCOPE,
+            [
+                RobustnessScope.PRIMARY_FAMILY_SET,
+                RobustnessScope.REPLICATION_FAMILY_SET,
+                RobustnessScope.NATURAL_SCARCITY,
+            ],
+        )
+    )
+    order = {name: index for index, name in enumerate(RobustnessScope)}
+    return (
+        pl.concat([paired, micro])
+        .with_columns(pl.col(Column.SCOPE).replace_strict(order).alias(Column.SCOPE_ORDER))
+        .sort(
+            Column.AGGREGATION,
+            Column.SCOPE_ORDER,
+            Column.SALT,
+            Column.METRIC,
+            Column.SENSITIVITY,
+            Column.ALPHA,
+            descending=[True, False, False, False, False, False],
+        )
+    )
+
+
+def _forest_label(row: ForestRow) -> ForestText:
+    detail = row[Column.METRIC] or row[Column.SENSITIVITY]
+    if row[Column.SCOPE] == RobustnessScope.PARTITION_SALT:
+        detail = PlotText.FOREST_SALT.format(detail=detail, salt=row[Column.SALT])
+    return PlotText.FOREST_ROW.format(
+        scope=row[Column.SCOPE],
+        detail=detail,
+        learner=row[Column.LEARNER],
+        alpha=row[Column.ALPHA],
+    )
+
+
+def ctk_robustness_forest(paths: Paths, config: Config, mode: ExecutionMode) -> None:
+    synthesis = pl.read_parquet(paths.analysis_file(mode, Artifact.ROBUSTNESS_SYNTHESIS))
+    table = _forest_selection(synthesis, config) if synthesis.height else synthesis
+    if table.height == 0:
+        _save(_blank(), paths, mode, ReportFigure.CTK_ROBUSTNESS_FOREST)
+        return
+    figure = _blank(
+        PlotGeometry.FOREST_WIDTH,
+        table.height * PlotGeometry.FOREST_ROW_HEIGHT + PlotGeometry.FOREST_MARGIN,
+    )
     axes = _axes(figure)
-    labels = [
-        PlotText.ROBUSTNESS_ROW.format(experiment=row[Column.EXPERIMENT], alpha=row[Column.ALPHA])
-        for row in table.iter_rows(named=True)
-    ]
+    positions = np.arange(table.height)
     means = table[Column.MEAN_DIFFERENCE].to_numpy()
     low = table[Column.CI_LOW].fill_null(table[Column.MEAN_DIFFERENCE]).to_numpy()
     high = table[Column.CI_HIGH].fill_null(table[Column.MEAN_DIFFERENCE]).to_numpy()
-    axes.errorbar(
-        means, range(len(labels)), xerr=[means - low, high - means], fmt=LibraryOption.MARKER_CIRCLE
+    micro = (table[Column.AGGREGATION] == CtkAggregation.MICRO_POOLED).to_numpy()
+    for selected, marker, label in (
+        (~micro, LibraryOption.MARKER_CIRCLE, PlotText.PAIRED_SEED_LEGEND),
+        (micro, LibraryOption.MARKER_SQUARE, PlotText.MICRO_POOLED_LEGEND),
+    ):
+        axes.errorbar(
+            means[selected],
+            positions[selected],
+            xerr=[means[selected] - low[selected], high[selected] - means[selected]],
+            fmt=marker,
+            label=label,
+        )
+    axes.axvline(0.0, color=LibraryOption.NEUTRAL_COLOR)
+    axes.axvline(
+        config.statistics.gates.ctk_min_gain,
+        linestyle=LibraryOption.LINE_DASHED,
+        color=LibraryOption.THRESHOLD_COLOR,
+        label=PlotText.PRACTICAL_THRESHOLD,
     )
-    axes.set_yticks(range(len(labels)), labels)
-    axes.set_xlabel(PlotText.GAIN)
-    axes.set_title(PlotText.ROBUSTNESS_TITLE)
-    _save(figure, paths, mode, ReportFigure.ROBUSTNESS_SUMMARY)
+    axes.set_yticks(positions, [_forest_label(row) for row in table.iter_rows(named=True)])
+    axes.tick_params(axis=LibraryOption.AXIS_Y, labelsize=PlotGeometry.SMALL_FONT)
+    axes.set_ylim(table.height - 0.5, -0.5)
+    axes.grid(axis=LibraryOption.AXIS_X, alpha=PlotGeometry.GRID_ALPHA)
+    axes.set_xlabel(PlotText.FOREST_AXIS)
+    axes.set_title(PlotText.FOREST_TITLE)
+    axes.legend(
+        loc=LibraryOption.UPPER_CENTER,
+        bbox_to_anchor=(PlotGeometry.LEGEND_ANCHOR_X, PlotGeometry.LEGEND_ANCHOR_Y),
+    )
+    figure.subplots_adjust(left=PlotGeometry.FOREST_LEFT)
+    _save(figure, paths, mode, ReportFigure.CTK_ROBUSTNESS_FOREST)
+
+
+def federated_arm_tradeoff_figure(paths: Paths, config: Config, mode: ExecutionMode) -> None:
+    table = pl.read_parquet(paths.analysis_file(mode, Artifact.ARM_TRADEOFF))
+    if table.height:
+        table = table.filter(pl.col(Column.COMPARISON) == TradeoffComparison.VERSUS_LOCAL)
+    if table.height == 0:
+        _save(_blank(), paths, mode, ReportFigure.FEDERATED_ARM_TRADEOFF)
+        return
+    measures = [
+        TradeoffMeasure.FEDERATION_UNSEEN_RECALL_CHANGE,
+        TradeoffMeasure.OWN_DOMAIN_UNSEEN_RECALL_CHANGE,
+        TradeoffMeasure.WORST_CLIENT_UNSEEN_RECALL_CHANGE,
+        TradeoffMeasure.CTK_GAIN,
+        TradeoffMeasure.KNOWN_FAMILY_RECALL_CHANGE,
+        TradeoffMeasure.REALISED_FPR_CHANGE,
+    ]
+    arms = [
+        Learner.FEDAVG,
+        Learner.FEDPROX,
+        Learner.FEDAVG_FINETUNE,
+        Learner.BLEND,
+        Learner.CENTRAL,
+    ]
+    figure = _blank(PlotGeometry.PANEL_WIDTH, PlotGeometry.PANEL_HEIGHT)
+    for index, measure in enumerate(measures, start=1):
+        axes = figure.add_subplot(SubplotGrid.PANEL_ROWS, SubplotGrid.PANEL_COLUMNS, index)
+        rows = table.filter(pl.col(Column.MEASURE) == measure)
+        present = [arm for arm in arms if rows.filter(pl.col(Column.LEARNER) == arm).height]
+        means = _values(
+            [
+                rows.filter(pl.col(Column.LEARNER) == arm)[Column.MEAN_DIFFERENCE].item()
+                for arm in present
+            ]
+        )
+        low = _values(
+            [rows.filter(pl.col(Column.LEARNER) == arm)[Column.CI_LOW].item() for arm in present]
+        )
+        high = _values(
+            [rows.filter(pl.col(Column.LEARNER) == arm)[Column.CI_HIGH].item() for arm in present]
+        )
+        positions = np.arange(len(present))
+        axes.errorbar(
+            means,
+            positions,
+            xerr=[
+                means - np.where(np.isnan(low), means, low),
+                np.where(np.isnan(high), means, high) - means,
+            ],
+            fmt=LibraryOption.MARKER_CIRCLE,
+        )
+        axes.axvline(0.0, color=LibraryOption.NEUTRAL_COLOR)
+        axes.set_yticks(positions, present)
+        axes.set_ylim(len(present) - 0.5, -0.5)
+        axes.set_title(measure, fontsize=PlotGeometry.SMALL_FONT)
+        axes.tick_params(labelsize=PlotGeometry.SMALL_FONT)
+        if measure is TradeoffMeasure.KNOWN_FAMILY_RECALL_CHANGE:
+            tolerance = config.statistics.gates.known_family_tolerance
+            for bound in (-tolerance, tolerance):
+                axes.axvline(bound, linestyle=LibraryOption.LINE_DASHED)
+    figure.subplots_adjust(wspace=PlotGeometry.PANEL_SPACE, hspace=PlotGeometry.PANEL_SPACE)
+    figure.suptitle(PlotText.TRADEOFF_SUPTITLE)
+    _save(figure, paths, mode, ReportFigure.FEDERATED_ARM_TRADEOFF)
+
+
+def natural_versus_controlled(paths: Paths, mode: ExecutionMode) -> None:
+    table = pl.read_parquet(paths.analysis_file(mode, Artifact.NATURAL_COMPARISON))
+    if table.height:
+        table = table.filter(pl.col(Column.LEARNER) == Learner.FEDAVG)
+    if table.height == 0:
+        _save(_blank(), paths, mode, ReportFigure.NATURAL_VERSUS_CONTROLLED)
+        return
+    metrics = [
+        Metric.FEDERATION_UNSEEN_RECALL,
+        Metric.OWN_DOMAIN_UNSEEN_RECALL,
+        Metric.WORST_CLIENT_UNSEEN_RECALL,
+    ]
+    estimands = [
+        (Estimand.TOTAL_GAIN, PlotText.ESTIMAND_TOTAL),
+        (Estimand.POOLING_GAIN, PlotText.ESTIMAND_POOLING),
+        (Estimand.CTK_GAIN, PlotText.ESTIMAND_CTK),
+    ]
+    figure = _blank(PlotGeometry.PANEL_WIDTH, PlotGeometry.HEIGHT)
+    for index, metric in enumerate(metrics, start=1):
+        axes = figure.add_subplot(SubplotGrid.ROWS, SubplotGrid.THREE_COLUMNS, index)
+        positions = np.arange(len(estimands))
+        for offset, experiment, label in (
+            (
+                -PlotGeometry.BAR_WIDTH / 2,
+                ExperimentName.CONTROLLED_EXPOSURE,
+                PlotText.CONTROLLED_LABEL,
+            ),
+            (PlotGeometry.BAR_WIDTH / 2, ExperimentName.NATURAL_SCARCITY, PlotText.NATURAL_LABEL),
+        ):
+            bands = [_band(table, experiment, metric, estimand) for estimand, _ in estimands]
+            axes.bar(
+                positions + offset,
+                _values([band.mean for band in bands]),
+                PlotGeometry.BAR_WIDTH,
+                yerr=np.vstack(
+                    [
+                        _values([band.lower for band in bands]),
+                        _values([band.upper for band in bands]),
+                    ]
+                ),
+                label=label,
+            )
+        axes.set_xticks(positions, [text for _, text in estimands])
+        axes.set_title(metric, fontsize=PlotGeometry.SMALL_FONT)
+        axes.axhline(0.0, color=LibraryOption.NEUTRAL_COLOR)
+        if index == 1:
+            axes.legend()
+    figure.subplots_adjust(wspace=PlotGeometry.PANEL_SPACE)
+    figure.suptitle(PlotText.NATURAL_TITLE)
+    _save(figure, paths, mode, ReportFigure.NATURAL_VERSUS_CONTROLLED)
+
+
+def _band(
+    table: ComparisonTable, experiment: ExperimentName, metric: Metric, estimand: Estimand
+) -> PlotBand:
+    row = table.filter(
+        (pl.col(Column.EXPERIMENT) == experiment)
+        & (pl.col(Column.METRIC) == metric)
+        & (pl.col(Column.ESTIMAND) == estimand)
+    )
+    if row.height == 0:
+        return PlotBand(mean=None, lower=None, upper=None)
+    mean = row[Column.MEAN_DIFFERENCE].item()
+    low, high = row[Column.CI_LOW].item(), row[Column.CI_HIGH].item()
+    return PlotBand(
+        mean=mean,
+        lower=None if low is None else mean - low,
+        upper=None if high is None else high - mean,
+    )
 
 
 def build_figures(paths: Paths, config: Config, mode: ExecutionMode) -> Directory:
@@ -338,5 +568,7 @@ def build_figures(paths: Paths, config: Config, mode: ExecutionMode) -> Director
     family_rescue_map(paths, mode)
     feature_novelty_versus_ctk_gain(paths, mode)
     known_versus_unseen_tradeoff(paths, config, mode)
-    robustness_summary(paths, mode)
-    return paths.report_figure_file(mode, ReportFigure.ROBUSTNESS_SUMMARY, FileSuffix.PNG).parent
+    ctk_robustness_forest(paths, config, mode)
+    federated_arm_tradeoff_figure(paths, config, mode)
+    natural_versus_controlled(paths, mode)
+    return paths.report_figure_file(mode, ReportFigure.CTK_ROBUSTNESS_FOREST, FileSuffix.PNG).parent

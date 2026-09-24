@@ -1,8 +1,9 @@
 import numpy as np
 import polars as pl
 
+from ctk_android.analysis.dose_response import dose_levels, with_level_exposure
 from ctk_android.config import Config
-from ctk_android.data.cache import records_to_frame
+from ctk_android.data.cache import is_one_of, records_to_frame
 from ctk_android.enums import (
     AllowedWording,
     ClaimName,
@@ -224,17 +225,8 @@ def generic_pooling_majority(evidence: GateEvidence, config: Config) -> ClaimRes
 
 def dose_response(evidence: GateEvidence, config: Config) -> ClaimResult:
     gates = config.statistics.gates
-    curve = (
-        evidence.dose.filter(pl.col(Column.LEARNER) == Learner.FEDAVG)
-        .group_by(Column.DOSE)
-        .agg(
-            pl.col(Column.RECALL).mean(),
-            pl.col(Column.EFFECTIVE_DOSE).mean(),
-            pl.col(Column.CTK_GAIN).mean(),
-        )
-        .filter(pl.col(Column.DOSE).is_not_null())
-        .sort(Column.DOSE)
-    )
+    fedavg = evidence.dose.filter(pl.col(Column.LEARNER) == Learner.FEDAVG)
+    curve = dose_levels(fedavg, gates.dose_min_peers)
     if curve.height < 2:
         return _result(
             ClaimName.DOSE_RESPONSE,
@@ -244,15 +236,12 @@ def dose_response(evidence: GateEvidence, config: Config) -> ClaimResult:
         )
     recall = curve[Column.RECALL].to_numpy()
     monotone = (np.diff(recall) >= -gates.dose_monotone_tolerance).all().item()
-    enough = curve.filter(pl.col(Column.EFFECTIVE_DOSE) >= gates.dose_min_peers)
+    enough = curve.filter(pl.col(Column.MEETS_DOSE_CRITERION))
     gain = enough[Column.CTK_GAIN].to_numpy().max().item() if enough.height else None
     improves = gain is not None and gain >= gates.dose_min_gain
     family_gains = (
-        evidence.dose.filter(
-            (pl.col(Column.LEARNER) == Learner.FEDAVG)
-            & pl.col(Column.DOSE).is_not_null()
-            & (pl.col(Column.EFFECTIVE_DOSE) >= gates.dose_min_peers)
-        )
+        with_level_exposure(fedavg)
+        .filter(pl.col(Column.LEVEL_EFFECTIVE_DOSE) >= gates.dose_min_peers)
         .group_by(Column.FAMILY)
         .agg(pl.col(Column.CTK_GAIN).mean())
     )
@@ -326,13 +315,26 @@ def known_family_safety(evidence: GateEvidence, config: Config) -> ClaimResult:
         return _result(ClaimName.KNOWN_FAMILY_SAFETY, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, 2)
     passed = [abs(recall_shift) <= gates.known_family_tolerance, fpr_shift <= gates.fpr_tolerance]
     status = ClaimStatus.PROMOTED if all(passed) else ClaimStatus.REJECTED
-    return _result(ClaimName.KNOWN_FAMILY_SAFETY, status, sum(passed), len(passed))
+    return _result(
+        ClaimName.KNOWN_FAMILY_SAFETY,
+        status,
+        sum(passed),
+        len(passed),
+        AllowedWording.STRONGEST_ARM_ONLY if status is ClaimStatus.PROMOTED else None,
+    )
+
+
+def frozen_family_set_experiments() -> tuple[ExperimentName, ...]:
+    return (ExperimentName.CONTROLLED_EXPOSURE, ExperimentName.REPLICATION_FAMILY_SET)
 
 
 def family_dependence(evidence: GateEvidence, config: Config) -> ClaimResult:
     gates = config.statistics.gates
     per_family = (
-        evidence.family_seed.filter(pl.col(Column.LEARNER) == Learner.FEDAVG)
+        evidence.family_seed.filter(
+            (pl.col(Column.LEARNER) == Learner.FEDAVG)
+            & is_one_of(Column.EXPERIMENT, list(frozen_family_set_experiments()))
+        )
         .group_by(Column.FAMILY)
         .agg(pl.col(Column.CTK_GAIN).mean())
     )

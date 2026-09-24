@@ -1,4 +1,5 @@
 import shutil
+from datetime import UTC, datetime
 
 import polars as pl
 
@@ -30,9 +31,11 @@ from ctk_android.types import (
     CodeProvenance,
     File,
     ManifestEntry,
+    Moment,
     PromotionDecision,
     ProtocolProvenance,
     ResultsManifest,
+    RunIndexTable,
     RunKey,
     RunManifest,
     SourceFingerprint,
@@ -40,7 +43,7 @@ from ctk_android.types import (
     Stale,
     Table,
 )
-from ctk_android.workflows.doctor import git_revision
+from ctk_android.workflows.doctor import git_revision, revision_at_or_before, sources_are_clean
 from ctk_android.workflows.plan import experiments_for, planned_targets
 
 
@@ -57,6 +60,15 @@ def evidence_files() -> list[Artifact]:
         Artifact.PEER_DOSE_RESPONSE,
         Artifact.FEATURE_NOVELTY,
         Artifact.ROBUSTNESS,
+        Artifact.ANCHORED_WORST_CLIENT,
+        Artifact.ANCHORED_CLIENT_SELECTION,
+        Artifact.ARM_TRADEOFF,
+        Artifact.ROBUSTNESS_SYNTHESIS,
+        Artifact.FAMILY_PATTERNS,
+        Artifact.NATURAL_COMPARISON,
+        Artifact.PERMUTATION_AUDIT,
+        Artifact.MECHANISM_HEADROOM,
+        Artifact.OPERATING_FIDELITY,
     ]
 
 
@@ -117,6 +129,24 @@ def _write_csv(frame: Table, target: File) -> ManifestEntry:
     )
 
 
+def _first_run_written(paths: Paths, index: RunIndexTable, mode: ExecutionMode) -> Moment:
+    written = [
+        paths.run_file(
+            RunKey(
+                mode=mode,
+                experiment=row[Column.EXPERIMENT],
+                seed=row[Column.SEED],
+                salt=row[Column.SALT],
+            ),
+            Artifact.STATUS,
+        )
+        .stat()
+        .st_mtime
+        for row in index.filter(pl.col(Column.STATUS) == RunStatus.COMPLETED).iter_rows(named=True)
+    ]
+    return datetime.fromtimestamp(min(written), tz=UTC)
+
+
 def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecision:
     blocks = promotion_blocks(paths, config, mode)
     if blocks:
@@ -170,7 +200,11 @@ def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecis
     )
     write_record(
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.CODE),
-        CodeProvenance(revision=git_revision(paths).detail),
+        CodeProvenance(
+            execution_revision=revision_at_or_before(paths, _first_run_written(paths, index, mode)),
+            analysis_revision=git_revision(paths).detail,
+            analysis_sources_clean=sources_are_clean(paths),
+        ),
     )
     write_record(
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.PROTOCOL),

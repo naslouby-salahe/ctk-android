@@ -1,5 +1,6 @@
 import polars as pl
 
+from ctk_android.analysis.dose_response import dose_levels
 from ctk_android.config import Config
 from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (
@@ -23,8 +24,11 @@ from ctk_android.types import (
     DecompositionReportTable,
     DoseReportTable,
     FamilyLevelTable,
+    FamilyRescueTable,
+    Fraction,
     ReportTables,
     RobustnessTable,
+    Table,
 )
 
 
@@ -105,31 +109,39 @@ def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> Decomposit
     )
 
 
-def peer_dose_response(paths: Paths, mode: ExecutionMode) -> DoseReportTable:
-    return (
-        pl.read_parquet(paths.analysis_file(mode, Artifact.PEER_DOSE_RESPONSE))
-        .group_by(Column.LEARNER, Column.DOSE)
-        .agg(
-            pl.col(Column.EFFECTIVE_DOSE).mean(),
-            pl.col(Column.RECALL).mean(),
-            pl.col(Column.RECALL).std().alias(Column.RECALL_STD),
-            pl.col(Column.CTK_GAIN).mean(),
-        )
-        .sort(Column.LEARNER, Column.DOSE, nulls_last=True)
+def peer_dose_response(paths: Paths, config: Config, mode: ExecutionMode) -> DoseReportTable:
+    return dose_levels(
+        pl.read_parquet(paths.analysis_file(mode, Artifact.PEER_DOSE_RESPONSE)),
+        config.statistics.gates.dose_min_peers,
+    ).select(
+        Column.LEARNER,
+        Column.DOSE_LEVEL,
+        Column.DOSE,
+        Column.EFFECTIVE_DOSE,
+        Column.RECALL,
+        Column.RECALL_STD,
+        Column.CTK_GAIN,
+        Column.OBSERVATIONS,
+        Column.OBSERVATIONS_MET,
+        Column.MEETS_DOSE_CRITERION,
     )
 
 
+def classify_families(rescue: FamilyRescueTable, poor: Fraction) -> FamilyLevelTable:
+    return rescue.with_columns(
+        pl.when(pl.col(Column.FULL_RECALL).is_null())
+        .then(pl.lit(FamilyOutcome.NOT_CLASSIFIABLE))
+        .when(pl.col(Column.FULL_RECALL) < poor)
+        .then(pl.lit(FamilyOutcome.POORLY_RESCUED))
+        .otherwise(pl.lit(FamilyOutcome.RESCUED))
+        .alias(Column.CLASSIFICATION)
+    ).sort(Column.EXPERIMENT, Column.LEARNER, Column.FAMILY)
+
+
 def family_level(paths: Paths, config: Config, mode: ExecutionMode) -> FamilyLevelTable:
-    poor = config.statistics.gates.poor_full_recall
-    return (
-        pl.read_parquet(paths.analysis_file(mode, Artifact.FAMILY_RESCUE))
-        .with_columns(
-            pl.when(pl.col(Column.FULL_RECALL) < poor)
-            .then(pl.lit(FamilyOutcome.POORLY_RESCUED))
-            .otherwise(pl.lit(FamilyOutcome.RESCUED))
-            .alias(Column.CLASSIFICATION)
-        )
-        .sort(Column.EXPERIMENT, Column.LEARNER, Column.FAMILY)
+    return classify_families(
+        pl.read_parquet(paths.analysis_file(mode, Artifact.FAMILY_RESCUE)),
+        config.statistics.gates.poor_full_recall,
     )
 
 
@@ -139,8 +151,12 @@ def claim_gates(paths: Paths, mode: ExecutionMode) -> ClaimsTable:
 
 def robustness(paths: Paths, mode: ExecutionMode) -> RobustnessTable:
     return pl.read_parquet(paths.analysis_file(mode, Artifact.ROBUSTNESS)).sort(
-        Column.EXPERIMENT, Column.SENSITIVITY
+        Column.EXPERIMENT, Column.SALT, Column.SENSITIVITY
     )
+
+
+def _analysis(paths: Paths, mode: ExecutionMode, artifact: Artifact) -> Table:
+    return pl.read_parquet(paths.analysis_file(mode, artifact))
 
 
 def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTables:
@@ -148,8 +164,19 @@ def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTab
         ReportTable.DATASET_CLIENT_AUDIT: dataset_client_audit(paths),
         ReportTable.PRIMARY_ARM_COMPARISON: primary_arm_comparison(paths, config, mode),
         ReportTable.COLLABORATION_DECOMPOSITION: collaboration_decomposition(paths, mode),
-        ReportTable.PEER_DOSE_RESPONSE: peer_dose_response(paths, mode),
+        ReportTable.PEER_DOSE_RESPONSE: peer_dose_response(paths, config, mode),
         ReportTable.FAMILY_LEVEL: family_level(paths, config, mode),
         ReportTable.CLAIM_GATES: claim_gates(paths, mode),
         ReportTable.ROBUSTNESS: robustness(paths, mode),
+        ReportTable.ANCHORED_WORST_CLIENT: _analysis(paths, mode, Artifact.ANCHORED_WORST_CLIENT),
+        ReportTable.ANCHORED_CLIENT_SELECTION: _analysis(
+            paths, mode, Artifact.ANCHORED_CLIENT_SELECTION
+        ),
+        ReportTable.ARM_TRADEOFF: _analysis(paths, mode, Artifact.ARM_TRADEOFF),
+        ReportTable.ROBUSTNESS_SYNTHESIS: _analysis(paths, mode, Artifact.ROBUSTNESS_SYNTHESIS),
+        ReportTable.FAMILY_PATTERNS: _analysis(paths, mode, Artifact.FAMILY_PATTERNS),
+        ReportTable.NATURAL_COMPARISON: _analysis(paths, mode, Artifact.NATURAL_COMPARISON),
+        ReportTable.PERMUTATION_AUDIT: _analysis(paths, mode, Artifact.PERMUTATION_AUDIT),
+        ReportTable.MECHANISM_HEADROOM: _analysis(paths, mode, Artifact.MECHANISM_HEADROOM),
+        ReportTable.OPERATING_FIDELITY: _analysis(paths, mode, Artifact.OPERATING_FIDELITY),
     }

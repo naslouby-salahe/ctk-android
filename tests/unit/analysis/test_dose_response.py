@@ -1,10 +1,16 @@
 import polars as pl
 import pytest
 
-from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
+from ctk_android.analysis.dose_response import (
+    dose_curve,
+    dose_levels,
+    dose_recall,
+    effective_peer_dose,
+)
 from ctk_android.enums import (
     ClientId,
     Column,
+    DoseLevel,
     EvaluationPopulation,
     ExperimentName,
     ExposureCondition,
@@ -85,3 +91,13 @@ def test_effective_dose_counts_peer_rows_only() -> None:
     assert effective[0] == 0
     assert effective[100] == 99
     assert effective[None] == 240
+
+
+def test_the_all_available_level_is_a_level_with_its_own_effective_exposure() -> None:
+    levels = dose_levels(_curve(), minimum_peers=100)
+    by_level = {row[Column.DOSE_LEVEL]: row for row in levels.iter_rows(named=True)}
+    assert by_level[DoseLevel.ALL_AVAILABLE][Column.DOSE] is None
+    assert by_level[DoseLevel.ALL_AVAILABLE][Column.EFFECTIVE_DOSE] == 240
+    assert by_level[DoseLevel.ALL_AVAILABLE][Column.MEETS_DOSE_CRITERION]
+    assert not by_level["100"][Column.MEETS_DOSE_CRITERION]
+    assert levels[Column.DOSE_LEVEL].to_list()[-1] == DoseLevel.ALL_AVAILABLE

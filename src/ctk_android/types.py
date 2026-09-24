@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Protocol
 
@@ -18,12 +19,14 @@ from ctk_android.enums import (
     ClientId,
     Column,
     ContrastFamily,
+    CtkAggregation,
     DatasetName,
     Device,
     DoctorCheck,
     EligibilityProfile,
     Estimand,
     EvaluationPopulation,
+    EvidenceClass,
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
@@ -41,13 +44,17 @@ from ctk_android.enums import (
     NoveltyDescriptor,
     OperatingPointStatus,
     Pattern,
+    PermutationOutcome,
     PromotionBlock,
     PromotionState,
     ReportTable,
+    RobustnessScope,
     RunStatus,
     Sensitivity,
     SplitRole,
     Stage,
+    TradeoffComparison,
+    TradeoffMeasure,
     TunedParameter,
     ValidationCheck,
 )
@@ -78,6 +85,7 @@ FairnessGrid = bool
 TuningValue = NonNegativeFloat
 Axis = NonNegativeInt
 ExceedanceCount = PositiveInt
+EffectiveDoseCount = NonNegativeInt
 
 seed_adapter: TypeAdapter[Seed] = TypeAdapter(Seed)
 
@@ -122,6 +130,7 @@ ExposureTable = pl.DataFrame
 TargetsTable = pl.DataFrame
 EffectiveDoseTable = pl.DataFrame
 DoseCurveTable = pl.DataFrame
+DoseLevelTable = pl.DataFrame
 EffectsTable = pl.DataFrame
 FamilyGainsTable = pl.DataFrame
 SeedMeansTable = pl.DataFrame
@@ -189,8 +198,24 @@ WeightVector = FloatArray
 LogitChunk = Float32Array
 PlotVector = FloatArray
 SelectionTable = pl.DataFrame
+AnchoredTable = pl.DataFrame
+TradeoffTable = pl.DataFrame
+SynthesisTable = pl.DataFrame
+AuditTable = pl.DataFrame
+HeadroomTable = pl.DataFrame
+PatternTable = pl.DataFrame
+FidelityTable = pl.DataFrame
+ComparisonTable = pl.DataFrame
+ScopeMap = dict[ExperimentName, RobustnessScope]
+ForestRow = dict[str, Any]
+ForestText = str
+PlotSize = float
 
 Directory = Path
+Moment = datetime
+GitOutput = str
+GitArguments = list[str]
+Clean = bool
 LamdaReleaseFiles = list[Path]
 EntryName = Annotated[str, StringConstraints(min_length=1)]
 File = Path
@@ -589,11 +614,76 @@ class GateEvidence(FrozenRecord):
 
 class RobustnessRow(FrozenRecord):
     experiment: ExperimentName
+    salt: Salt
+    alpha: Alpha
     sensitivity: Sensitivity
-    mean_difference: Effect
+    aggregation: CtkAggregation
+    micro_pooled_ctk_gain: Effect
+    median_difference: Effect
     ci_low: Effect | None
     ci_high: Effect | None
+    positive_seeds: RowCount
     seed_count: RowCount
+
+
+class SeedSummary(FrozenRecord):
+    mean_difference: Effect
+    median_difference: Effect
+    ci_low: Effect | None
+    ci_high: Effect | None
+    positive_seeds: RowCount
+    seed_count: RowCount
+
+
+class EvidenceRow(SeedSummary):
+    evidence_class: EvidenceClass
+
+
+class AnchoredEffectRow(EvidenceRow):
+    learner: Learner
+    estimand: Estimand
+
+
+class AnchoredSelectionRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    client: ClientId
+    seeds_selected: RowCount
+    mean_local_recall: Fraction
+
+
+class TradeoffRow(EvidenceRow):
+    learner: Learner
+    comparison: TradeoffComparison
+    measure: TradeoffMeasure
+    within_tolerance: bool | None
+
+
+class SynthesisRow(EvidenceRow):
+    scope: RobustnessScope
+    experiment: ExperimentName
+    salt: Salt
+    alpha: Alpha
+    metric: Metric | None
+    learner: Learner
+    aggregation: CtkAggregation
+    sensitivity: Sensitivity | None
+    exceeds_practical_threshold: bool
+    ci_excludes_zero: bool | None
+
+
+class PermutationAuditRow(EvidenceRow):
+    experiment: ExperimentName
+    alpha: Alpha
+    metric: Metric
+    learner: Learner
+    outcome: PermutationOutcome
+
+
+class HeadroomRow(EvidenceRow):
+    learner: Learner
+    metric: Metric
+    gate_threshold: Effect
+    exceeds_gate_threshold: bool
 
 
 class AssociationRow(FrozenRecord):
@@ -630,6 +720,14 @@ class PlotAxes(Protocol):
 
     def axhline(self, *args: Any, **kwargs: Any) -> Any: ...
 
+    def axvline(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def set_ylim(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def tick_params(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def grid(self, *args: Any, **kwargs: Any) -> Any: ...
+
     def set_xticks(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def set_yticks(self, *args: Any, **kwargs: Any) -> Any: ...
@@ -649,6 +747,8 @@ class PlotFigure(Protocol):
     def add_subplot(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def suptitle(self, *args: Any, **kwargs: Any) -> Any: ...
+
+    def subplots_adjust(self, *args: Any, **kwargs: Any) -> Any: ...
 
     def colorbar(self, *args: Any, **kwargs: Any) -> Any: ...
 
@@ -677,7 +777,9 @@ class SourceProvenance(FrozenRecord):
 
 
 class CodeProvenance(FrozenRecord):
-    revision: Message
+    execution_revision: Message
+    analysis_revision: Message
+    analysis_sources_clean: bool
 
 
 class ProtocolProvenance(FrozenRecord):
