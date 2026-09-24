@@ -1,0 +1,43 @@
+training:
+  budget_rows: 6000
+  budget_rows_low: 1500
+  batch_size: 256
+  learning_rate: 0.001
+  weight_decay: 0.0
+  hidden_units: [256, 64]
+  dropout: 0.1
+  local_epochs: 20
+  central_epochs: 20
+  federated_rounds: 20
+  federated_local_epochs: 2
+  fedprox_mu: 0.01
+  finetune_epochs: 5
+  blend_weight: 0.5
+  linear_epochs: 20
+  trees:
+    max_iter: 100
+    max_depth: 6
+    learning_rate: 0.1
+  min_rows_per_class: 2
+operating:
+  primary_alpha: 0.05
+  alphas: [0.01, 0.05, 0.10]
+  min_expected_exceedances: 10
+novelty:
+  min_active_prevalence: 0.1
+dose_levels: [0, 1, 10, 50, 100, 500, 1000, -1]
+top_family_removal_count: 3
+permutation_seed_offset: 7919
+fairness_grids:
+  local_epochs: [10, 20, 40]
+  finetune_epochs: [2, 5, 10]
+  fedprox_mu: [0.001, 0.01, 0.1]
+smoke:
+  budget_rows: 800
+  epochs: 3
+  rounds: 3
+  family_set_size: 2
+  peer_min_fit: 20
+  federation_min_test: 5
+  own_domain_min_test: 2
+  target_min_remaining_fit: 50

@@ -1,0 +1,23 @@
+bootstrap_resamples: 9999
+cluster_bootstrap_resamples: 2000
+confidence_level: 0.95
+statistics_seed: 20260924
+share_min_total_gain: 0.02
+gates:
+  local_deficit_min_seeds: 8
+  local_deficit_min_gap: 0.05
+  collaboration_min_gain: 0.02
+  ctk_min_gain: 0.03
+  ctk_min_positive_seeds: 8
+  pooling_majority_share: 0.5
+  dose_min_peers: 100
+  dose_min_gain: 0.03
+  dose_max_family_share: 0.7
+  known_family_tolerance: 0.02
+  fpr_tolerance: 0.02
+  poor_full_recall: 0.60
+  novelty_min_abs_spearman: 0.3
+  mechanism_mean_gap: 0.10
+  mechanism_worst_gap: 0.15
+  permutation_null_max: 0.01
+  operating_point_tolerance: 0.02

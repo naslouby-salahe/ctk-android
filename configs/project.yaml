@@ -1,0 +1,9 @@
+seeds:
+  smoke: [0]
+  development: [1, 2, 3, 4, 5]
+  confirmatory: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+salts:
+  primary: 0
+  sensitivity: [1, 2, 3]
+device: cuda
+logging_level: INFO
