@@ -1,15 +1,14 @@
 import platform
 import sys
-from dataclasses import dataclass
 from importlib.metadata import version
 
 import numpy as np
 import polars as pl
-import structlog
 import torch
 
+from ctk_android import logs
 from ctk_android.analysis.novelty import family_descriptors
-from ctk_android.config import Config, ExperimentSpec, TrainingConfig
+from ctk_android.config import Config, TrainingConfig
 from ctk_android.data import partitions
 from ctk_android.data.cache import (
     fingerprint_model,
@@ -33,6 +32,7 @@ from ctk_android.enums import (
     FailureReason,
     Learner,
     LogEvent,
+    LogField,
     Metric,
     OperatingPointStatus,
     RunStatus,
@@ -42,31 +42,38 @@ from ctk_android.enums import (
 )
 from ctk_android.experiment import evaluation, exposure, metrics, training
 from ctk_android.experiment.models import resolve_device
+from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
     ArmKey,
-    ArmScores,
+    ArmResult,
+    ClientPools,
+    ClientScorers,
     CtkError,
     DoseRequest,
     EnvironmentRecord,
+    ExperimentSpec,
+    ExposureSetting,
     File,
-    IntArray,
+    LogFields,
+    Overwrite,
     PartitionKey,
+    ResultsByArm,
+    RowCount,
     RunKey,
     RunManifest,
     RunReport,
     RunStatusDocument,
-    Scorer,
     Seed,
     StudyData,
+    SummaryTable,
     TargetPair,
+    TrainingByArm,
     TrainingRows,
     ValidationDocument,
     ValidationRecord,
 )
 from ctk_android.workflows.plan import planned_targets
-
-log = structlog.get_logger()
 
 
 def local_arm() -> ArmKey:
@@ -81,10 +88,19 @@ def learner_stream(learner: Learner) -> Seed:
     return list(Learner).index(learner) + 1
 
 
-@dataclass(frozen=True)
-class ArmResult:
-    scores: ArmScores
-    scorers: dict[ClientId, Scorer]
+def planned_arm_count(spec: ExperimentSpec, config: Config) -> RowCount:
+    local = 1 if Learner.LOCAL in spec.learners else 0
+    shared = sum(learner is not Learner.LOCAL for learner in spec.learners)
+    return local + shared * len(settings_for(spec, config))
+
+
+def _run_fields(key: RunKey) -> LogFields:
+    return {
+        LogField.EXPERIMENT: key.experiment,
+        LogField.MODE: key.mode,
+        LogField.SEED: key.seed,
+        LogField.SALT: key.salt,
+    }
 
 
 def training_config(config: Config, mode: ExecutionMode) -> TrainingConfig:
@@ -93,15 +109,15 @@ def training_config(config: Config, mode: ExecutionMode) -> TrainingConfig:
     return config.experiments.training
 
 
-def settings_for(
-    spec: ExperimentSpec, config: Config
-) -> list[tuple[ExposureCondition, DoseRequest]]:
+def settings_for(spec: ExperimentSpec, config: Config) -> list[ExposureSetting]:
     if spec.dose_sweep:
         doses: list[DoseRequest] = list(config.experiments.dose_levels)
         if config.experiments.dose_include_all_available:
             doses.append(None)
-        return [(ExposureCondition.PEER_PRESENT, dose) for dose in doses]
-    return [(condition, None) for condition in spec.conditions]
+        return [
+            ExposureSetting(condition=ExposureCondition.PEER_PRESENT, dose=dose) for dose in doses
+        ]
+    return [ExposureSetting(condition=condition, dose=None) for condition in spec.conditions]
 
 
 def _train_learner(
@@ -109,7 +125,7 @@ def _train_learner(
     context: training.TrainingContext,
     rows: TrainingRows,
     study: StudyData,
-    pools: dict[ClientId, IntArray],
+    pools: ClientPools,
     local: ArmResult | None,
     federated: ArmResult | None,
 ) -> ArmResult:
@@ -120,12 +136,14 @@ def _train_learner(
             context, training.pooled_rows(rows), config.central_epochs, stream
         )
         return ArmResult(
-            evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer)
+            scores=evaluation.score_shared(scorer, study, pools),
+            scorers=dict.fromkeys(ClientId, scorer),
         )
     if learner in (Learner.FEDAVG, Learner.FEDPROX):
         scorer = training.train_federated(context, rows, learner, stream)
         return ArmResult(
-            evaluation.score_shared(scorer, study, pools), dict.fromkeys(ClientId, scorer)
+            scores=evaluation.score_shared(scorer, study, pools),
+            scorers=dict.fromkeys(ClientId, scorer),
         )
     if federated is None:
         raise CtkError(
@@ -142,11 +160,12 @@ def _train_learner(
             )
             for index, client in enumerate(ClientId)
         }
-        return ArmResult(evaluation.score_per_client(tuned, study, pools), tuned)
+        return ArmResult(scores=evaluation.score_per_client(tuned, study, pools), scorers=tuned)
     if local is None:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.NEEDS_LOCAL)
     return ArmResult(
-        evaluation.blend_scores(local.scores, federated.scores, config.blend_weight), {}
+        scores=evaluation.blend_scores(local.scores, federated.scores, config.blend_weight),
+        scorers={},
     )
 
 
@@ -154,7 +173,7 @@ def _train_local(
     context: training.TrainingContext,
     rows: TrainingRows,
     study: StudyData,
-    pools: dict[ClientId, IntArray],
+    pools: ClientPools,
 ) -> ArmResult:
     scorers = {
         client: training.train_scorer(
@@ -165,12 +184,12 @@ def _train_local(
         )
         for index, client in enumerate(ClientId)
     }
-    return ArmResult(evaluation.score_per_client(scorers, study, pools), scorers)
+    return ArmResult(scores=evaluation.score_per_client(scorers, study, pools), scorers=scorers)
 
 
 def _pool_validations(
     attributes: evaluation.RowAttributes,
-    pools: dict[ClientId, IntArray],
+    pools: ClientPools,
     targets: tuple[TargetPair, ...],
 ) -> list[ValidationRecord]:
     calibration_ok = True
@@ -199,7 +218,7 @@ def _pool_validations(
     ]
 
 
-def _operating_validation(summary: pl.DataFrame, config: Config) -> ValidationRecord:
+def _operating_validation(summary: SummaryTable, config: Config) -> ValidationRecord:
     fpr = summary.filter(
         (pl.col(Column.METRIC) == Metric.REALISED_FPR)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
@@ -217,7 +236,7 @@ def _operating_validation(summary: pl.DataFrame, config: Config) -> ValidationRe
     )
 
 
-def _save_models(file: File, scorers: dict[ClientId, Scorer]) -> None:
+def _save_models(file: File, scorers: ClientScorers) -> None:
     states = {
         client: scorer.network.state_dict()
         for client, scorer in scorers.items()
@@ -240,12 +259,13 @@ def _environment(device: Device) -> EnvironmentRecord:
     )
 
 
-def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> RunReport:
+def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite) -> RunReport:
     directory = paths.run_dir(key)
-    planned_status, targets = planned_targets(paths, key)
+    planned = planned_targets(paths, key)
+    planned_status, targets = planned.status, planned.targets
     provenance = run_provenance(paths, config, key, targets)
     if not overwrite and is_reusable(paths.provenance_file(directory), provenance):
-        log.info(LogEvent.RUN_REUSED, experiment=key.experiment, seed=key.seed)
+        logs.info(LogEvent.RUN_REUSED, _run_fields(key))
         return RunReport(key=key, status=RunStatus.COMPLETED, reused=True, directory=directory)
     if planned_status is RunStatus.INFEASIBLE:
         write_record(
@@ -254,9 +274,12 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
                 status=RunStatus.INFEASIBLE, reason=FailureReason.NO_ELIGIBLE_TARGETS
             ),
         )
+        logs.warning(
+            LogEvent.RUN_INFEASIBLE,
+            {**_run_fields(key), LogField.REASON: FailureReason.NO_ELIGIBLE_TARGETS},
+        )
         write_provenance(paths.provenance_file(directory), provenance)
         return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
-    log.info(LogEvent.RUN_STARTED, experiment=key.experiment, seed=key.seed, salt=key.salt)
     spec = config.experiments.experiments[key.experiment]
     train_config = training_config(config, key.mode)
     partition_key = PartitionKey(
@@ -285,9 +308,20 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
     orders = exposure.training_orders(study, key.seed, key.salt)
     priorities = exposure.row_priorities(study, key.seed, key.salt)
     budget = config.experiments.budgets[spec.budget]
+    watch = Stopwatch()
+    logs.info(
+        LogEvent.RUN_STARTED,
+        {
+            **_run_fields(key),
+            LogField.DEVICE: device,
+            LogField.TARGETS: len(targets),
+            LogField.BUDGET: budget,
+            LogField.ARMS: planned_arm_count(spec, config),
+        },
+    )
 
-    results: dict[ArmKey, ArmResult] = {}
-    trainings: dict[ArmKey, TrainingRows] = {}
+    results: ResultsByArm = {}
+    trainings: TrainingByArm = {}
     fit_pool = orders
     need_local = Learner.LOCAL in spec.learners or Learner.BLEND in spec.learners
     local: ArmResult | None = None
@@ -299,16 +333,36 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
             {},
             budget,
         )
+        arm_watch = Stopwatch()
         local = _train_local(context, local_rows, study, pools)
+        logs.info(
+            LogEvent.ARM_TRAINED,
+            {
+                **_run_fields(key),
+                LogField.ARM: local_arm().label(),
+                LogField.TRAIN_ROWS: sum(rows.size for rows in local_rows.values()),
+                LogField.SECONDS: arm_watch.seconds(),
+            },
+        )
         if Learner.LOCAL in spec.learners:
             results[local_arm()] = local
             trainings[local_arm()] = local_rows
     reported = tuple(learner for learner in global_learners() if learner in spec.learners)
-    for condition, dose in settings_for(spec, config):
+    for setting in settings_for(spec, config):
+        condition, dose = setting.condition, setting.dose
         base = ArmKey(learner=Learner.CENTRAL, condition=condition, dose=dose)
         exposure_spec = exposure.exposure_spec(base, spec.exposure_mode, targets)
         allowed = exposure.allowed_dose_rows(study, masks, exposure_spec, priorities)
         rows = exposure.select_training(orders, masks, exposure_spec, allowed, budget)
+        logs.info(
+            LogEvent.EXPOSURE_SELECTED,
+            {
+                **_run_fields(key),
+                LogField.CONDITION: condition,
+                LogField.DOSE: dose,
+                LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
+            },
+        )
         federated: ArmResult | None = None
         for learner in global_learners():
             needed = learner in reported or (
@@ -317,6 +371,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
             )
             if not needed:
                 continue
+            arm_watch = Stopwatch()
             result = _train_learner(learner, context, rows, study, pools, local, federated)
             if learner is Learner.FEDAVG:
                 federated = result
@@ -324,8 +379,17 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
                 arm = ArmKey(learner=learner, condition=condition, dose=dose)
                 results[arm] = result
                 trainings[arm] = rows
-                log.info(LogEvent.ARM_TRAINED, arm=arm.label(), seed=key.seed)
+                logs.info(
+                    LogEvent.ARM_TRAINED,
+                    {
+                        **_run_fields(key),
+                        LogField.ARM: arm.label(),
+                        LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
+                        LogField.SECONDS: arm_watch.seconds(),
+                    },
+                )
 
+    evaluation_watch = Stopwatch()
     evaluations = [
         evaluation.evaluate_arm(
             arm, result.scores, pools, attributes, targets, config.experiments.operating
@@ -343,6 +407,14 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         clients, family_table, discrimination, operating, rule.own_domain_min_test
     )
 
+    logs.info(
+        LogEvent.EVALUATION_FINISHED,
+        {
+            **_run_fields(key),
+            LogField.ARMS: len(results),
+            LogField.SECONDS: evaluation_watch.seconds(),
+        },
+    )
     exposure_table = pl.concat(
         [exposure.exposure_counts(trainings[arm], masks, arm) for arm in trainings]
     )
@@ -353,6 +425,23 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         *_pool_validations(attributes, pools, targets),
     ]
     validations.append(_operating_validation(summary, config))
+    for record in validations:
+        report = logs.info if record.passed else logs.warning
+        report(
+            LogEvent.VALIDATION_PASSED if record.passed else LogEvent.VALIDATION_FAILED,
+            {
+                **_run_fields(key),
+                LogField.CHECK: record.check,
+                LogField.DETAIL: record.detail,
+            },
+        )
+    unresolved = summary.filter(
+        pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE
+    )[Column.ALPHA].unique()
+    for alpha in unresolved.to_list():
+        logs.warning(
+            LogEvent.OPERATING_POINT_UNRESOLVED, {**_run_fields(key), LogField.ALPHA: alpha}
+        )
     structural = [v for v in validations if v.check is not ValidationCheck.OPERATING_POINT_REALISED]
     status = (
         RunStatus.COMPLETED if all(v.passed for v in structural) else RunStatus.FAILED_VALIDATION
@@ -417,7 +506,15 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: bool) -> R
         ),
     )
     write_provenance(paths.provenance_file(directory), provenance)
-    log.info(LogEvent.RUN_FINISHED, experiment=key.experiment, seed=key.seed, status=status)
+    logs.info(
+        LogEvent.RUN_FINISHED,
+        {
+            **_run_fields(key),
+            LogField.STATUS: status,
+            LogField.ARMS: len(results),
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
     return RunReport(key=key, status=status, reused=False, directory=directory)
 
 
@@ -427,7 +524,7 @@ def run_experiment(
     experiment: ExperimentName,
     mode: ExecutionMode,
     seeds: tuple[Seed, ...],
-    overwrite: bool,
+    overwrite: Overwrite,
 ) -> list[RunReport]:
     spec = config.experiments.experiments[experiment]
     if mode not in spec.modes:
@@ -453,8 +550,9 @@ def run_experiment(
                     paths.run_file(key, Artifact.STATUS),
                     RunStatusDocument(status=RunStatus.INFEASIBLE, reason=error.reason),
                 )
-                log.error(
-                    LogEvent.STAGE_FAILED, experiment=experiment, seed=seed, reason=error.reason
+                logs.error(
+                    LogEvent.RUN_INFEASIBLE,
+                    {**_run_fields(key), LogField.REASON: error.reason, LogField.ERROR: f"{error}"},
                 )
                 reports.append(
                     RunReport(

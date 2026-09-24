@@ -4,11 +4,18 @@ from ctk_android.config import Config
 from ctk_android.data.cache import read_record
 from ctk_android.enums import Artifact, Column, ExecutionMode, RunStatus
 from ctk_android.paths import Paths
-from ctk_android.types import RunEvidence, RunKey, RunStatusDocument
+from ctk_android.types import (
+    FrameLists,
+    RunEvidence,
+    RunIndexTable,
+    RunKey,
+    RunStatusDocument,
+    Table,
+)
 from ctk_android.workflows.plan import experiments_for
 
 
-def _tagged(frame: pl.DataFrame, key: RunKey) -> pl.DataFrame:
+def _tagged(frame: Table, key: RunKey) -> Table:
     return frame.with_columns(
         pl.lit(key.experiment).alias(Column.EXPERIMENT),
         pl.lit(key.seed).alias(Column.SEED),
@@ -17,8 +24,8 @@ def _tagged(frame: pl.DataFrame, key: RunKey) -> pl.DataFrame:
 
 
 def collect_evidence(paths: Paths, config: Config, mode: ExecutionMode) -> RunEvidence:
-    index: list[pl.DataFrame] = []
-    tables: dict[Artifact, list[pl.DataFrame]] = {
+    index: list[RunIndexTable] = []
+    tables: FrameLists = {
         Artifact.SUMMARY: [],
         Artifact.CLIENT_METRICS: [],
         Artifact.FAMILY_METRICS: [],

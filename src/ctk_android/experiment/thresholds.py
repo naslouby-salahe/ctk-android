@@ -1,11 +1,11 @@
 import numpy as np
 
 from ctk_android.enums import LibraryOption, OperatingPointStatus
-from ctk_android.types import Alpha, ExceedanceCount, FloatArray, OperatingPoint
+from ctk_android.types import Alpha, ExceedanceCount, OperatingPoint, ScoreVector
 
 
 def calibrate(
-    benign_scores: FloatArray, alpha: Alpha, min_exceedances: ExceedanceCount
+    benign_scores: ScoreVector, alpha: Alpha, min_exceedances: ExceedanceCount
 ) -> OperatingPoint:
     count = benign_scores.size
     if count == 0:

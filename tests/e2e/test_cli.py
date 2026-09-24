@@ -1,8 +1,12 @@
+import json
+
 import pytest
 from typer.testing import CliRunner
 
 from ctk_android.cli import app
-from ctk_android.enums import CliCommand
+from ctk_android.enums import CliCommand, ExecutionMode, LogEvent, LogField, Verdict
+from ctk_android.paths import Paths
+from tests.architecture.source_index import REPO_ROOT
 
 runner = CliRunner()
 
@@ -17,3 +21,20 @@ def test_root_help_lists_the_public_commands() -> None:
 def test_each_command_builds_and_shows_help(command: CliCommand) -> None:
     result = runner.invoke(app, [command, "--help"])
     assert result.exit_code == 0, result.output
+
+
+def test_a_command_writes_start_and_finish_events_to_its_log_file() -> None:
+    result = runner.invoke(app, [CliCommand.STATUS, "--mode", ExecutionMode.SMOKE])
+    assert result.exit_code == 0, result.output
+    lines = [
+        json.loads(line)
+        for line in Paths(REPO_ROOT)
+        .log_file(CliCommand.STATUS)
+        .read_text(encoding="utf-8")
+        .splitlines()
+    ]
+    events = [line["event"] for line in lines]
+    assert LogEvent.COMMAND_STARTED in events
+    assert events[-1] == LogEvent.COMMAND_FINISHED
+    assert lines[-1][LogField.STATUS] == Verdict.PASS
+    assert lines[-1][LogField.SECONDS] >= 0

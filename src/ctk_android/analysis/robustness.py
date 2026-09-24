@@ -10,10 +10,19 @@ from ctk_android.enums import (
     Learner,
     Sensitivity,
 )
-from ctk_android.types import Alpha, FamilyName, RobustnessRow, SupportCount
+from ctk_android.types import (
+    Alpha,
+    FamilyCountsTable,
+    FamilyName,
+    MicroGainTable,
+    PooledRecallTable,
+    RobustnessRow,
+    RobustnessTable,
+    SupportCount,
+)
 
 
-def top_support_families(families: pl.DataFrame, count: SupportCount) -> list[FamilyName]:
+def top_support_families(families: FamilyCountsTable, count: SupportCount) -> list[FamilyName]:
     ranked = (
         families.filter(pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
         .group_by(Column.FAMILY)
@@ -24,9 +33,9 @@ def top_support_families(families: pl.DataFrame, count: SupportCount) -> list[Fa
 
 
 def micro_ctk_by_seed(
-    families: pl.DataFrame, alpha: Alpha, excluded: list[FamilyName]
-) -> pl.DataFrame:
-    def pooled(condition: ExposureCondition, name: Column) -> pl.DataFrame:
+    families: FamilyCountsTable, alpha: Alpha, excluded: list[FamilyName]
+) -> MicroGainTable:
+    def pooled(condition: ExposureCondition, name: Column) -> PooledRecallTable:
         return (
             families.filter(
                 (pl.col(Column.LEARNER) == Learner.FEDAVG)
@@ -52,7 +61,7 @@ def micro_ctk_by_seed(
     )
 
 
-def robustness_table(families: pl.DataFrame, config: Config) -> pl.DataFrame:
+def robustness_table(families: FamilyCountsTable, config: Config) -> RobustnessTable:
     alpha = config.experiments.operating.primary_alpha
     removed = top_support_families(families, config.experiments.top_family_removal_count)
     rows: list[RobustnessRow] = []

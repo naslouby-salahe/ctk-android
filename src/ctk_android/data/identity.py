@@ -4,30 +4,38 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.csgraph import connected_components
 
 from ctk_android.enums import Column, Grouping, LibraryOption
-from ctk_android.types import ByteMatrix, IntArray
+from ctk_android.types import (
+    AssignmentsTable,
+    ComponentSummaryTable,
+    FeatureMatrix,
+    GroupIds,
+    IdentitiesTable,
+    IdentityIds,
+    PackageSeries,
+)
 
 
-def _first_occurrence_ids(labels: IntArray) -> IntArray:
+def _first_occurrence_ids(labels: IdentityIds) -> IdentityIds:
     _, first_index, inverse = np.unique(labels, return_index=True, return_inverse=True)
     rank = np.empty(first_index.size, dtype=np.int64)
     rank[np.argsort(first_index, kind=LibraryOption.SORT_STABLE)] = np.arange(first_index.size)
     return rank[inverse.reshape(-1)]
 
 
-def feature_identities(features: ByteMatrix) -> IntArray:
+def feature_identities(features: FeatureMatrix) -> IdentityIds:
     packed = np.ascontiguousarray(np.packbits(features, axis=1))
     voids = packed.view(np.dtype((np.void, packed.shape[1]))).reshape(-1)
     _, inverse = np.unique(voids, return_inverse=True)
     return _first_occurrence_ids(inverse.reshape(-1).astype(np.int64))
 
 
-def package_identities(packages: pl.Series) -> IntArray:
+def package_identities(packages: PackageSeries) -> IdentityIds:
     return _first_occurrence_ids(
         packages.rank(LibraryOption.RANK_DENSE).to_numpy().astype(np.int64)
     )
 
 
-def connected_component_ids(package_ids: IntArray, feature_ids: IntArray) -> IntArray:
+def connected_component_ids(package_ids: IdentityIds, feature_ids: IdentityIds) -> GroupIds:
     rows = package_ids.size
     package_count = package_ids.max(initial=-1).item() + 1
     feature_count = feature_ids.max(initial=-1).item() + 1
@@ -42,7 +50,7 @@ def connected_component_ids(package_ids: IntArray, feature_ids: IntArray) -> Int
     return _first_occurrence_ids(labels[:rows].astype(np.int64))
 
 
-def build_identities(assignments: pl.DataFrame, features: ByteMatrix) -> pl.DataFrame:
+def build_identities(assignments: AssignmentsTable, features: FeatureMatrix) -> IdentitiesTable:
     package_ids = package_identities(assignments[Column.PACKAGE])
     feature_ids = feature_identities(features)
     return pl.DataFrame(
@@ -55,12 +63,14 @@ def build_identities(assignments: pl.DataFrame, features: ByteMatrix) -> pl.Data
     ).with_row_index(Column.ROW)
 
 
-def grouping_ids(identities: pl.DataFrame, grouping: Grouping) -> IntArray:
+def grouping_ids(identities: IdentitiesTable, grouping: Grouping) -> GroupIds:
     column = Column.COMPONENT if grouping is Grouping.COMPONENT else Column.PACKAGE_ID
     return identities[column].to_numpy().astype(np.int64)
 
 
-def component_summary(identities: pl.DataFrame, assignments: pl.DataFrame) -> pl.DataFrame:
+def component_summary(
+    identities: IdentitiesTable, assignments: AssignmentsTable
+) -> ComponentSummaryTable:
     return (
         identities.with_columns(assignments[Column.LABEL])
         .group_by(Column.COMPONENT)

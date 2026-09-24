@@ -1,7 +1,7 @@
 import polars as pl
-import structlog
 
-from ctk_android.config import Config, ExperimentSpec
+from ctk_android import logs
+from ctk_android.config import Config
 from ctk_android.data import families, partitions
 from ctk_android.data.cache import write_record, write_table
 from ctk_android.enums import (
@@ -14,22 +14,27 @@ from ctk_android.enums import (
     FailureReason,
     FamilyLabelSource,
     FamilySetName,
+    LogEvent,
+    LogField,
     RunStatus,
 )
+from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
     CtkError,
+    ExperimentSpec,
     FamilyName,
+    LogFields,
+    PairTables,
     PartitionKey,
     PlannedRun,
+    PlannedTargets,
     PlanSummary,
     RunKey,
     Seed,
     TargetPair,
 )
 from ctk_android.workflows.preprocess import read_family_set
-
-log = structlog.get_logger()
 
 
 def experiments_for(config: Config, mode: ExecutionMode) -> list[ExperimentName]:
@@ -47,11 +52,11 @@ def set_members(
 
 def _pair_tables(
     paths: Paths, config: Config, spec: ExperimentSpec, key: PartitionKey
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+) -> PairTables:
     if spec.family_labels is FamilyLabelSource.OBSERVED:
-        return (
-            pl.read_parquet(paths.partition_file(key, Artifact.CONTROLLED_PAIRS)),
-            pl.read_parquet(paths.partition_file(key, Artifact.NATURAL_PAIRS)),
+        return PairTables(
+            controlled=pl.read_parquet(paths.partition_file(key, Artifact.CONTROLLED_PAIRS)),
+            natural=pl.read_parquet(paths.partition_file(key, Artifact.NATURAL_PAIRS)),
         )
     study = partitions.load_study(
         paths, key, config.data, spec.family_labels, config.experiments.permutation_seed_offset
@@ -72,17 +77,17 @@ def plan_run(
     key = PartitionKey(seed=seed, salt=salt, grouping=spec.grouping, profile=spec.eligibility)
     run_key = RunKey(mode=mode, experiment=name, seed=seed, salt=salt)
     members = set_members(paths, config, spec, mode)
-    controlled, natural = _pair_tables(paths, config, spec, key)
+    pair_tables = _pair_tables(paths, config, spec, key)
     if spec.exposure_mode is ExposureMode.HIDE_FROM_TARGET:
         chosen = families.assign_targets(
-            controlled.filter(pl.col(Column.FAMILY).is_in(list(members))),
+            pair_tables.controlled.filter(pl.col(Column.FAMILY).is_in(list(members))),
             seed,
             members,
             config.data.eligibility[spec.eligibility],
         )
-        targets = tuple(TargetPair(client=client, family=family) for client, family in chosen)
+        targets = tuple(chosen)
     else:
-        eligible = natural.filter(
+        eligible = pair_tables.natural.filter(
             pl.col(Column.ELIGIBLE) & pl.col(Column.FAMILY).is_in(list(members))
         )
         targets = tuple(
@@ -99,12 +104,24 @@ def plan_run(
 
 
 def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedRun]:
+    watch = Stopwatch()
     planned = [
         plan_run(paths, config, name, mode, seed, salt)
         for name in experiments_for(config, mode)
         for seed in config.project.seeds.for_mode(mode)
         for salt in config.experiments.experiments[name].salts
     ]
+    for run in planned:
+        fields: LogFields = {
+            LogField.EXPERIMENT: run.key.experiment,
+            LogField.SEED: run.key.seed,
+            LogField.SALT: run.key.salt,
+            LogField.TARGETS: len(run.targets),
+        }
+        if run.status is RunStatus.INFEASIBLE:
+            logs.warning(LogEvent.RUN_PLANNED_INFEASIBLE, {**fields, LogField.REASON: run.reason})
+        else:
+            logs.debug(LogEvent.RUN_PLANNED, fields)
     write_table(
         pl.DataFrame(
             [
@@ -154,10 +171,19 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
             seeds=config.project.seeds.for_mode(mode),
         ),
     )
+    logs.info(
+        LogEvent.PLAN_WRITTEN,
+        {
+            LogField.MODE: mode,
+            LogField.RUNS: len(planned),
+            LogField.INFEASIBLE: sum(run.status is RunStatus.INFEASIBLE for run in planned),
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
     return planned
 
 
-def planned_targets(paths: Paths, key: RunKey) -> tuple[RunStatus, tuple[TargetPair, ...]]:
+def planned_targets(paths: Paths, key: RunKey) -> PlannedTargets:
     matrix_path = paths.plan_file(key.mode, Artifact.RUN_MATRIX)
     if not matrix_path.is_file():
         raise CtkError(
@@ -184,4 +210,4 @@ def planned_targets(paths: Paths, key: RunKey) -> tuple[RunStatus, tuple[TargetP
         TargetPair(client=row[Column.CLIENT], family=row[Column.FAMILY])
         for row in assignments.iter_rows(named=True)
     )
-    return RunStatus(matrix[Column.STATUS][0]), targets
+    return PlannedTargets(status=RunStatus(matrix[Column.STATUS][0]), targets=targets)

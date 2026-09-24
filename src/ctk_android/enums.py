@@ -328,6 +328,8 @@ class Column(StrEnum):
     LOW = "low"
     HIGH = "high"
     LINKED_VT = "linked_vt_detection"
+    SCOPES_PASSED = "scopes_passed"
+    SCOPES_TOTAL = "scopes_total"
     MEDIAN_DIFFERENCE = "median_difference"
     CI_HIGH = "ci_high"
     RECALL_STD = "recall_std"
@@ -354,14 +356,96 @@ class Column(StrEnum):
 
 
 class LogEvent(StrEnum):
+    COMMAND_STARTED = "command-started"
+    COMMAND_FINISHED = "command-finished"
+    COMMAND_FAILED = "command-failed"
+    DOCTOR_CHECKED = "doctor-checked"
+    SOURCE_FINGERPRINTED = "source-fingerprinted"
+    LAMDA_LOADED = "lamda-loaded"
+    ANDROZOO_SCANNED = "androzoo-scanned"
+    LINKAGE_AUDITED = "linkage-audited"
+    CLIENTS_ASSIGNED = "clients-assigned"
+    IDENTITIES_BUILT = "identities-built"
+    FAMILIES_SELECTED = "families-selected"
+    PARTITION_BUILT = "partition-built"
     STAGE_REUSED = "stage-reused"
     STAGE_BUILT = "stage-built"
     STAGE_FAILED = "stage-failed"
+    PLAN_WRITTEN = "plan-written"
+    RUN_PLANNED = "run-planned"
+    RUN_PLANNED_INFEASIBLE = "run-planned-infeasible"
     RUN_STARTED = "run-started"
     RUN_REUSED = "run-reused"
-    RUN_FINISHED = "run-finished"
+    RUN_INFEASIBLE = "run-infeasible"
+    EXPOSURE_SELECTED = "exposure-selected"
     ARM_TRAINED = "arm-trained"
+    FEDERATED_ROUND = "federated-round"
+    EVALUATION_FINISHED = "evaluation-finished"
+    VALIDATION_PASSED = "validation-passed"
+    VALIDATION_FAILED = "validation-failed"
+    OPERATING_POINT_UNRESOLVED = "operating-point-unresolved"
+    RUN_FINISHED = "run-finished"
+    STATUS_SUMMARIZED = "status-summarized"
+    EVIDENCE_COLLECTED = "evidence-collected"
+    ANALYSIS_STAGE_FINISHED = "analysis-stage-finished"
+    CLAIM_EVALUATED = "claim-evaluated"
+    TABLES_WRITTEN = "tables-written"
+    FIGURES_WRITTEN = "figures-written"
     REPORT_WRITTEN = "report-written"
+    PROMOTION_DECIDED = "promotion-decided"
+
+
+class LogField(StrEnum):
+    COMMAND = "command"
+    STAGE = "stage"
+    DATASET = "dataset"
+    CLIENT = "client"
+    FAMILY = "family"
+    SEED = "seed"
+    SALT = "salt"
+    EXPERIMENT = "experiment"
+    MODE = "mode"
+    ARM = "arm"
+    LEARNER = "learner"
+    CONDITION = "condition"
+    DOSE = "dose"
+    CONFIG_FINGERPRINT = "config_fingerprint"
+    DEVICE = "device"
+    FAMILY_SET = "family_set"
+    ROWS = "rows"
+    FILES = "files"
+    BYTES = "bytes"
+    COUNT = "count"
+    REUSED = "reused"
+    SECONDS = "seconds"
+    PATH = "path"
+    STATUS = "status"
+    REASON = "reason"
+    CHECK = "check"
+    DETAIL = "detail"
+    PASSED = "passed"
+    ATTEMPT = "attempt"
+    TRAIN_ROWS = "train_rows"
+    ROUND = "round"
+    TARGETS = "targets"
+    ELIGIBLE = "eligible"
+    FEATURES = "features"
+    COMPONENTS = "components"
+    LARGEST = "largest"
+    RUNS = "runs"
+    INFEASIBLE = "infeasible"
+    COMPLETED = "completed"
+    CLAIM = "claim"
+    BLOCKS = "blocks"
+    UNMATCHED = "unmatched"
+    ALPHA = "alpha"
+    FAILED = "failed"
+    SCOPES_PASSED = "scopes_passed"
+    SCOPES_TOTAL = "scopes_total"
+    BUDGET = "budget"
+    ARMS = "arms"
+    ERROR = "error"
+    THROUGHPUT = "throughput"
 
 
 class CliCommand(StrEnum):
@@ -386,11 +470,10 @@ class DoctorCheck(StrEnum):
 class WorkspaceDirectory(StrEnum):
     DATA = "data"
     RAW = "raw"
-    SOURCE = "src"
-    PACKAGE = "ctk_android"
     CONFIGS = "configs"
     DOCS = "docs"
     OUTPUTS = "outputs"
+    LOGS = "logs"
     PREPROCESSING = "preprocessing"
     LINKAGE = "linkage"
     CACHE = "cache"
@@ -411,20 +494,13 @@ class SourceFile(StrEnum):
     LAMDA_FEATURE_MAPPING = "feature_mapping.csv"
     LAMDA_PARQUET_GLOB = "*/*.parquet"
     ANDROZOO_ARCHIVE = "latest.csv.gz"
-    PYTHON_GLOB = "*.py"
     ROADMAP = "Roadmap.md"
-
-
-class CoreModule(StrEnum):
-    TYPES = "types.py"
-    ENUMS = "enums.py"
-    CONFIG = "config.py"
-    PATHS = "paths.py"
 
 
 class FileSuffix(StrEnum):
     PARQUET = ".parquet"
     CSV = ".csv"
+    JSONL = ".jsonl"
     PDF = ".pdf"
     PNG = ".png"
     TORCH = ".pt"
@@ -491,12 +567,14 @@ class PythonRequirement(IntEnum):
 
 class Tolerance(float, Enum):
     PARTITION_FRACTIONS = 1e-9
+    THROUGHPUT_FLOOR = 1e-9
 
 
 class Separator(StrEnum):
     NEWLINE = "\n"
     COLON = ":"
     COLON_SPACE = ": "
+    COMMA = ","
     PIPE = "|"
     EMPTY = ""
 
@@ -526,6 +604,7 @@ class ErrorMessage(StrEnum):
     EXPERIMENT_MODE = "{experiment} is not defined for {mode}"
     NEEDS_FEDERATED = "{learner} needs a federated model"
     NEEDS_LOCAL = "blend needs local models"
+    STALE_PREPROCESSING = "unreadable provenance at {path}; run preprocess again"
     NO_EVIDENCE = "no completed {mode} runs to analyse; run the planned experiments first"
     PARAMETRIC_ONLY = "federated averaging needs parametric models"
     FINETUNE_NETWORK = "fine-tuning needs a network"
@@ -591,6 +670,7 @@ class LibraryOption:
     MARKER_CIRCLE: Final = "o"
     SCALE_SYMLOG: Final = "symlog"
     ASPECT_AUTO: Final = "auto"
+    TIMESTAMP_ISO: Final = "iso"
     WILCOXON_EXACT: Final = "exact"
 
 
@@ -756,3 +836,14 @@ class PromotionBlock(StrEnum):
 class PromotionState(StrEnum):
     PROMOTED = "promoted"
     BLOCKED = "blocked"
+
+
+class AnalysisStage(StrEnum):
+    DECOMPOSITION = "decomposition"
+    STATISTICS = "statistics"
+    FAMILY_EFFECTS = "family-effects"
+    DOSE_RESPONSE = "dose-response"
+    NOVELTY = "novelty"
+    ROBUSTNESS = "robustness"
+    CLUSTER_BOOTSTRAP = "cluster-bootstrap"
+    CLAIM_GATES = "claim-gates"

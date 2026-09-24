@@ -1,14 +1,22 @@
 import polars as pl
 
 from ctk_android.enums import Column, EvaluationPopulation, ExposureCondition, LibraryOption
-from ctk_android.types import Alpha
+from ctk_android.types import (
+    Alpha,
+    DoseCurveTable,
+    DoseRecallTable,
+    EffectiveDoseTable,
+    ExposureTable,
+    FamilyCountsTable,
+    TargetsTable,
+)
 
 
 def _keys() -> list[Column]:
     return [Column.EXPERIMENT, Column.SEED, Column.SALT, Column.LEARNER, Column.DOSE, Column.FAMILY]
 
 
-def dose_recall(families: pl.DataFrame, alpha: Alpha) -> pl.DataFrame:
+def dose_recall(families: FamilyCountsTable, alpha: Alpha) -> DoseRecallTable:
     return (
         families.filter(
             (pl.col(Column.ALPHA) == alpha)
@@ -21,7 +29,7 @@ def dose_recall(families: pl.DataFrame, alpha: Alpha) -> pl.DataFrame:
     )
 
 
-def effective_peer_dose(exposure: pl.DataFrame, targets: pl.DataFrame) -> pl.DataFrame:
+def effective_peer_dose(exposure: ExposureTable, targets: TargetsTable) -> EffectiveDoseTable:
     keys = [Column.EXPERIMENT, Column.SEED, Column.SALT, Column.FAMILY]
     target_clients = (
         targets.select(*keys, Column.CLIENT).unique().rename({Column.CLIENT: Column.TARGET_CLIENT})
@@ -35,7 +43,7 @@ def effective_peer_dose(exposure: pl.DataFrame, targets: pl.DataFrame) -> pl.Dat
     )
 
 
-def dose_curve(recalls: pl.DataFrame, effective: pl.DataFrame) -> pl.DataFrame:
+def dose_curve(recalls: DoseRecallTable, effective: EffectiveDoseTable) -> DoseCurveTable:
     joined = recalls.join(effective, on=_keys(), how=LibraryOption.JOIN_LEFT, nulls_equal=True)
     zero = joined.filter(pl.col(Column.DOSE) == 0).select(
         Column.EXPERIMENT,

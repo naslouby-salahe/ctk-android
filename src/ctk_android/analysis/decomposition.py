@@ -9,10 +9,18 @@ from ctk_android.enums import (
     LibraryOption,
     Metric,
 )
-from ctk_android.types import Alpha
+from ctk_android.types import (
+    Alpha,
+    DecompositionTable,
+    FamilyArmTable,
+    FamilyCountsTable,
+    FamilyEffectsTable,
+    FamilySeedTable,
+    SummaryTable,
+)
 
 
-def decomposed_learners() -> tuple[Learner, Learner]:
+def decomposed_learners() -> tuple[Learner, ...]:
     return (Learner.CENTRAL, Learner.FEDAVG)
 
 
@@ -29,7 +37,7 @@ def _keys() -> list[Column]:
     return [Column.EXPERIMENT, Column.SEED, Column.SALT, Column.ALPHA, Column.METRIC]
 
 
-def _arm(summary: pl.DataFrame, learner: Learner, condition: ExposureCondition) -> pl.DataFrame:
+def _arm(summary: SummaryTable, learner: Learner, condition: ExposureCondition) -> SummaryTable:
     return summary.filter(
         (pl.col(Column.LEARNER) == learner)
         & (pl.col(Column.CONDITION) == condition)
@@ -38,14 +46,14 @@ def _arm(summary: pl.DataFrame, learner: Learner, condition: ExposureCondition) 
     ).select(*_keys(), Column.VALUE)
 
 
-def decompose(summary: pl.DataFrame) -> pl.DataFrame:
+def decompose(summary: SummaryTable) -> DecompositionTable:
     local = _arm(summary, Learner.LOCAL, ExposureCondition.PEER_PRESENT).rename(
         {Column.VALUE: Column.LOCAL_RECALL}
     )
     full = _arm(summary, Learner.CENTRAL, ExposureCondition.FULL_EXPOSURE).rename(
         {Column.VALUE: Column.FULL_RECALL}
     )
-    parts: list[pl.DataFrame] = []
+    parts: list[DecompositionTable] = []
     for learner in decomposed_learners():
         peer = _arm(summary, learner, ExposureCondition.PEER_PRESENT).rename(
             {Column.VALUE: Column.PEER_RECALL}
@@ -82,7 +90,7 @@ def decompose(summary: pl.DataFrame) -> pl.DataFrame:
     return pl.concat(parts).sort(*_keys(), Column.LEARNER, Column.ESTIMAND)
 
 
-def family_seed_effects(families: pl.DataFrame, alpha: Alpha) -> pl.DataFrame:
+def family_seed_effects(families: FamilyCountsTable, alpha: Alpha) -> FamilySeedTable:
     keys = [Column.EXPERIMENT, Column.SEED, Column.SALT, Column.CLIENT, Column.FAMILY]
     recalls = (
         families.filter(
@@ -95,13 +103,13 @@ def family_seed_effects(families: pl.DataFrame, alpha: Alpha) -> pl.DataFrame:
         .select(*keys, Column.LEARNER, Column.CONDITION, Column.RECALL, Column.TRIALS)
     )
 
-    def arm(learner: Learner, condition: ExposureCondition, name: Column) -> pl.DataFrame:
+    def arm(learner: Learner, condition: ExposureCondition, name: Column) -> FamilyArmTable:
         return recalls.filter(
             (pl.col(Column.LEARNER) == learner) & (pl.col(Column.CONDITION) == condition)
         ).select(*keys, pl.col(Column.RECALL).alias(name), Column.TRIALS)
 
     local = arm(Learner.LOCAL, ExposureCondition.PEER_PRESENT, Column.LOCAL_RECALL)
-    parts: list[pl.DataFrame] = []
+    parts: list[FamilySeedTable] = []
     for learner in decomposed_learners():
         wide = (
             arm(learner, ExposureCondition.PEER_PRESENT, Column.PEER_RECALL)
@@ -129,7 +137,7 @@ def family_seed_effects(families: pl.DataFrame, alpha: Alpha) -> pl.DataFrame:
     return pl.concat(parts)
 
 
-def family_effects(seed_effects: pl.DataFrame) -> pl.DataFrame:
+def family_effects(seed_effects: FamilySeedTable) -> FamilyEffectsTable:
     return (
         seed_effects.group_by(Column.EXPERIMENT, Column.FAMILY, Column.LEARNER)
         .agg(

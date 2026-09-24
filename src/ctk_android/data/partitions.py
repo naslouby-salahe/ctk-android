@@ -25,12 +25,17 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    ClientFitRowsTable,
     CtkError,
     FamilyName,
-    IntArray,
+    GroupIds,
+    IdentitiesTable,
+    LabelledTable,
+    PairTables,
     PartitionKey,
     PartitionResult,
     Rank,
+    RoleSeries,
     RowCount,
     Seed,
     StudyData,
@@ -39,8 +44,8 @@ from ctk_android.types import (
 
 
 def assign_roles(
-    group_ids: IntArray, key: PartitionKey, attempt: Rank, config: DataConfig
-) -> pl.Series:
+    group_ids: GroupIds, key: PartitionKey, attempt: Rank, config: DataConfig
+) -> RoleSeries:
     group_count = group_ids.max(initial=-1).item() + 1
     rng = np.random.default_rng(np.random.SeedSequence([key.seed, key.salt, attempt]))
     position = np.empty(group_count, dtype=np.int64)
@@ -59,7 +64,7 @@ def assign_roles(
     return pl.Series(Column.ROLE, [role_order[code] for code in codes], dtype=pl.String)
 
 
-def client_fit_rows(labelled: pl.DataFrame, roles: pl.Series) -> pl.DataFrame:
+def client_fit_rows(labelled: LabelledTable, roles: RoleSeries) -> ClientFitRowsTable:
     return (
         labelled.with_columns(roles.alias(Column.ROLE))
         .filter(pl.col(Column.ROLE) == SplitRole.FIT)
@@ -69,12 +74,12 @@ def client_fit_rows(labelled: pl.DataFrame, roles: pl.Series) -> pl.DataFrame:
 
 
 def evaluate_partition(
-    labelled: pl.DataFrame,
-    roles: pl.Series,
+    labelled: LabelledTable,
+    roles: RoleSeries,
     families: tuple[FamilyName, ...],
     config: DataConfig,
     key: PartitionKey,
-) -> tuple[pl.DataFrame, pl.DataFrame]:
+) -> PairTables:
     counts = role_counts(labelled, roles, families)
     fit_rows = client_fit_rows(labelled, roles)
     controlled = controlled_pairs(counts, fit_rows, config.eligibility[key.profile])
@@ -85,11 +90,11 @@ def evaluate_partition(
         config.natural_scarcity.peer_min_fit,
         config.natural_scarcity.own_domain_min_test,
     )
-    return controlled, natural
+    return PairTables(controlled=controlled, natural=natural)
 
 
 def validate_partition(
-    identities: pl.DataFrame, roles: pl.Series, grouping: Grouping
+    identities: IdentitiesTable, roles: RoleSeries, grouping: Grouping
 ) -> tuple[ValidationRecord, ...]:
     frame = identities.with_columns(roles.alias(Column.ROLE))
 
@@ -130,33 +135,33 @@ def validate_partition(
 
 
 def build_partition(
-    labelled: pl.DataFrame,
-    identities: pl.DataFrame,
-    group_ids: IntArray,
+    labelled: LabelledTable,
+    identities: IdentitiesTable,
+    group_ids: GroupIds,
     families: tuple[FamilyName, ...],
     key: PartitionKey,
     config: DataConfig,
 ) -> PartitionResult:
     best_score: RowCount = 0
     best_attempt: Rank = 0
-    best_roles: pl.Series | None = None
+    best_roles: RoleSeries | None = None
     for attempt in range(config.partition.attempts):
         roles = assign_roles(group_ids, key, attempt, config)
-        controlled, natural = evaluate_partition(labelled, roles, families, config, key)
+        tables = evaluate_partition(labelled, roles, families, config, key)
         score = (
-            controlled.filter(pl.col(Column.ELIGIBLE)).height
-            + natural.filter(pl.col(Column.ELIGIBLE)).height
+            tables.controlled.filter(pl.col(Column.ELIGIBLE)).height
+            + tables.natural.filter(pl.col(Column.ELIGIBLE)).height
         )
         if best_roles is None or score > best_score:
             best_score, best_attempt, best_roles = score, attempt, roles
     if best_roles is None:
         raise CtkError(FailureReason.NO_ELIGIBLE_TARGETS, ErrorMessage.PARTITION_ATTEMPTS)
-    controlled, natural = evaluate_partition(labelled, best_roles, families, config, key)
+    tables = evaluate_partition(labelled, best_roles, families, config, key)
     return PartitionResult(
         roles=best_roles,
         attempt=best_attempt,
-        controlled=controlled,
-        natural=natural,
+        controlled=tables.controlled,
+        natural=tables.natural,
         validations=validate_partition(identities, best_roles, key.grouping),
     )
 

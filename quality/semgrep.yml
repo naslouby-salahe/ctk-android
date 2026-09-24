@@ -6,7 +6,7 @@ rules:
     paths:
       exclude:
         - types.py
-    pattern-regex: '(?m)^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*?\b(?:int|float|str|object|Any)\b(?:[^)]|\n)*?\)\s*(?:->[^:\n]*)?:|^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*\)\s*->\s*[^:\n]*\b(?:int|float|str|object|Any)\b'
+    pattern-regex: '(?m)^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*?\b(?:int|float|str|object|Any|bool)\b(?:[^)]|\n)*?\)\s*(?:->[^:\n]*)?:|^\s*(?:async\s+)?def\s+\w+\((?:[^)]|\n)*\)\s*->\s*[^:\n]*\b(?:int|float|str|object|Any|bool)\b'
   - id: no-raw-dict-domain-io
     languages: [python]
     message: Raw dict values must not cross function boundaries; use a typed record or a semantic alias.

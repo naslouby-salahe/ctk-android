@@ -19,16 +19,25 @@ from ctk_android.enums import (
     ReportFigure,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import Directory, Effect, FloatArray, PlotAxes, PlotBand, PlotFigure
+from ctk_android.types import (
+    Directory,
+    Effect,
+    EffectsTable,
+    FamilyRescueTable,
+    PlotAxes,
+    PlotBand,
+    PlotFigure,
+    PlotVector,
+    SummaryTable,
+)
 
 
 def _blank() -> PlotFigure:
     return Figure(figsize=(PlotGeometry.WIDTH, PlotGeometry.HEIGHT))
 
 
-def _new_figure() -> tuple[PlotFigure, PlotAxes]:
-    figure = _blank()
-    return figure, figure.add_subplot()
+def _axes(figure: PlotFigure) -> PlotAxes:
+    return figure.add_subplot()
 
 
 def _save(figure: PlotFigure, paths: Paths, name: ReportFigure) -> None:
@@ -38,7 +47,7 @@ def _save(figure: PlotFigure, paths: Paths, name: ReportFigure) -> None:
         figure.savefig(target, dpi=PlotGeometry.DPI, bbox_inches=LibraryOption.BBOX_TIGHT)
 
 
-def _summary(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
+def _summary(paths: Paths, config: Config, mode: ExecutionMode) -> SummaryTable:
     return pl.read_parquet(paths.analysis_file(mode, Artifact.ARM_METRICS)).filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
@@ -47,7 +56,7 @@ def _summary(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
 
 
 def _mean(
-    summary: pl.DataFrame, learner: Learner, condition: ExposureCondition, metric: Metric
+    summary: SummaryTable, learner: Learner, condition: ExposureCondition, metric: Metric
 ) -> Effect | None:
     values = (
         summary.filter(
@@ -61,14 +70,14 @@ def _mean(
     return values.mean().item() if values.size else None
 
 
-def _effects(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
+def _effects(paths: Paths, config: Config, mode: ExecutionMode) -> EffectsTable:
     return pl.read_parquet(paths.statistics_file(mode, Artifact.PAIRED_EFFECTS)).filter(
         pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha
     )
 
 
 def _effect(
-    effects: pl.DataFrame, learner: Learner, estimand: Estimand, metric: Metric
+    effects: EffectsTable, learner: Learner, estimand: Estimand, metric: Metric
 ) -> PlotBand:
     row = effects.filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
@@ -87,7 +96,7 @@ def _effect(
     )
 
 
-def _values(items: list[Effect | None]) -> FloatArray:
+def _values(items: list[Effect | None]) -> PlotVector:
     return np.array(items, dtype=np.float64)
 
 
@@ -97,7 +106,8 @@ def _or_nan(value: Effect | None) -> Effect:
 
 def collaboration_decomposition(paths: Paths, config: Config, mode: ExecutionMode) -> None:
     summary, effects = _summary(paths, config, mode), _effects(paths, config, mode)
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     learners = [Learner.CENTRAL, Learner.FEDAVG]
     positions = np.arange(len(learners))
     local = _or_nan(
@@ -188,7 +198,8 @@ def mean_versus_worst_client(paths: Paths, config: Config, mode: ExecutionMode) 
 
 def own_domain_versus_federation_wide(paths: Paths, config: Config, mode: ExecutionMode) -> None:
     effects = _effects(paths, config, mode)
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     learners = [Learner.CENTRAL, Learner.FEDAVG]
     positions = np.arange(len(learners))
     for offset, metric, label in (
@@ -214,7 +225,8 @@ def own_domain_versus_federation_wide(paths: Paths, config: Config, mode: Execut
 
 def peer_dose_response(paths: Paths, mode: ExecutionMode) -> None:
     curve = pl.read_parquet(paths.analysis_file(mode, Artifact.PEER_DOSE_RESPONSE))
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     for learner in curve[Column.LEARNER].unique():
         rows = (
             curve.filter(pl.col(Column.LEARNER) == learner)
@@ -236,7 +248,7 @@ def peer_dose_response(paths: Paths, mode: ExecutionMode) -> None:
     _save(figure, paths, ReportFigure.PEER_DOSE_RESPONSE)
 
 
-def _family_rescue(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
+def _family_rescue(paths: Paths, mode: ExecutionMode) -> FamilyRescueTable:
     return pl.read_parquet(paths.analysis_file(mode, Artifact.FAMILY_RESCUE)).filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.LEARNER) == Learner.FEDAVG)
@@ -245,7 +257,8 @@ def _family_rescue(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
 
 def family_rescue_map(paths: Paths, mode: ExecutionMode) -> None:
     table = _family_rescue(paths, mode).sort(Column.FAMILY)
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     columns = [Column.LOCAL_RECALL, Column.ABSENT_RECALL, Column.PEER_RECALL, Column.FULL_RECALL]
     matrix = table.select(columns).to_numpy() if table.height else np.zeros((1, len(columns)))
     image = axes.imshow(matrix, vmin=0.0, vmax=1.0, aspect=LibraryOption.ASPECT_AUTO)
@@ -260,7 +273,8 @@ def family_rescue_map(paths: Paths, mode: ExecutionMode) -> None:
 
 def feature_novelty_versus_ctk_gain(paths: Paths, mode: ExecutionMode) -> None:
     table = _family_rescue(paths, mode).drop_nulls(Column.NOVELTY)
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     axes.scatter(
         table[Column.NOVELTY].to_numpy(),
         table[Column.CTK_GAIN].to_numpy(),
@@ -276,7 +290,8 @@ def feature_novelty_versus_ctk_gain(paths: Paths, mode: ExecutionMode) -> None:
 
 def known_versus_unseen_tradeoff(paths: Paths, config: Config, mode: ExecutionMode) -> None:
     summary = _summary(paths, config, mode)
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     for learner in Learner:
         unseen = _mean(
             summary, learner, ExposureCondition.PEER_PRESENT, Metric.FEDERATION_UNSEEN_RECALL
@@ -296,7 +311,8 @@ def robustness_summary(paths: Paths, mode: ExecutionMode) -> None:
         & (pl.col(Column.ESTIMAND) == Estimand.CTK_GAIN)
         & (pl.col(Column.METRIC) == Metric.FEDERATION_UNSEEN_RECALL)
     )
-    figure, axes = _new_figure()
+    figure = _blank()
+    axes = _axes(figure)
     labels = [
         PlotText.ROBUSTNESS_ROW.format(experiment=row[Column.EXPERIMENT], alpha=row[Column.ALPHA])
         for row in table.iter_rows(named=True)

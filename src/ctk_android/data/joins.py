@@ -1,10 +1,19 @@
 import polars as pl
 
-from ctk_android.enums import Column, DetailMessage, LibraryOption, Separator, ValidationCheck
-from ctk_android.types import JoinResult, ValidationRecord
+from ctk_android import logs
+from ctk_android.enums import (
+    Column,
+    DetailMessage,
+    LibraryOption,
+    LogEvent,
+    LogField,
+    Separator,
+    ValidationCheck,
+)
+from ctk_android.types import AndroZooTable, JoinResult, LamdaMetadataTable, ValidationRecord
 
 
-def join_sources(lamda: pl.DataFrame, androzoo: pl.DataFrame) -> JoinResult:
+def join_sources(lamda: LamdaMetadataTable, androzoo: AndroZooTable) -> JoinResult:
     unique_links = androzoo[Column.SHA256].n_unique() == androzoo.height
     linked = lamda.join(
         androzoo.rename({Column.VT_COUNT: Column.LINKED_VT}),
@@ -21,6 +30,14 @@ def join_sources(lamda: pl.DataFrame, androzoo: pl.DataFrame) -> JoinResult:
         .list.join(Separator.PIPE)
         .alias(Column.MARKETS),
         pl.col(Column.MARKETS).str.split(Separator.PIPE).list.len().alias(Column.MARKET_COUNT),
+    )
+    logs.info(
+        LogEvent.LINKAGE_AUDITED,
+        {
+            LogField.ROWS: joined.height,
+            LogField.UNMATCHED: unmatched.height,
+            LogField.PASSED: unique_links and vt_agrees,
+        },
     )
     return JoinResult(
         joined=joined,

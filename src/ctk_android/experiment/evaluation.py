@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 import numpy as np
-import polars as pl
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from ctk_android.config import OperatingConfig
@@ -17,16 +16,26 @@ from ctk_android.experiment.thresholds import calibrate
 from ctk_android.types import (
     ArmKey,
     ArmScores,
+    AttributeColumn,
     BlendWeight,
-    BoolArray,
     ClientCountRow,
+    ClientCountsTable,
+    ClientPools,
+    ClientScorers,
     DiscriminationRow,
+    DiscriminationTable,
     FamilyCountRow,
+    FamilyCountsTable,
+    FamilyMasks,
     FamilyName,
-    FloatArray,
-    IntArray,
+    LabelVector,
+    LogitVector,
     OperatingRow,
+    OperatingTable,
+    PopulationMasks,
+    RowMask,
     Scorer,
+    ScoreVector,
     StudyData,
     TargetPair,
 )
@@ -34,21 +43,21 @@ from ctk_android.types import (
 
 @dataclass(frozen=True)
 class RowAttributes:
-    labels: IntArray
-    clients: np.ndarray
-    roles: np.ndarray
-    masks: dict[FamilyName, BoolArray]
+    labels: LabelVector
+    clients: AttributeColumn
+    roles: AttributeColumn
+    masks: FamilyMasks
 
 
 @dataclass(frozen=True)
 class ArmEvaluation:
-    operating: pl.DataFrame
-    clients: pl.DataFrame
-    families: pl.DataFrame
-    discrimination: pl.DataFrame
+    operating: OperatingTable
+    clients: ClientCountsTable
+    families: FamilyCountsTable
+    discrimination: DiscriminationTable
 
 
-def row_attributes(study: StudyData, masks: dict[FamilyName, BoolArray]) -> RowAttributes:
+def row_attributes(study: StudyData, masks: FamilyMasks) -> RowAttributes:
     table = study.table
     return RowAttributes(
         labels=table[Column.LABEL].to_numpy().astype(np.int64),
@@ -62,17 +71,15 @@ def target_families(targets: tuple[TargetPair, ...], client: ClientId) -> tuple[
     return tuple(pair.family for pair in targets if pair.client is client)
 
 
-def _unseen_mask(attributes: RowAttributes, families: tuple[FamilyName, ...]) -> BoolArray:
+def _unseen_mask(attributes: RowAttributes, families: tuple[FamilyName, ...]) -> RowMask:
     mask = np.zeros(attributes.labels.size, dtype=bool)
     for family in families:
         mask |= attributes.masks[family]
     return mask
 
 
-def build_pools(
-    attributes: RowAttributes, targets: tuple[TargetPair, ...]
-) -> dict[ClientId, IntArray]:
-    pools: dict[ClientId, IntArray] = {}
+def build_pools(attributes: RowAttributes, targets: tuple[TargetPair, ...]) -> ClientPools:
+    pools: ClientPools = {}
     test = attributes.roles == SplitRole.TEST
     for client in ClientId:
         own = attributes.clients == client
@@ -82,15 +89,13 @@ def build_pools(
     return pools
 
 
-def score_shared(scorer: Scorer, study: StudyData, pools: dict[ClientId, IntArray]) -> ArmScores:
+def score_shared(scorer: Scorer, study: StudyData, pools: ClientPools) -> ArmScores:
     union = np.unique(np.concatenate(list(pools.values())))
     logits = scorer_logits(scorer, study.features, union)
     return {client: logits[np.searchsorted(union, rows)] for client, rows in pools.items()}
 
 
-def score_per_client(
-    scorers: dict[ClientId, Scorer], study: StudyData, pools: dict[ClientId, IntArray]
-) -> ArmScores:
+def score_per_client(scorers: ClientScorers, study: StudyData, pools: ClientPools) -> ArmScores:
     return {
         client: scorer_logits(scorers[client], study.features, rows)
         for client, rows in pools.items()
@@ -98,7 +103,7 @@ def score_per_client(
 
 
 def blend_scores(local: ArmScores, shared: ArmScores, weight: BlendWeight) -> ArmScores:
-    def sigmoid(values: FloatArray) -> FloatArray:
+    def sigmoid(values: LogitVector) -> ScoreVector:
         return 1.0 / (1.0 + np.exp(-values))
 
     return {
@@ -110,7 +115,7 @@ def blend_scores(local: ArmScores, shared: ArmScores, weight: BlendWeight) -> Ar
 def evaluate_arm(
     arm: ArmKey,
     scores: ArmScores,
-    pools: dict[ClientId, IntArray],
+    pools: ClientPools,
     attributes: RowAttributes,
     targets: tuple[TargetPair, ...],
     operating: OperatingConfig,
@@ -130,7 +135,7 @@ def evaluate_arm(
         benign_cal = own & (roles == SplitRole.CALIBRATION) & (labels == 0)
         own_test = own & (roles == SplitRole.TEST)
         test = roles == SplitRole.TEST
-        populations: dict[EvaluationPopulation, BoolArray] = {
+        populations: PopulationMasks = {
             EvaluationPopulation.BENIGN: own_test & (labels == 0),
             EvaluationPopulation.KNOWN_FAMILY: own_test & (labels == 1) & ~unseen,
             EvaluationPopulation.OWN_DOMAIN: own_test & (labels == 1) & unseen,

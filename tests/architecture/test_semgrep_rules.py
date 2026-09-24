@@ -44,3 +44,18 @@ def test_every_semgrep_rule_has_a_regression_case() -> None:
         if line.strip().startswith("- id:")
     }
     assert declared == set(VIOLATIONS)
+
+
+def test_the_primitive_boundary_rule_also_flags_bool(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.py"
+    sample.write_text("def f(flag: bool) -> None:\n    return None\n", encoding="utf-8")
+    completed = subprocess.run(
+        [str(BIN / "semgrep"), "--config", str(RULES), "--json", "--quiet", str(sample)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    flagged = {
+        result["check_id"].split(".")[-1] for result in json.loads(completed.stdout)["results"]
+    }
+    assert "no-primitive-function-boundary" in flagged

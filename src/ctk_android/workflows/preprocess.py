@@ -1,14 +1,12 @@
 import numpy as np
 import polars as pl
-import structlog
 
+from ctk_android import logs
 from ctk_android.config import Config
 from ctk_android.data import clients, families, identity, joins, partitions, sources
 from ctk_android.data.cache import (
     combine_fingerprints,
-    fingerprint_file,
     fingerprint_model,
-    fingerprint_source_tree,
     is_reusable,
     load_features,
     read_record,
@@ -27,37 +25,33 @@ from ctk_android.enums import (
     FailureReason,
     FamilySetName,
     LogEvent,
+    LogField,
     Stage,
     ValidationCheck,
 )
+from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
     CtkError,
     Directory,
     FamilyName,
     FamilySetDocument,
-    Fingerprint,
+    IdentitiesTable,
     LamdaCounts,
     LamdaSchema,
     LinkageCounts,
     LinkageSchema,
+    Overwrite,
     PartitionKey,
     PartitionManifest,
     Provenance,
+    Reusable,
+    Reused,
     SourceInventory,
     StageReport,
     ValidationDocument,
     ValidationRecord,
 )
-
-log = structlog.get_logger()
-
-
-def code_fingerprint(paths: Paths) -> Fingerprint:
-    return combine_fingerprints(
-        fingerprint_source_tree(paths.data_package),
-        *(fingerprint_file(module) for module in paths.core_modules),
-    )
 
 
 def required_partition_keys(config: Config) -> list[PartitionKey]:
@@ -79,8 +73,27 @@ def _record(
 ) -> None:
     write_record(paths.audit_file(directory), ValidationDocument(validations=tuple(records)))
     failed = [record for record in records if not record.passed]
+    for record in records:
+        report = logs.info if record.passed else logs.warning
+        report(
+            LogEvent.VALIDATION_PASSED if record.passed else LogEvent.VALIDATION_FAILED,
+            {
+                LogField.STAGE: stage,
+                LogField.CHECK: record.check,
+                LogField.PASSED: record.passed,
+                LogField.DETAIL: record.detail,
+            },
+        )
     if failed:
-        log.error(LogEvent.STAGE_FAILED, stage=stage, check=failed[0].check)
+        logs.error(
+            LogEvent.STAGE_FAILED,
+            {
+                LogField.STAGE: stage,
+                LogField.CHECK: failed[0].check,
+                LogField.DETAIL: failed[0].detail,
+                LogField.FAILED: len(failed),
+            },
+        )
         raise CtkError(
             FailureReason.SCHEMA_MISMATCH,
             ErrorMessage.STAGE_VALIDATION.format(
@@ -89,25 +102,44 @@ def _record(
         )
 
 
-def _reuse(paths: Paths, directory: Directory, provenance: Provenance, overwrite: bool) -> bool:
+def _reuse(
+    paths: Paths, directory: Directory, provenance: Provenance, overwrite: Overwrite
+) -> Reusable:
     reusable = not overwrite and is_reusable(paths.provenance_file(directory), provenance)
     if reusable:
-        log.info(LogEvent.STAGE_REUSED, stage=provenance.stage)
+        logs.info(
+            LogEvent.STAGE_REUSED,
+            {
+                LogField.STAGE: provenance.stage,
+                LogField.PATH: f"{directory}",
+                LogField.REUSED: True,
+            },
+        )
     return reusable
 
 
-def _stage_report(directory: Directory, provenance: Provenance, reused: bool) -> StageReport:
+def _stage_report(directory: Directory, provenance: Provenance, reused: Reused) -> StageReport:
     return StageReport(
         stage=provenance.stage,
         directory=directory,
         reused=reused,
-        fingerprint=combine_fingerprints(provenance.inputs, provenance.code),
+        fingerprint=provenance.inputs,
     )
 
 
-def _finish(paths: Paths, directory: Directory, provenance: Provenance) -> StageReport:
+def _finish(
+    paths: Paths, directory: Directory, provenance: Provenance, watch: Stopwatch
+) -> StageReport:
     write_provenance(paths.provenance_file(directory), provenance)
-    log.info(LogEvent.STAGE_BUILT, stage=provenance.stage)
+    logs.info(
+        LogEvent.STAGE_BUILT,
+        {
+            LogField.STAGE: provenance.stage,
+            LogField.PATH: f"{directory}",
+            LogField.REUSED: False,
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
     return _stage_report(directory, provenance, reused=False)
 
 
@@ -116,18 +148,17 @@ def _known_inventory(paths: Paths, dataset: DatasetName) -> SourceInventory:
     return read_record(path, SourceInventory) if path.is_file() else SourceInventory(entries=())
 
 
-def source_audit(paths: Paths, config: Config, code: Fingerprint, overwrite: bool) -> StageReport:
-    lamda_fp, lamda_inventory = sources.fingerprint_lamda(
+def source_audit(paths: Paths, config: Config, overwrite: Overwrite) -> StageReport:
+    watch = Stopwatch()
+    lamda_scan = sources.fingerprint_lamda(
         paths, config.data, _known_inventory(paths, DatasetName.LAMDA)
     )
-    az_fp, az_inventory = sources.fingerprint_androzoo(
-        paths, _known_inventory(paths, DatasetName.ANDROZOO)
-    )
+    az_scan = sources.fingerprint_androzoo(paths, _known_inventory(paths, DatasetName.ANDROZOO))
+    lamda_fp, az_fp = lamda_scan.fingerprint, az_scan.fingerprint
     config_fp = fingerprint_model(config.data)
     provenance = Provenance(
         stage=Stage.SOURCE_AUDIT,
         inputs=combine_fingerprints(sources.sources_fingerprint(lamda_fp, az_fp), config_fp),
-        code=code,
     )
     if _reuse(paths, paths.linkage_dir, provenance, overwrite):
         return _stage_report(paths.linkage_dir, provenance, reused=True)
@@ -137,12 +168,9 @@ def source_audit(paths: Paths, config: Config, code: Fingerprint, overwrite: boo
     result = joins.join_sources(lamda.metadata, azoo)
     validations = [*sources.validate_lamda(lamda, config.data), *result.validations]
 
-    for dataset, fingerprint, inventory in (
-        (DatasetName.LAMDA, lamda_fp, lamda_inventory),
-        (DatasetName.ANDROZOO, az_fp, az_inventory),
-    ):
-        write_record(paths.source_file(dataset, Artifact.FINGERPRINT), fingerprint)
-        write_record(paths.source_file(dataset, Artifact.INVENTORY), inventory)
+    for dataset, scan in ((DatasetName.LAMDA, lamda_scan), (DatasetName.ANDROZOO, az_scan)):
+        write_record(paths.source_file(dataset, Artifact.FINGERPRINT), scan.fingerprint)
+        write_record(paths.source_file(dataset, Artifact.INVENTORY), scan.inventory)
     write_record(
         paths.source_file(DatasetName.LAMDA, Artifact.SCHEMA),
         LamdaSchema(
@@ -173,14 +201,13 @@ def source_audit(paths: Paths, config: Config, code: Fingerprint, overwrite: boo
     write_table(azoo, paths.linkage_file(Artifact.HASH_LINKAGE))
     write_table(result.unmatched, paths.linkage_file(Artifact.UNMATCHED))
     _record(paths, validations, paths.linkage_dir, Stage.SOURCE_AUDIT)
-    return _finish(paths, paths.linkage_dir, provenance)
+    return _finish(paths, paths.linkage_dir, provenance, watch)
 
 
-def join_stage(
-    paths: Paths, upstream: StageReport, code: Fingerprint, overwrite: bool
-) -> StageReport:
+def join_stage(paths: Paths, upstream: StageReport, overwrite: Overwrite) -> StageReport:
+    watch = Stopwatch()
     directory = paths.stage_dir(Stage.JOINED)
-    provenance = Provenance(stage=Stage.JOINED, inputs=upstream.fingerprint, code=code)
+    provenance = Provenance(stage=Stage.JOINED, inputs=upstream.fingerprint)
     if _reuse(paths, directory, provenance, overwrite):
         return _stage_report(directory, provenance, reused=True)
     metadata = pl.read_parquet(paths.source_file(DatasetName.LAMDA, Artifact.METADATA))
@@ -188,14 +215,15 @@ def join_stage(
     result = joins.join_sources(metadata, linked)
     write_table(result.joined, paths.stage_file(Stage.JOINED, Artifact.DATASET))
     _record(paths, list(result.validations), directory, Stage.JOINED)
-    return _finish(paths, directory, provenance)
+    return _finish(paths, directory, provenance, watch)
 
 
 def clients_stage(
-    paths: Paths, config: Config, upstream: StageReport, code: Fingerprint, overwrite: bool
+    paths: Paths, config: Config, upstream: StageReport, overwrite: Overwrite
 ) -> StageReport:
+    watch = Stopwatch()
     directory = paths.stage_dir(Stage.CLIENTS)
-    provenance = Provenance(stage=Stage.CLIENTS, inputs=upstream.fingerprint, code=code)
+    provenance = Provenance(stage=Stage.CLIENTS, inputs=upstream.fingerprint)
     if _reuse(paths, directory, provenance, overwrite):
         return _stage_report(directory, provenance, reused=True)
     joined = pl.read_parquet(paths.stage_file(Stage.JOINED, Artifact.DATASET))
@@ -213,6 +241,15 @@ def clients_stage(
         paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS),
     )
     support = clients.client_support(assignments)
+    for row in support.iter_rows(named=True):
+        logs.info(
+            LogEvent.CLIENTS_ASSIGNED,
+            {
+                LogField.CLIENT: row[Column.CLIENT],
+                LogField.ROWS: row[Column.ROWS],
+                LogField.COUNT: row[Column.MALWARE_ROWS],
+            },
+        )
     write_table(support, paths.stage_file(Stage.CLIENTS, Artifact.SUPPORT))
     present = {ClientId(name) for name in support[Column.CLIENT].to_list()}
     _record(
@@ -227,19 +264,27 @@ def clients_stage(
         directory,
         Stage.CLIENTS,
     )
-    return _finish(paths, directory, provenance)
+    return _finish(paths, directory, provenance, watch)
 
 
-def identity_stage(
-    paths: Paths, upstream: StageReport, code: Fingerprint, overwrite: bool
-) -> StageReport:
+def identity_stage(paths: Paths, upstream: StageReport, overwrite: Overwrite) -> StageReport:
+    watch = Stopwatch()
     directory = paths.stage_dir(Stage.IDENTITY)
-    provenance = Provenance(stage=Stage.IDENTITY, inputs=upstream.fingerprint, code=code)
+    provenance = Provenance(stage=Stage.IDENTITY, inputs=upstream.fingerprint)
     if _reuse(paths, directory, provenance, overwrite):
         return _stage_report(directory, provenance, reused=True)
     assignments = pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS))
     features = load_features(paths.cache_file(Artifact.FEATURES))
     identities = identity.build_identities(assignments, np.asarray(features))
+    summary = identity.component_summary(identities, assignments)
+    logs.info(
+        LogEvent.IDENTITIES_BUILT,
+        {
+            LogField.ROWS: identities.height,
+            LogField.COMPONENTS: summary.height,
+            LogField.LARGEST: summary[Column.ROWS].to_numpy().max().item(),
+        },
+    )
     write_table(identities, paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS))
     write_table(
         identities.select(Column.ROW, Column.SHA256, Column.FEATURE_ID),
@@ -250,17 +295,18 @@ def identity_stage(
         paths.stage_file(Stage.IDENTITY, Artifact.PACKAGE_IDENTITIES),
     )
     write_table(
-        identity.component_summary(identities, assignments),
+        summary,
         paths.stage_file(Stage.IDENTITY, Artifact.COMPONENT_SUMMARY),
     )
-    return _finish(paths, directory, provenance)
+    return _finish(paths, directory, provenance, watch)
 
 
 def families_stage(
-    paths: Paths, config: Config, upstream: StageReport, code: Fingerprint, overwrite: bool
+    paths: Paths, config: Config, upstream: StageReport, overwrite: Overwrite
 ) -> StageReport:
+    watch = Stopwatch()
     directory = paths.stage_dir(Stage.FAMILIES)
-    provenance = Provenance(stage=Stage.FAMILIES, inputs=upstream.fingerprint, code=code)
+    provenance = Provenance(stage=Stage.FAMILIES, inputs=upstream.fingerprint)
     if _reuse(paths, directory, provenance, overwrite):
         return _stage_report(directory, provenance, reused=True)
     labelled = families.classify_labels(
@@ -274,6 +320,10 @@ def families_stage(
     )
     for name, members in sets.items():
         write_record(paths.family_set_file(name), FamilySetDocument(families=members))
+        logs.info(
+            LogEvent.FAMILIES_SELECTED,
+            {LogField.FAMILY_SET: name, LogField.COUNT: len(members)},
+        )
     overlap = set(sets[FamilySetName.PRIMARY]) & set(sets[FamilySetName.REPLICATION])
     _record(
         paths,
@@ -287,7 +337,7 @@ def families_stage(
         directory,
         Stage.FAMILIES,
     )
-    return _finish(paths, directory, provenance)
+    return _finish(paths, directory, provenance, watch)
 
 
 def read_family_set(paths: Paths, name: FamilySetName) -> tuple[FamilyName, ...]:
@@ -295,12 +345,12 @@ def read_family_set(paths: Paths, name: FamilySetName) -> tuple[FamilyName, ...]
 
 
 def partition_stage(
-    paths: Paths, config: Config, upstream: StageReport, code: Fingerprint, overwrite: bool
+    paths: Paths, config: Config, upstream: StageReport, overwrite: Overwrite
 ) -> list[StageReport]:
     labelled = families.classify_labels(
         pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)), config.data
     )
-    identities: pl.DataFrame | None = None
+    identities: IdentitiesTable | None = None
     universe = (
         *read_family_set(paths, FamilySetName.PRIMARY),
         *read_family_set(paths, FamilySetName.REPLICATION),
@@ -308,10 +358,10 @@ def partition_stage(
     reports: list[StageReport] = []
     for key in required_partition_keys(config):
         directory = paths.partition_dir(key)
+        watch = Stopwatch()
         provenance = Provenance(
             stage=Stage.PARTITIONS,
             inputs=combine_fingerprints(upstream.fingerprint, key.model_dump_json()),
-            code=code,
         )
         if _reuse(paths, directory, provenance, overwrite):
             reports.append(_stage_report(directory, provenance, reused=True))
@@ -341,18 +391,27 @@ def partition_stage(
                 eligible_natural_pairs=result.natural.filter(pl.col(Column.ELIGIBLE)).height,
             ),
         )
+        logs.info(
+            LogEvent.PARTITION_BUILT,
+            {
+                LogField.SEED: key.seed,
+                LogField.SALT: key.salt,
+                LogField.ATTEMPT: result.attempt,
+                LogField.ELIGIBLE: result.controlled.filter(pl.col(Column.ELIGIBLE)).height,
+                LogField.COUNT: result.natural.filter(pl.col(Column.ELIGIBLE)).height,
+            },
+        )
         _record(paths, list(result.validations), directory, Stage.PARTITIONS)
-        reports.append(_finish(paths, directory, provenance))
+        reports.append(_finish(paths, directory, provenance, watch))
     return reports
 
 
-def run_preprocess(paths: Paths, config: Config, overwrite: bool) -> list[StageReport]:
-    code = code_fingerprint(paths)
-    audit = source_audit(paths, config, code, overwrite)
-    joined = join_stage(paths, audit, code, overwrite)
-    assigned = clients_stage(paths, config, joined, code, overwrite)
-    identified = identity_stage(paths, assigned, code, overwrite)
-    family_report = families_stage(paths, config, assigned, code, overwrite)
+def run_preprocess(paths: Paths, config: Config, overwrite: Overwrite) -> list[StageReport]:
+    audit = source_audit(paths, config, overwrite)
+    joined = join_stage(paths, audit, overwrite)
+    assigned = clients_stage(paths, config, joined, overwrite)
+    identified = identity_stage(paths, assigned, overwrite)
+    family_report = families_stage(paths, config, assigned, overwrite)
     upstream = StageReport(
         stage=Stage.PARTITIONS,
         directory=paths.stage_dir(Stage.PARTITIONS),
@@ -365,5 +424,5 @@ def run_preprocess(paths: Paths, config: Config, overwrite: bool) -> list[StageR
         assigned,
         identified,
         family_report,
-        *partition_stage(paths, config, upstream, code, overwrite),
+        *partition_stage(paths, config, upstream, overwrite),
     ]

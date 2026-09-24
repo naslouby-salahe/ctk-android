@@ -7,7 +7,13 @@ from tests.architecture.source_index import CLI_MODULE, SRC_ROOT, location, pars
 
 WORKFLOWS_PACKAGE = "ctk_android.workflows"
 CLI_ALLOWED_PACKAGES = {"ctk_android.workflows", "ctk_android.config", "ctk_android.enums"}
-CLI_ALLOWED_MODULES = {"ctk_android.paths", "ctk_android.types", "ctk_android.cli"}
+CLI_ALLOWED_MODULES = {
+    "ctk_android",
+    "ctk_android.logs",
+    "ctk_android.paths",
+    "ctk_android.types",
+    "ctk_android.cli",
+}
 COMMAND_WORKFLOW = {
     CliCommand.DOCTOR: "doctor_workflow",
     CliCommand.PREPROCESS: "preprocess_workflow",

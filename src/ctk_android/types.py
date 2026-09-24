@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated, Any, Protocol
 
@@ -10,6 +11,8 @@ from sklearn.ensemble import HistGradientBoostingClassifier
 
 from ctk_android.enums import (
     AllowedWording,
+    Artifact,
+    BudgetLevel,
     ClaimName,
     ClaimStatus,
     ClientId,
@@ -24,7 +27,10 @@ from ctk_android.enums import (
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
+    ExposureMode,
     FailureReason,
+    FamilyLabelSource,
+    FamilySetName,
     Grouping,
     LamdaRelease,
     Learner,
@@ -37,6 +43,7 @@ from ctk_android.enums import (
     Pattern,
     PromotionBlock,
     PromotionState,
+    ReportTable,
     RunStatus,
     Sensitivity,
     Stage,
@@ -45,7 +52,6 @@ from ctk_android.enums import (
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
 PositiveInt = Annotated[int, Field(gt=0)]
-SignedInt = int
 NonNegativeFloat = Annotated[float, Field(ge=0.0)]
 PositiveFloat = Annotated[float, Field(gt=0.0)]
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
@@ -55,26 +61,24 @@ OpenUnitInterval = Annotated[float, Field(gt=0.0, lt=1.0, allow_inf_nan=False)]
 Seed = NonNegativeInt
 Salt = NonNegativeInt
 RowCount = NonNegativeInt
-RowIndex = NonNegativeInt
-ComponentId = NonNegativeInt
 FeatureCount = PositiveInt
-FeatureIndex = NonNegativeInt
 Epochs = PositiveInt
 Rounds = PositiveInt
 BatchSize = PositiveInt
 UnitCount = PositiveInt
-Dose = SignedInt
 ResampleCount = PositiveInt
 TreeIterations = PositiveInt
 TreeDepth = PositiveInt
 VtCount = NonNegativeInt
 Rank = NonNegativeInt
+DoseSweep = bool
 Axis = NonNegativeInt
 ExceedanceCount = PositiveInt
 
 seed_adapter: TypeAdapter[Seed] = TypeAdapter(Seed)
 
 Fraction = UnitInterval
+Seconds = NonNegativeFloat
 Rate = UnitInterval
 Alpha = OpenUnitInterval
 Confidence = OpenUnitInterval
@@ -88,22 +92,98 @@ Threshold = FiniteFloat
 Effect = FiniteFloat
 Correlation = FiniteFloat
 PValue = UnitInterval
-Seconds = NonNegativeFloat
 
-Sha256 = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
-PackageName = Annotated[str, StringConstraints(min_length=1)]
 FamilyName = Annotated[str, StringConstraints(strip_whitespace=True)]
 YearMonth = Annotated[str, StringConstraints(pattern=Pattern.YEAR_MONTH)]
 Fingerprint = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
 Message = Annotated[str, StringConstraints(min_length=1)]
 FeatureColumn = Annotated[str, StringConstraints(pattern=Pattern.FEATURE_COLUMN)]
-Label = Annotated[int, Field(ge=0, le=1)]
 
 FloatArray = NDArray[np.float64]
 Float32Array = NDArray[np.float32]
 IntArray = NDArray[np.int64]
 BoolArray = NDArray[np.bool_]
 ByteMatrix = NDArray[np.uint8]
+ObjectArray = NDArray[np.object_]
+
+Table = pl.DataFrame
+SummaryTable = pl.DataFrame
+DecompositionTable = pl.DataFrame
+FamilyCountsTable = pl.DataFrame
+FamilySeedTable = pl.DataFrame
+FamilyEffectsTable = pl.DataFrame
+FamilyArmTable = pl.DataFrame
+DoseRecallTable = pl.DataFrame
+ExposureTable = pl.DataFrame
+TargetsTable = pl.DataFrame
+EffectiveDoseTable = pl.DataFrame
+DoseCurveTable = pl.DataFrame
+EffectsTable = pl.DataFrame
+FamilyGainsTable = pl.DataFrame
+SeedMeansTable = pl.DataFrame
+ClaimsTable = pl.DataFrame
+DescriptorTable = pl.DataFrame
+NoveltyTable = pl.DataFrame
+DescriptorScoreTable = pl.DataFrame
+MicroGainTable = pl.DataFrame
+RobustnessTable = pl.DataFrame
+PooledRecallTable = pl.DataFrame
+GroupTable = pl.DataFrame
+JoinedTable = pl.DataFrame
+UnmatchedTable = pl.DataFrame
+AssignmentsTable = pl.DataFrame
+ClientSupportTable = pl.DataFrame
+LabelledTable = pl.DataFrame
+FamilySupportTable = pl.DataFrame
+EligibilityTable = pl.DataFrame
+RoleCountsTable = pl.DataFrame
+RoleSliceTable = pl.DataFrame
+ClientFitRowsTable = pl.DataFrame
+PairsTable = pl.DataFrame
+IdentitiesTable = pl.DataFrame
+ComponentSummaryTable = pl.DataFrame
+LamdaMetadataTable = pl.DataFrame
+AndroZooTable = pl.DataFrame
+ClientCountsTable = pl.DataFrame
+DiscriminationTable = pl.DataFrame
+OperatingTable = pl.DataFrame
+RatesTable = pl.DataFrame
+MetricTable = pl.DataFrame
+FamilyRescueTable = pl.DataFrame
+RunIndexTable = pl.DataFrame
+ClientAuditTable = pl.DataFrame
+ArmComparisonTable = pl.DataFrame
+DecompositionReportTable = pl.DataFrame
+DoseReportTable = pl.DataFrame
+FamilyLevelTable = pl.DataFrame
+ClusterTable = pl.DataFrame
+StatusCountsTable = pl.DataFrame
+StudyTable = pl.DataFrame
+ValueSeries = pl.Series
+RoleSeries = pl.Series
+PackageSeries = pl.Series
+ShaSeries = pl.Series
+RowIndices = IntArray
+Prevalence = FloatArray
+ActiveMask = BoolArray
+NoveltyVector = FloatArray
+GainVector = FloatArray
+SeedEffects = FloatArray
+PValueVector = FloatArray
+HitVector = IntArray
+TrialVector = IntArray
+GroupIds = IntArray
+IdentityIds = IntArray
+FeatureMatrix = ByteMatrix
+LabelVector = IntArray
+AttributeColumn = ObjectArray
+RowMask = BoolArray
+LogitVector = FloatArray
+ScoreVector = FloatArray
+Priorities = FloatArray
+WeightVector = FloatArray
+LogitChunk = Float32Array
+PlotVector = FloatArray
 
 Directory = Path
 LamdaReleaseFiles = list[Path]
@@ -156,7 +236,6 @@ class ValidationRecord(FrozenRecord):
 class Provenance(FrozenRecord):
     stage: Stage
     inputs: Fingerprint
-    code: Fingerprint
 
 
 class CtkError(Exception):
@@ -166,15 +245,15 @@ class CtkError(Exception):
 
 
 class LamdaTable(FrozenRecord):
-    metadata: pl.DataFrame
-    features: ByteMatrix
+    metadata: LamdaMetadataTable
+    features: FeatureMatrix
     non_binary_cells: RowCount
     negative_cells: RowCount
 
 
 class JoinResult(FrozenRecord):
-    joined: pl.DataFrame
-    unmatched: pl.DataFrame
+    joined: JoinedTable
+    unmatched: UnmatchedTable
     validations: tuple[ValidationRecord, ...]
 
 
@@ -184,10 +263,10 @@ class TargetPair(FrozenRecord):
 
 
 class PartitionResult(FrozenRecord):
-    roles: pl.Series
+    roles: RoleSeries
     attempt: NonNegativeInt
-    controlled: pl.DataFrame
-    natural: pl.DataFrame
+    controlled: PairsTable
+    natural: PairsTable
     validations: tuple[ValidationRecord, ...]
 
 
@@ -214,8 +293,8 @@ class ArmKey(FrozenRecord):
 
 
 class StudyData(FrozenRecord):
-    table: pl.DataFrame
-    features: ByteMatrix
+    table: StudyTable
+    features: FeatureMatrix
 
 
 class ExposureSpec(FrozenRecord):
@@ -429,12 +508,12 @@ class PairedEffect(FrozenRecord):
 
 
 class RunEvidence(FrozenRecord):
-    index: pl.DataFrame
-    summary: pl.DataFrame
-    clients: pl.DataFrame
-    families: pl.DataFrame
-    exposure: pl.DataFrame
-    novelty: pl.DataFrame
+    index: RunIndexTable
+    summary: SummaryTable
+    clients: ClientCountsTable
+    families: FamilyCountsTable
+    exposure: ExposureTable
+    novelty: NoveltyTable
 
 
 class EffectRow(FrozenRecord):
@@ -472,11 +551,11 @@ class ClaimResult(FrozenRecord):
 
 
 class GateEvidence(FrozenRecord):
-    effects: pl.DataFrame
-    summary: pl.DataFrame
-    family_seed: pl.DataFrame
-    family_effects: pl.DataFrame
-    dose: pl.DataFrame
+    effects: EffectsTable
+    summary: SummaryTable
+    family_seed: FamilySeedTable
+    family_effects: FamilyEffectsTable
+    dose: DoseCurveTable
     associations: dict[ExperimentName, NoveltyAssociation | None]
     failed_validation_runs: RowCount
 
@@ -572,7 +651,6 @@ class SourceProvenance(FrozenRecord):
 
 class CodeProvenance(FrozenRecord):
     revision: Message
-    fingerprint: Fingerprint
 
 
 class ProtocolProvenance(FrozenRecord):
@@ -583,3 +661,86 @@ class ProtocolProvenance(FrozenRecord):
 class PromotionDecision(FrozenRecord):
     state: PromotionState
     blocks: tuple[PromotionBlock, ...]
+
+
+class EligibilityRule(FrozenRecord):
+    peer_min_fit: SupportCount
+    federation_min_test: SupportCount
+    own_domain_min_test: SupportCount
+    target_min_remaining_fit: SupportCount
+    target_min_fit: SupportCount
+
+
+class ExperimentSpec(FrozenRecord):
+    modes: tuple[ExecutionMode, ...]
+    model_family: ModelFamily
+    family_set: FamilySetName
+    exposure_mode: ExposureMode
+    family_labels: FamilyLabelSource
+    grouping: Grouping
+    budget: BudgetLevel
+    eligibility: EligibilityProfile
+    salts: tuple[Salt, ...]
+    learners: tuple[Learner, ...]
+    conditions: tuple[ExposureCondition, ...]
+    dose_sweep: DoseSweep
+
+
+class ArmResult(FrozenRecord):
+    scores: dict[ClientId, FloatArray]
+    scorers: dict[ClientId, Scorer]
+
+
+class PairTables(FrozenRecord):
+    controlled: PairsTable
+    natural: PairsTable
+
+
+class SourceScan(FrozenRecord):
+    fingerprint: SourceFingerprint
+    inventory: SourceInventory
+
+
+class PlannedTargets(FrozenRecord):
+    status: RunStatus
+    targets: tuple[TargetPair, ...]
+
+
+class ExposureSetting(FrozenRecord):
+    condition: ExposureCondition
+    dose: DoseRequest
+
+
+Overwrite = bool
+Reused = bool
+Promote = bool
+Reusable = bool
+Stale = bool
+Passed = bool
+Refuted = bool
+Positive = bool
+IncludeAllDose = bool
+Records = Sequence[FrozenRecord]
+FamilyMasks = dict[FamilyName, BoolArray]
+ClientPools = dict[ClientId, IntArray]
+ClientScorers = dict[ClientId, Scorer]
+PopulationMasks = dict[EvaluationPopulation, BoolArray]
+DescriptorValues = dict[NoveltyDescriptor, Score]
+FamilySets = dict[FamilySetName, tuple[FamilyName, ...]]
+DoseCaps = dict[FamilyName, SupportCount]
+DoseTargets = dict[FamilyName, ClientId]
+ExcludedFamilies = dict[ClientId, tuple[FamilyName, ...]]
+TrainingSizes = dict[ClientId, set[RowCount]]
+TrainingByArm = dict[ArmKey, TrainingRows]
+ResultsByArm = dict[ArmKey, ArmResult]
+AssociationMap = dict[ExperimentName, NoveltyAssociation | None]
+ReportTables = dict[ReportTable, pl.DataFrame]
+FrameLists = dict[Artifact, list[pl.DataFrame]]
+HitVectors = dict[ExposureCondition, list[IntArray]]
+EligibilityRules = dict[EligibilityProfile, EligibilityRule]
+BudgetRows = dict[BudgetLevel, RowCount]
+ExperimentSpecs = dict[ExperimentName, ExperimentSpec]
+
+
+LogValue = str | int | float | bool | None
+LogFields = dict[str, LogValue]

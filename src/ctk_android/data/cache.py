@@ -1,23 +1,32 @@
 import hashlib
-from collections.abc import Sequence
 
 import numpy as np
 import polars as pl
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from ctk_android.config import Config
-from ctk_android.enums import ByteBlock, LibraryOption, Separator, SourceFile, Stage, TextEncoding
+from ctk_android.enums import (
+    ByteBlock,
+    ErrorMessage,
+    FailureReason,
+    LibraryOption,
+    Separator,
+    Stage,
+    TextEncoding,
+)
 from ctk_android.paths import Paths
 from ctk_android.types import (
-    ByteMatrix,
-    Directory,
+    CtkError,
+    FeatureMatrix,
     File,
     Fingerprint,
-    FrozenRecord,
     PartitionKey,
     Provenance,
+    Records,
+    Reusable,
     RunInputs,
     RunKey,
+    Table,
     TargetPair,
 )
 
@@ -38,32 +47,27 @@ def fingerprint_model(model: BaseModel) -> Fingerprint:
     return hashlib.sha256(model.model_dump_json().encode()).hexdigest()
 
 
-def fingerprint_source_tree(source_root: Directory) -> Fingerprint:
-    files = sorted(source_root.rglob(SourceFile.PYTHON_GLOB))
-    parts = [
-        Separator.COLON.join((f"{path.relative_to(source_root)}", fingerprint_file(path)))
-        for path in files
-    ]
-    return hashlib.sha256(Separator.NEWLINE.join(parts).encode()).hexdigest()
-
-
 def write_provenance(file: File, provenance: Provenance) -> None:
     file.parent.mkdir(parents=True, exist_ok=True)
     file.write_text(provenance.model_dump_json(indent=2), encoding=TextEncoding.UTF8)
 
 
-def is_reusable(file: File, expected: Provenance) -> bool:
+def is_reusable(file: File, expected: Provenance) -> Reusable:
     if not file.is_file():
         return False
-    return Provenance.model_validate_json(file.read_text(encoding=TextEncoding.UTF8)) == expected
+    try:
+        stored = Provenance.model_validate_json(file.read_text(encoding=TextEncoding.UTF8))
+    except ValidationError:
+        return False
+    return stored == expected
 
 
-def save_features(path: File, features: ByteMatrix) -> None:
+def save_features(path: File, features: FeatureMatrix) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, features, allow_pickle=False)
 
 
-def load_features(path: File) -> ByteMatrix:
+def load_features(path: File) -> FeatureMatrix:
     return np.load(path, mmap_mode=LibraryOption.MMAP_READ, allow_pickle=False)
 
 
@@ -76,12 +80,12 @@ def read_record[Record: BaseModel](path: File, model: type[Record]) -> Record:
     return model.model_validate_json(path.read_text(encoding=TextEncoding.UTF8))
 
 
-def write_table(frame: pl.DataFrame, path: File) -> None:
+def write_table(frame: Table, path: File) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.write_parquet(path)
 
 
-def records_to_frame(rows: Sequence[FrozenRecord]) -> pl.DataFrame:
+def records_to_frame(rows: Records) -> Table:
     return pl.DataFrame([row.model_dump() for row in rows]) if rows else pl.DataFrame()
 
 
@@ -92,16 +96,18 @@ def run_provenance(
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
+    partition_file = paths.provenance_file(paths.partition_dir(partition_key))
+    try:
+        partition = read_record(partition_file, Provenance)
+    except (ValidationError, FileNotFoundError) as error:
+        raise CtkError(
+            FailureReason.SCHEMA_MISMATCH,
+            ErrorMessage.STALE_PREPROCESSING.format(path=partition_file),
+        ) from error
     inputs = RunInputs(
         key=key,
-        partition=read_record(
-            paths.provenance_file(paths.partition_dir(partition_key)), Provenance
-        ),
+        partition=partition,
         config=config.fingerprint(),
         targets=targets,
     )
-    return Provenance(
-        stage=Stage.RUNS,
-        inputs=fingerprint_model(inputs),
-        code=fingerprint_source_tree(paths.source_root),
-    )
+    return Provenance(stage=Stage.RUNS, inputs=fingerprint_model(inputs))

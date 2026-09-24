@@ -7,7 +7,16 @@ from ctk_android.enums import (
     Metric,
     OperatingPointStatus,
 )
-from ctk_android.types import SupportCount
+from ctk_android.types import (
+    ClientCountsTable,
+    DiscriminationTable,
+    FamilyCountsTable,
+    MetricTable,
+    OperatingTable,
+    RatesTable,
+    SummaryTable,
+    SupportCount,
+)
 
 
 def arm_columns() -> list[Column]:
@@ -19,8 +28,8 @@ def group_columns() -> list[Column]:
 
 
 def _rates(
-    table: pl.DataFrame, population: EvaluationPopulation, minimum: SupportCount
-) -> pl.DataFrame:
+    table: ClientCountsTable, population: EvaluationPopulation, minimum: SupportCount
+) -> RatesTable:
     return (
         table.filter(
             (pl.col(Column.POPULATION) == population) & (pl.col(Column.TRIALS) >= max(minimum, 1))
@@ -30,7 +39,7 @@ def _rates(
     )
 
 
-def _long(frame: pl.DataFrame, metric: Metric, expression: pl.Expr) -> pl.DataFrame:
+def _long(frame: RatesTable, metric: Metric, expression: pl.Expr) -> MetricTable:
     return (
         frame.group_by(group_columns())
         .agg(expression.alias(Column.VALUE))
@@ -43,14 +52,14 @@ def _spread(expression: pl.Expr) -> pl.Expr:
 
 
 def summarize(
-    clients: pl.DataFrame,
-    families: pl.DataFrame,
-    discrimination: pl.DataFrame,
-    operating: pl.DataFrame,
+    clients: ClientCountsTable,
+    families: FamilyCountsTable,
+    discrimination: DiscriminationTable,
+    operating: OperatingTable,
     own_domain_min: SupportCount,
-) -> pl.DataFrame:
+) -> SummaryTable:
     recall = pl.col(Column.RECALL)
-    parts: list[pl.DataFrame] = []
+    parts: list[MetricTable] = []
     own = _rates(clients, EvaluationPopulation.OWN_DOMAIN, own_domain_min)
     parts.append(_long(own, Metric.OWN_DOMAIN_UNSEEN_RECALL, recall.mean()))
     federation = _rates(clients, EvaluationPopulation.FEDERATION_WIDE, 1)

@@ -17,16 +17,22 @@ from ctk_android.enums import (
 from ctk_android.types import (
     Alpha,
     Axis,
+    DecompositionTable,
     Effect,
     EffectRow,
-    FloatArray,
+    EffectsTable,
     Fraction,
-    IntArray,
+    GroupIds,
+    GroupTable,
+    HitVector,
     Interval,
     PairedEffect,
     PValue,
+    PValueVector,
     ResampleCount,
     Seed,
+    SeedEffects,
+    TrialVector,
 )
 
 
@@ -34,7 +40,7 @@ def _finite_interval(low: Effect, high: Effect) -> Interval | None:
     return Interval(low=low, high=high) if np.isfinite(low) and np.isfinite(high) else None
 
 
-def bca_interval(values: FloatArray, config: StatisticsConfig) -> Interval | None:
+def bca_interval(values: SeedEffects, config: StatisticsConfig) -> Interval | None:
     if values.size < StatisticsLimit.BCA_SEEDS:
         return None
     result = stats.bootstrap(
@@ -50,13 +56,13 @@ def bca_interval(values: FloatArray, config: StatisticsConfig) -> Interval | Non
     )
 
 
-def exact_wilcoxon(differences: FloatArray) -> PValue:
+def exact_wilcoxon(differences: SeedEffects) -> PValue:
     if not np.any(differences):
         return 1.0
     return stats.wilcoxon(differences, method=LibraryOption.WILCOXON_EXACT).pvalue.item()
 
 
-def paired_effect(differences: FloatArray, config: StatisticsConfig) -> PairedEffect:
+def paired_effect(differences: SeedEffects, config: StatisticsConfig) -> PairedEffect:
     spread = differences.std(ddof=1) if differences.size > 1 else 0.0
     return PairedEffect(
         mean=differences.mean().item(),
@@ -69,7 +75,7 @@ def paired_effect(differences: FloatArray, config: StatisticsConfig) -> PairedEf
     )
 
 
-def holm_adjust(p_values: FloatArray) -> FloatArray:
+def holm_adjust(p_values: PValueVector) -> PValueVector:
     order = np.argsort(p_values, kind=LibraryOption.SORT_STABLE)
     scaled = (p_values.size - np.arange(p_values.size)) * p_values[order]
     adjusted = np.minimum(np.maximum.accumulate(scaled), 1.0)
@@ -79,15 +85,15 @@ def holm_adjust(p_values: FloatArray) -> FloatArray:
 
 
 def ratio_interval(
-    numerator: FloatArray,
-    denominator: FloatArray,
+    numerator: SeedEffects,
+    denominator: SeedEffects,
     minimum_denominator: Fraction,
     config: StatisticsConfig,
 ) -> Interval | None:
     if numerator.size < StatisticsLimit.BCA_SEEDS or abs(denominator.mean()) < minimum_denominator:
         return None
 
-    def ratio_of_means(top: FloatArray, bottom: FloatArray, axis: Axis) -> FloatArray:
+    def ratio_of_means(top: SeedEffects, bottom: SeedEffects, axis: Axis) -> SeedEffects:
         return top.mean(axis=axis) / bottom.mean(axis=axis)
 
     result = stats.bootstrap(
@@ -106,10 +112,10 @@ def ratio_interval(
 
 
 def cluster_bootstrap_difference(
-    hits_first: IntArray,
-    hits_second: IntArray,
-    trials: IntArray,
-    groups: IntArray,
+    hits_first: HitVector,
+    hits_second: HitVector,
+    trials: TrialVector,
+    groups: GroupIds,
     resamples: ResampleCount,
     seed: Seed,
     level: Fraction,
@@ -157,7 +163,7 @@ def contrast_family(
     return ContrastFamily.EXPLORATORY
 
 
-def _effect_row(group: pl.DataFrame, config: Config) -> EffectRow:
+def _effect_row(group: GroupTable, config: Config) -> EffectRow:
     head = group.row(0, named=True)
     experiment, alpha = head[Column.EXPERIMENT], head[Column.ALPHA]
     metric, learner, estimand = head[Column.METRIC], head[Column.LEARNER], head[Column.ESTIMAND]
@@ -184,13 +190,13 @@ def _effect_row(group: pl.DataFrame, config: Config) -> EffectRow:
     )
 
 
-def _share_rows(decomposition: pl.DataFrame, config: Config) -> list[EffectRow]:
+def _share_rows(decomposition: DecompositionTable, config: Config) -> list[EffectRow]:
     keys = [Column.EXPERIMENT, Column.SALT, Column.ALPHA, Column.METRIC, Column.LEARNER]
     rows: list[EffectRow] = []
     for group in decomposition.sort(Column.SEED).partition_by(keys):
         head = group.row(0, named=True)
 
-        def seeds(estimand: Estimand, frame: pl.DataFrame = group) -> FloatArray:
+        def seeds(estimand: Estimand, frame: GroupTable = group) -> SeedEffects:
             return frame.filter(pl.col(Column.ESTIMAND) == estimand)[Column.VALUE].to_numpy()
 
         total = seeds(Estimand.TOTAL_GAIN)
@@ -225,7 +231,7 @@ def _share_rows(decomposition: pl.DataFrame, config: Config) -> list[EffectRow]:
     return rows
 
 
-def paired_effect_table(decomposition: pl.DataFrame, config: Config) -> pl.DataFrame:
+def paired_effect_table(decomposition: DecompositionTable, config: Config) -> EffectsTable:
     keys = [
         Column.EXPERIMENT,
         Column.SALT,

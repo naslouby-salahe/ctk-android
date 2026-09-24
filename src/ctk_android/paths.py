@@ -2,8 +2,8 @@ from typing import Self
 
 from ctk_android.enums import (
     Artifact,
+    CliCommand,
     ConfigFile,
-    CoreModule,
     DatasetName,
     EligibilityProfile,
     ErrorMessage,
@@ -52,18 +52,6 @@ class Paths:
         raise FileNotFoundError(
             ErrorMessage.NO_PROJECT_ROOT.format(marker=SourceFile.PROJECT_MARKER, start=start)
         )
-
-    @property
-    def source_root(self) -> Directory:
-        return self.root / WorkspaceDirectory.SOURCE / WorkspaceDirectory.PACKAGE
-
-    @property
-    def data_package(self) -> Directory:
-        return self.source_root / WorkspaceDirectory.DATA
-
-    @property
-    def core_modules(self) -> list[File]:
-        return [self.source_root / module for module in CoreModule]
 
     @property
     def roadmap_file(self) -> File:
@@ -146,6 +134,9 @@ class Paths:
 
     def results_root_file(self, name: ResultsFile) -> File:
         return self.root / WorkspaceDirectory.RESULTS / name
+
+    def log_file(self, command: CliCommand) -> File:
+        return self.outputs / WorkspaceDirectory.LOGS / f"{command}{FileSuffix.JSONL}"
 
     def analysis_file(self, mode: ExecutionMode, artifact: Artifact) -> File:
         return self.outputs / WorkspaceDirectory.ANALYSIS / mode / artifact

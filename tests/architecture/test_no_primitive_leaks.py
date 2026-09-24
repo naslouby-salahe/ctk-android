@@ -11,7 +11,9 @@ from tests.architecture.source_index import (
     source_files,
 )
 
-FORBIDDEN_PRIMITIVES = {"int", "float", "str", "object", "Any"}
+FORBIDDEN_PRIMITIVES = {"int", "float", "str", "object", "Any", "bool", "bytes", "complex"}
+FORBIDDEN_ARRAYS = {"ndarray", "NDArray"}
+FORBIDDEN_INLINE_CONTAINERS = {"dict", "Mapping", "Sequence", "Callable"}
 UNPARAMETERISED_CONTAINERS = {"dict", "list", "tuple", "set", "frozenset"}
 HIDING_CALLS = {"float", "int", "str", "cast"}
 
@@ -132,4 +134,114 @@ def test_no_wrapper_only_classes() -> None:
             }
             if len(fields) == 1 and not methods and not sibling_bases:
                 offenders.append(f"{location(path, node.lineno)} {node.name}")
+    assert not offenders, offenders
+
+
+def _annotations_outside_types() -> list[tuple[str, ast.expr]]:
+    found: list[tuple[str, ast.expr]] = []
+    for path in _outside_types():
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                where = f"{location(path, node.lineno)} {node.name}"
+                found.extend((where, a) for a in function_annotations(node) if a is not None)
+            elif isinstance(node, ast.AnnAssign):
+                found.append((location(path, node.lineno), node.annotation))
+    return found
+
+
+def _attribute_names(annotation: ast.expr) -> set[str]:
+    return {node.attr for node in ast.walk(annotation) if isinstance(node, ast.Attribute)}
+
+
+def _fixed_tuple(annotation: ast.expr) -> bool:
+    for node in ast.walk(annotation):
+        if (
+            isinstance(node, ast.Subscript)
+            and isinstance(node.value, ast.Name)
+            and node.value.id == "tuple"
+            and isinstance(node.slice, ast.Tuple)
+        ):
+            elements = node.slice.elts
+            variadic = (
+                len(elements) == 2
+                and isinstance(elements[1], ast.Constant)
+                and elements[1].value is Ellipsis
+            )
+            if not variadic:
+                return True
+    return False
+
+
+def test_no_raw_numpy_arrays_outside_types_py() -> None:
+    offenders = [
+        f"{where} uses raw numpy array annotation"
+        for where, annotation in _annotations_outside_types()
+        if (set(annotation_names(annotation)) | _attribute_names(annotation)) & FORBIDDEN_ARRAYS
+    ]
+    assert not offenders, offenders
+
+
+def test_no_anonymous_fixed_tuples_as_domain_bundles() -> None:
+    offenders = [
+        f"{where}: {ast.unparse(annotation)}"
+        for where, annotation in _annotations_outside_types()
+        if _fixed_tuple(annotation)
+    ]
+    assert not offenders, offenders
+
+
+def test_no_inline_mapping_or_callable_annotations() -> None:
+    offenders = [
+        f"{where}: {ast.unparse(annotation)}"
+        for where, annotation in _annotations_outside_types()
+        if set(annotation_names(annotation)) & FORBIDDEN_INLINE_CONTAINERS
+    ]
+    assert not offenders, offenders
+
+
+def test_type_aliases_in_types_py_are_all_referenced() -> None:
+    aliases = {
+        node.targets[0].id
+        for node in parse(TYPES_MODULE).body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id[:1].isupper()
+        and not node.targets[0].id.isupper()
+    }
+    referenced = {
+        node.id
+        for path in source_files()
+        for node in ast.walk(parse(path))
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+    }
+    unused = sorted(alias for alias in aliases if alias not in referenced)
+    assert not unused, unused
+
+
+GENERIC_ARRAY_ALIASES = {
+    "FloatArray",
+    "Float32Array",
+    "IntArray",
+    "BoolArray",
+    "ByteMatrix",
+    "ObjectArray",
+}
+RAW_FRAME_TYPES = {"DataFrame", "Series", "LazyFrame"}
+
+
+def test_signatures_use_semantic_array_aliases_not_generic_ones() -> None:
+    offenders = [
+        f"{where}: {ast.unparse(annotation)}"
+        for where, annotation in _annotations_outside_types()
+        if set(annotation_names(annotation)) & GENERIC_ARRAY_ALIASES
+    ]
+    assert not offenders, offenders
+
+
+def test_signatures_use_named_table_aliases_not_raw_polars_types() -> None:
+    offenders = [
+        f"{where}: {ast.unparse(annotation)}"
+        for where, annotation in _annotations_outside_types()
+        if (_attribute_names(annotation) | set(annotation_names(annotation))) & RAW_FRAME_TYPES
+    ]
     assert not offenders, offenders

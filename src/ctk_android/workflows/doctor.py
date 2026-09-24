@@ -3,6 +3,7 @@ import sys
 
 import torch
 
+from ctk_android import logs
 from ctk_android.config import Config
 from ctk_android.enums import (
     DetailMessage,
@@ -10,6 +11,8 @@ from ctk_android.enums import (
     Display,
     DoctorCheck,
     GitArgument,
+    LogEvent,
+    LogField,
     PythonRequirement,
 )
 from ctk_android.paths import Paths
@@ -47,6 +50,21 @@ def _raw_lamda(paths: Paths, config: Config) -> DoctorResult:
 
 
 def run_doctor(paths: Paths, config: Config) -> list[DoctorResult]:
+    results = _checks(paths, config)
+    for result in results:
+        report = logs.info if result.passed else logs.warning
+        report(
+            LogEvent.DOCTOR_CHECKED,
+            {
+                LogField.CHECK: result.check,
+                LogField.PASSED: result.passed,
+                LogField.DETAIL: result.detail,
+            },
+        )
+    return results
+
+
+def _checks(paths: Paths, config: Config) -> list[DoctorResult]:
     archive = paths.androzoo_archive()
     device = Device.CUDA if torch.cuda.is_available() else Device.CPU
     return [

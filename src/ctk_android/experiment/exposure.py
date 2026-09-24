@@ -1,5 +1,4 @@
 import numpy as np
-import polars as pl
 
 from ctk_android.data.cache import records_to_frame
 from ctk_android.enums import (
@@ -14,31 +13,37 @@ from ctk_android.enums import (
 )
 from ctk_android.types import (
     ArmKey,
-    BoolArray,
+    DoseCaps,
+    DoseTargets,
+    ExcludedFamilies,
     ExposureRow,
     ExposureSpec,
+    ExposureTable,
+    FamilyMasks,
     FamilyName,
-    FloatArray,
-    IntArray,
+    Priorities,
     RowCount,
+    RowIndices,
     Salt,
     Seed,
     StudyData,
     SupportCount,
     TargetPair,
+    TrainingByArm,
     TrainingRows,
+    TrainingSizes,
     ValidationRecord,
 )
 
 
-def family_masks(study: StudyData, families: tuple[FamilyName, ...]) -> dict[FamilyName, BoolArray]:
+def family_masks(study: StudyData, families: tuple[FamilyName, ...]) -> FamilyMasks:
     table = study.table
     malware = table[Column.LABEL].to_numpy() == 1
     names = table[Column.FAMILY]
     return {family: malware & (names == family).to_numpy() for family in families}
 
 
-def client_rows(study: StudyData, client: ClientId, role: SplitRole) -> IntArray:
+def client_rows(study: StudyData, client: ClientId, role: SplitRole) -> RowIndices:
     table = study.table
     mask = (table[Column.CLIENT] == client) & (table[Column.ROLE] == role)
     return np.flatnonzero(mask.to_numpy())
@@ -53,7 +58,7 @@ def training_orders(study: StudyData, seed: Seed, salt: Salt) -> TrainingRows:
     return orders
 
 
-def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> FloatArray:
+def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> Priorities:
     rng = np.random.default_rng(np.random.SeedSequence([seed, salt, len(ClientId)]))
     return rng.random(study.table.height)
 
@@ -65,7 +70,7 @@ def exposure_spec(
 ) -> ExposureSpec:
     families = tuple(dict.fromkeys(pair.family for pair in targets))
     hide = mode is ExposureMode.HIDE_FROM_TARGET
-    excluded: dict[ClientId, tuple[FamilyName, ...]] = {client: () for client in ClientId}
+    excluded: ExcludedFamilies = {client: () for client in ClientId}
     if arm.condition is ExposureCondition.FAMILY_ABSENT_EVERYWHERE:
         excluded = {client: families for client in ClientId}
     elif hide and arm.condition is ExposureCondition.PEER_PRESENT:
@@ -73,8 +78,8 @@ def exposure_spec(
             client: tuple(pair.family for pair in targets if pair.client is client)
             for client in ClientId
         }
-    dose_caps: dict[FamilyName, SupportCount] = {}
-    dose_targets: dict[FamilyName, ClientId] = {}
+    dose_caps: DoseCaps = {}
+    dose_targets: DoseTargets = {}
     if arm.dose is not None and arm.condition is ExposureCondition.PEER_PRESENT:
         for pair in targets:
             dose_caps[pair.family] = arm.dose
@@ -84,13 +89,13 @@ def exposure_spec(
 
 def allowed_dose_rows(
     study: StudyData,
-    masks: dict[FamilyName, BoolArray],
+    masks: FamilyMasks,
     spec: ExposureSpec,
-    priorities: FloatArray,
-) -> dict[FamilyName, BoolArray]:
+    priorities: Priorities,
+) -> FamilyMasks:
     table = study.table
     fit = (table[Column.ROLE] == SplitRole.FIT).to_numpy()
-    allowed: dict[FamilyName, BoolArray] = {}
+    allowed: FamilyMasks = {}
     for family, cap in spec.dose_caps.items():
         target = spec.dose_targets[family]
         peer = (table[Column.CLIENT] != target).to_numpy()
@@ -106,9 +111,9 @@ def allowed_dose_rows(
 
 def select_training(
     orders: TrainingRows,
-    masks: dict[FamilyName, BoolArray],
+    masks: FamilyMasks,
     spec: ExposureSpec,
-    allowed: dict[FamilyName, BoolArray],
+    allowed: FamilyMasks,
     budget: RowCount,
 ) -> TrainingRows:
     selected: TrainingRows = {}
@@ -125,9 +130,9 @@ def select_training(
 
 def exposure_counts(
     training: TrainingRows,
-    masks: dict[FamilyName, BoolArray],
+    masks: FamilyMasks,
     arm: ArmKey,
-) -> pl.DataFrame:
+) -> ExposureTable:
     return records_to_frame(
         [
             ExposureRow(
@@ -147,8 +152,8 @@ def exposure_counts(
 
 def validate_exposure(
     study: StudyData,
-    training: dict[ArmKey, TrainingRows],
-    masks: dict[FamilyName, BoolArray],
+    training: TrainingByArm,
+    masks: FamilyMasks,
     targets: tuple[TargetPair, ...],
     mode: ExposureMode,
     peer_min_fit: SupportCount,
@@ -158,7 +163,7 @@ def validate_exposure(
     hidden_zero = True
     peer_present = True
     absent_zero = True
-    sizes: dict[ClientId, set[RowCount]] = {client: set() for client in ClientId}
+    sizes: TrainingSizes = {client: set() for client in ClientId}
     only_fit = True
     for arm, per_client in training.items():
         for client, rows in per_client.items():

@@ -1,7 +1,7 @@
 import numpy as np
 import polars as pl
 
-from ctk_android.config import DataConfig, EligibilityRule
+from ctk_android.config import DataConfig
 from ctk_android.enums import (
     ClientId,
     Column,
@@ -11,10 +11,28 @@ from ctk_android.enums import (
     SourceFamilyLabel,
     SplitRole,
 )
-from ctk_android.types import FamilyName, Fraction, Rank, Seed, SupportCount
+from ctk_android.types import (
+    AssignmentsTable,
+    ClientFitRowsTable,
+    EligibilityRule,
+    EligibilityTable,
+    FamilyName,
+    FamilySets,
+    FamilySupportTable,
+    Fraction,
+    LabelledTable,
+    PairsTable,
+    Rank,
+    RoleCountsTable,
+    RoleSeries,
+    RoleSliceTable,
+    Seed,
+    SupportCount,
+    TargetPair,
+)
 
 
-def classify_labels(assignments: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
+def classify_labels(assignments: AssignmentsTable, config: DataConfig) -> LabelledTable:
     family = pl.col(Column.FAMILY)
     reason = (
         pl.when(pl.col(Column.LABEL) == 0)
@@ -31,7 +49,7 @@ def classify_labels(assignments: pl.DataFrame, config: DataConfig) -> pl.DataFra
     return assignments.with_columns(reason)
 
 
-def corpus_support(labelled: pl.DataFrame) -> pl.DataFrame:
+def corpus_support(labelled: LabelledTable) -> FamilySupportTable:
     return (
         labelled.filter(pl.col(Column.REASON) == EligibilityReason.ELIGIBLE)
         .group_by(Column.CLIENT, Column.FAMILY)
@@ -40,7 +58,7 @@ def corpus_support(labelled: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def label_eligibility(labelled: pl.DataFrame) -> pl.DataFrame:
+def label_eligibility(labelled: LabelledTable) -> EligibilityTable:
     return (
         labelled.filter(pl.col(Column.LABEL) == 1)
         .group_by(Column.REASON)
@@ -50,8 +68,8 @@ def label_eligibility(labelled: pl.DataFrame) -> pl.DataFrame:
 
 
 def select_family_sets(
-    support: pl.DataFrame, config: DataConfig, set_size: SupportCount
-) -> dict[FamilySetName, tuple[FamilyName, ...]]:
+    support: FamilySupportTable, config: DataConfig, set_size: SupportCount
+) -> FamilySets:
     totals = (
         support.group_by(Column.FAMILY)
         .agg(
@@ -72,8 +90,8 @@ def select_family_sets(
 
 
 def role_counts(
-    labelled: pl.DataFrame, roles: pl.Series, families: tuple[FamilyName, ...]
-) -> pl.DataFrame:
+    labelled: LabelledTable, roles: RoleSeries, families: tuple[FamilyName, ...]
+) -> RoleCountsTable:
     return (
         labelled.with_columns(roles.alias(Column.ROLE))
         .filter(
@@ -85,17 +103,17 @@ def role_counts(
     )
 
 
-def _count(table: pl.DataFrame, role: SplitRole) -> pl.DataFrame:
+def _count(table: RoleCountsTable, role: SplitRole) -> RoleSliceTable:
     return table.filter(pl.col(Column.ROLE) == role).select(
         Column.CLIENT, Column.FAMILY, pl.col(Column.ROWS)
     )
 
 
 def controlled_pairs(
-    counts: pl.DataFrame,
-    client_fit_rows: pl.DataFrame,
+    counts: RoleCountsTable,
+    client_fit_rows: ClientFitRowsTable,
     rule: EligibilityRule,
-) -> pl.DataFrame:
+) -> PairsTable:
     fit = _count(counts, SplitRole.FIT).rename({Column.ROWS: Column.TARGET_FIT_ROWS})
     fed_fit = fit.group_by(Column.FAMILY).agg(
         pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS)
@@ -134,12 +152,12 @@ def controlled_pairs(
 
 
 def natural_pairs(
-    counts: pl.DataFrame,
-    client_fit_rows: pl.DataFrame,
+    counts: RoleCountsTable,
+    client_fit_rows: ClientFitRowsTable,
     max_target_share: Fraction,
     peer_min_fit: SupportCount,
     own_domain_min_test: SupportCount,
-) -> pl.DataFrame:
+) -> PairsTable:
     fit = _count(counts, SplitRole.FIT).rename({Column.ROWS: Column.TARGET_FIT_ROWS})
     total = fit.group_by(Column.FAMILY).agg(
         pl.col(Column.TARGET_FIT_ROWS).sum().alias(Column.TOTAL_FIT_ROWS)
@@ -176,14 +194,14 @@ def natural_pairs(
 
 
 def assign_targets(
-    pairs: pl.DataFrame, seed: Seed, families: tuple[FamilyName, ...], rule: EligibilityRule
-) -> list[tuple[ClientId, FamilyName]]:
+    pairs: PairsTable, seed: Seed, families: tuple[FamilyName, ...], rule: EligibilityRule
+) -> list[TargetPair]:
     remaining = {
         row[Column.CLIENT]: row[Column.FIT_ROWS]
         for row in pairs.select(Column.CLIENT, Column.FIT_ROWS).unique().iter_rows(named=True)
     }
     rng = np.random.default_rng(np.random.SeedSequence([seed, len(families)]))
-    chosen: list[tuple[ClientId, FamilyName]] = []
+    chosen: list[TargetPair] = []
     for family in families:
         options = pairs.filter((pl.col(Column.FAMILY) == family) & pl.col(Column.ELIGIBLE)).sort(
             Column.CLIENT
@@ -196,12 +214,12 @@ def assign_targets(
             after = remaining[client] - row[Column.TARGET_FIT_ROWS]
             if after >= rule.target_min_remaining_fit:
                 remaining[client] = after
-                chosen.append((client, family))
+                chosen.append(TargetPair(client=client, family=family))
                 break
     return chosen
 
 
-def permute_family_labels(labelled: pl.DataFrame, seed: Seed, offset: Seed) -> pl.DataFrame:
+def permute_family_labels(labelled: LabelledTable, seed: Seed, offset: Seed) -> LabelledTable:
     eligible = (labelled[Column.REASON] == EligibilityReason.ELIGIBLE).to_numpy()
     positions = np.flatnonzero(eligible)
     rng = np.random.default_rng(np.random.SeedSequence([seed, offset]))

@@ -5,6 +5,7 @@ import polars as pl
 import pyarrow as pa
 import pyarrow.csv as pacsv
 
+from ctk_android import logs
 from ctk_android.config import DataConfig
 from ctk_android.data.cache import combine_fingerprints, fingerprint_file
 from ctk_android.enums import (
@@ -18,22 +19,30 @@ from ctk_android.enums import (
     FeatureNaming,
     LamdaColumn,
     LibraryOption,
+    LogEvent,
+    LogField,
     Separator,
+    Tolerance,
     ValidationCheck,
 )
+from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
-    ByteMatrix,
+    AndroZooTable,
     CtkError,
     Directory,
     FeatureColumn,
     FeatureCount,
+    FeatureMatrix,
     File,
     Fingerprint,
     InventoryEntry,
+    LamdaMetadataTable,
     LamdaTable,
+    ShaSeries,
     SourceFingerprint,
     SourceInventory,
+    SourceScan,
     StatKey,
     ValidationRecord,
 )
@@ -46,16 +55,18 @@ def _stat_key(path: File) -> StatKey:
 
 def fingerprint_files(
     dataset: DatasetName, root: Directory, files: list[File], known: SourceInventory
-) -> tuple[SourceFingerprint, SourceInventory]:
+) -> SourceScan:
+    watch = Stopwatch()
     previous = {entry.name: entry for entry in known.entries}
     entries: list[InventoryEntry] = []
+    rehashed = 0
     for path in files:
         name = f"{path.relative_to(root)}"
         stat_key = _stat_key(path)
         entry = previous.get(name)
-        digest = (
-            entry.digest if entry is not None and entry.stat == stat_key else fingerprint_file(path)
-        )
+        cached = entry is not None and entry.stat == stat_key
+        rehashed += 0 if cached else 1
+        digest = entry.digest if entry is not None and cached else fingerprint_file(path)
         entries.append(InventoryEntry(name=name, stat=stat_key, digest=digest))
     listing = Separator.NEWLINE.join(
         Separator.COLON.join((entry.name, entry.digest)) for entry in entries
@@ -66,19 +77,25 @@ def fingerprint_files(
         file_count=len(files),
         total_bytes=sum(path.stat().st_size for path in files),
     )
-    return fingerprint, SourceInventory(entries=tuple(entries))
+    logs.info(
+        LogEvent.SOURCE_FINGERPRINTED,
+        {
+            LogField.DATASET: dataset,
+            LogField.FILES: len(files),
+            LogField.BYTES: fingerprint.total_bytes,
+            LogField.COUNT: rehashed,
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
+    return SourceScan(fingerprint=fingerprint, inventory=SourceInventory(entries=tuple(entries)))
 
 
-def fingerprint_lamda(
-    paths: Paths, config: DataConfig, known: SourceInventory
-) -> tuple[SourceFingerprint, SourceInventory]:
+def fingerprint_lamda(paths: Paths, config: DataConfig, known: SourceInventory) -> SourceScan:
     files = paths.lamda_release_files(config.lamda_release)
     return fingerprint_files(DatasetName.LAMDA, paths.raw_data(DatasetName.LAMDA), files, known)
 
 
-def fingerprint_androzoo(
-    paths: Paths, known: SourceInventory
-) -> tuple[SourceFingerprint, SourceInventory]:
+def fingerprint_androzoo(paths: Paths, known: SourceInventory) -> SourceScan:
     return fingerprint_files(
         DatasetName.ANDROZOO,
         paths.raw_data(DatasetName.ANDROZOO),
@@ -99,9 +116,10 @@ def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
     files = paths.lamda_release_files(config.lamda_release)[:-1]
     if not files:
         raise CtkError(FailureReason.SCHEMA_MISMATCH, ErrorMessage.NO_LAMDA_FILES)
+    watch = Stopwatch()
     feature_names = _feature_columns(config.expected_features)
-    frames: list[pl.DataFrame] = []
-    blocks: list[ByteMatrix] = []
+    frames: list[LamdaMetadataTable] = []
+    blocks: list[FeatureMatrix] = []
     non_binary = 0
     negative = 0
     for path in files:
@@ -131,6 +149,16 @@ def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
     metadata = pl.concat(frames)
     features = np.concatenate(blocks)
     order = np.argsort(metadata[Column.SHA256].to_numpy(), kind=LibraryOption.SORT_STABLE)
+    logs.info(
+        LogEvent.LAMDA_LOADED,
+        {
+            LogField.ROWS: metadata.height,
+            LogField.FEATURES: features.shape[1],
+            LogField.COUNT: non_binary,
+            LogField.FILES: len(files),
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
     return LamdaTable(
         metadata=metadata[order],
         features=features[order],
@@ -176,7 +204,8 @@ def validate_lamda(table: LamdaTable, config: DataConfig) -> list[ValidationReco
     ]
 
 
-def scan_androzoo(paths: Paths, wanted: pl.Series) -> pl.DataFrame:
+def scan_androzoo(paths: Paths, wanted: ShaSeries) -> AndroZooTable:
+    watch = Stopwatch()
     wanted_upper = wanted.str.to_uppercase()
     reader = pacsv.open_csv(
         paths.androzoo_archive(),
@@ -198,6 +227,15 @@ def scan_androzoo(paths: Paths, wanted: pl.Series) -> pl.DataFrame:
             )
             for batch in reader
         ]
+    )
+    logs.info(
+        LogEvent.ANDROZOO_SCANNED,
+        {
+            LogField.ROWS: frame.height,
+            LogField.COUNT: wanted.len(),
+            LogField.SECONDS: watch.seconds(),
+            LogField.THROUGHPUT: frame.height / max(watch.seconds(), Tolerance.THROUGHPUT_FLOOR),
+        },
     )
     return frame.select(
         pl.col(AndroZooColumn.SHA256).str.to_lowercase().alias(Column.SHA256),

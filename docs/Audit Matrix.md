@@ -24,6 +24,10 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Third-party `Literal`-typed option strings | PASS | grouped in `enums.LibraryOption` (enum members cannot satisfy `Literal[...]` parameters); documented boundary, nothing else is allowed |
 | Every enum member is used by code or config; config-selectable enums are exempt | PASS | `test_types_and_enums.py`; unused members and the claim/contrast/estimand enums were removed and return with the analysis code |
 | Novelty descriptors read only fit rows | PASS | `test_scientific_isolation.py` |
+| Semantic aliases only: no bool, inline dict, ndarray, anonymous tuple, raw DataFrame/Series, or generic array alias in signatures/fields | PASS | `test_no_primitive_leaks.py` (14 tests); Semgrep rule also flags `bool` |
+| Structured logging: enum events and keys, single logging module, console + JSONL sink, every CLI entry point and preprocessing stage logs | PASS | `test_logging.py`, `tests/unit/test_logging.py`, smoke-run lifecycle test, CLI log-file test |
+| Source-code fingerprint / dirty-tree checks | REMOVED | user decision, see implementation-decisions.md |
+| Statistics, decomposition, dose response, novelty association, robustness (top-family removal), claim gates, tables, figures, promotion, `report` command | PARTIAL | implemented and unit-tested on synthetic evidence; not yet run on real development seeds; deduplication sensitivity not implemented |
 | Graphify before/after reachability | MISSING | not yet run |
 
 ## Scientific pipeline
@@ -37,8 +41,5 @@ Status legend: PASS, PARTIAL, MISSING, BLOCKED. Last updated at the lint/archite
 | Local, central, FedAvg, FedProx, fine-tune, blend, MLP/linear/trees | PARTIAL | implemented; only local/central/FedAvg exercised end to end so far |
 | Thresholds, own-domain / federation-wide / known-family metrics | PASS | `test_thresholds.py`, `test_metrics.py` |
 | Feature-novelty descriptors | PARTIAL | computed per run; association analysis not written |
-| Decomposition, dose response, natural-scarcity, robustness analysis | MISSING | |
-| BCa, exact Wilcoxon, cluster bootstrap, Holm, claim gates | MISSING | statistics config removed until implemented |
-| Reporting, tables, figures, controlled promotion to `results/`, `report` command | MISSING | |
 | Development baseline-fairness grids | MISSING | |
 | Doctor / preprocess / plan / smoke / run / status | PASS | e2e smoke idempotency test |

@@ -18,17 +18,26 @@ from ctk_android.enums import (
 from ctk_android.types import (
     Alpha,
     ClaimResult,
+    ClaimsTable,
     Effect,
     EffectRow,
+    EffectsTable,
+    FamilyGainsTable,
     FamilyName,
     Fraction,
     GateEvidence,
+    Passed,
+    Positive,
+    Refuted,
     RowCount,
+    SeedMeansTable,
+    SummaryTable,
     SupportCount,
+    ValueSeries,
 )
 
 
-def federated_arms() -> tuple[Learner, Learner, Learner]:
+def federated_arms() -> tuple[Learner, ...]:
     return (Learner.FEDAVG, Learner.FEDPROX, Learner.FEDAVG_FINETUNE)
 
 
@@ -36,13 +45,13 @@ def simple_baselines() -> list[Learner]:
     return [Learner.CENTRAL, *federated_arms(), Learner.BLEND]
 
 
-def _mean(values: pl.Series) -> Effect | None:
+def _mean(values: ValueSeries) -> Effect | None:
     present = values.drop_nulls().to_numpy()
     return present.mean().item() if present.size else None
 
 
 def _effect(
-    effects: pl.DataFrame,
+    effects: EffectsTable,
     experiment: ExperimentName,
     learner: Learner,
     estimand: Estimand,
@@ -60,7 +69,7 @@ def _effect(
     return EffectRow.model_validate(rows.row(0, named=True)) if rows.height else None
 
 
-def _passes(row: EffectRow | None, minimum: Effect, positive_seeds: SupportCount) -> bool:
+def _passes(row: EffectRow | None, minimum: Effect, positive_seeds: SupportCount) -> Passed:
     return (
         row is not None
         and row.mean_difference >= minimum
@@ -70,11 +79,11 @@ def _passes(row: EffectRow | None, minimum: Effect, positive_seeds: SupportCount
     )
 
 
-def _refuted(row: EffectRow | None, minimum: Effect) -> bool:
+def _refuted(row: EffectRow | None, minimum: Effect) -> Refuted:
     return row is not None and row.ci_high is not None and row.ci_high < minimum
 
 
-def _decide(passed: list[bool], refuted: list[bool]) -> ClaimStatus:
+def _decide(passed: list[Passed], refuted: list[Refuted]) -> ClaimStatus:
     if passed and all(passed):
         return ClaimStatus.PROMOTED
     if any(passed):
@@ -107,7 +116,7 @@ def _scoped(
     return _result(claim, _decide(passed, refuted), sum(passed), len(passed))
 
 
-def _population_metrics() -> tuple[Metric, Metric]:
+def _population_metrics() -> tuple[Metric, ...]:
     return (Metric.FEDERATION_UNSEEN_RECALL, Metric.OWN_DOMAIN_UNSEEN_RECALL)
 
 
@@ -249,7 +258,7 @@ def dose_response(evidence: GateEvidence, config: Config) -> ClaimResult:
     return _result(ClaimName.DOSE_RESPONSE, status, sum(passed), len(passed))
 
 
-def _without(gains: pl.DataFrame, family: FamilyName) -> Fraction:
+def _without(gains: FamilyGainsTable, family: FamilyName) -> Fraction:
     return _mean(gains.filter(pl.col(Column.FAMILY) != family)[Column.CTK_GAIN]) or 0.0
 
 
@@ -268,8 +277,8 @@ def worst_client_benefit(evidence: GateEvidence, config: Config) -> ClaimResult:
 
 
 def _seed_means(
-    summary: pl.DataFrame, learner: Learner, metric: Metric, alpha: Alpha
-) -> pl.DataFrame:
+    summary: SummaryTable, learner: Learner, metric: Metric, alpha: Alpha
+) -> SeedMeansTable:
     return summary.filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.LEARNER) == learner)
@@ -347,8 +356,8 @@ def representation_limited_family(evidence: GateEvidence, config: Config) -> Cla
 
 def feature_novelty_explanation(evidence: GateEvidence, config: Config) -> ClaimResult:
     minimum = config.statistics.gates.novelty_min_abs_spearman
-    outcomes: list[bool] = []
-    directions: set[bool] = set()
+    outcomes: list[Passed] = []
+    directions: set[Positive] = set()
     for experiment in (ExperimentName.CONTROLLED_EXPOSURE, ExperimentName.REPLICATION_FAMILY_SET):
         association = evidence.associations.get(experiment)
         if association is None or association.interval is None:
@@ -397,7 +406,7 @@ def new_mechanism_trigger(evidence: GateEvidence, config: Config) -> ClaimResult
     return _result(ClaimName.NEW_MECHANISM_TRIGGER, status, 1 if headroom else 0, 2)
 
 
-def evaluate_claims(evidence: GateEvidence, config: Config) -> pl.DataFrame:
+def evaluate_claims(evidence: GateEvidence, config: Config) -> ClaimsTable:
     return records_to_frame(
         [
             local_deficit(evidence, config),

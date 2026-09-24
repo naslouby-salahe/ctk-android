@@ -4,8 +4,18 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 
+from ctk_android import logs
 from ctk_android.config import TrainingConfig
-from ctk_android.enums import ClientId, Device, ErrorMessage, FailureReason, Learner, ModelFamily
+from ctk_android.enums import (
+    ClientId,
+    Device,
+    ErrorMessage,
+    FailureReason,
+    Learner,
+    LogEvent,
+    LogField,
+    ModelFamily,
+)
 from ctk_android.experiment.models import (
     StateDict,
     average_states,
@@ -14,11 +24,12 @@ from ctk_android.experiment.models import (
     fit_trees,
 )
 from ctk_android.types import (
-    ByteMatrix,
     CtkError,
     Epochs,
-    IntArray,
+    FeatureMatrix,
+    LabelVector,
     ProximalAnchor,
+    RowIndices,
     Scorer,
     Seed,
     TrainingRows,
@@ -27,8 +38,8 @@ from ctk_android.types import (
 
 @dataclass(frozen=True)
 class TrainingContext:
-    features: ByteMatrix
-    labels: IntArray
+    features: FeatureMatrix
+    labels: LabelVector
     config: TrainingConfig
     family: ModelFamily
     device: Device
@@ -39,7 +50,7 @@ def derive_seed(base: Seed, *parts: Seed) -> Seed:
     return np.random.SeedSequence([base, *parts]).generate_state(1)[0].item()
 
 
-def _require_both_classes(context: TrainingContext, rows: IntArray) -> None:
+def _require_both_classes(context: TrainingContext, rows: RowIndices) -> None:
     counts = np.bincount(context.labels[rows], minlength=2)
     if counts.min() < context.config.min_rows_per_class:
         raise CtkError(
@@ -53,7 +64,9 @@ def _initial_network(context: TrainingContext, stream: Seed) -> torch.nn.Module:
     return build_network(context.family, context.features.shape[1], context.config)
 
 
-def train_scorer(context: TrainingContext, rows: IntArray, epochs: Epochs, stream: Seed) -> Scorer:
+def train_scorer(
+    context: TrainingContext, rows: RowIndices, epochs: Epochs, stream: Seed
+) -> Scorer:
     _require_both_classes(context, rows)
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
         trees = fit_trees(
@@ -79,7 +92,7 @@ def train_scorer(context: TrainingContext, rows: IntArray, epochs: Epochs, strea
     return Scorer(family=context.family, network=network, trees=None, device=context.device)
 
 
-def pooled_rows(training: TrainingRows) -> IntArray:
+def pooled_rows(training: TrainingRows) -> RowIndices:
     return np.concatenate([training[client] for client in ClientId])
 
 
@@ -113,10 +126,14 @@ def train_federated(
             )
             states.append({k: v.detach().cpu() for k, v in local.state_dict().items()})
         global_net.load_state_dict(average_states(states, weights))
+        logs.debug(
+            LogEvent.FEDERATED_ROUND,
+            {LogField.ROUND: round_index, LogField.LEARNER: learner, LogField.SEED: context.seed},
+        )
     return Scorer(family=context.family, network=global_net, trees=None, device=context.device)
 
 
-def finetune(context: TrainingContext, scorer: Scorer, rows: IntArray, stream: Seed) -> Scorer:
+def finetune(context: TrainingContext, scorer: Scorer, rows: RowIndices, stream: Seed) -> Scorer:
     if scorer.network is None:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.FINETUNE_NETWORK)
     network = copy.deepcopy(scorer.network)

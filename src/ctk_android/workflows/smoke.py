@@ -12,12 +12,12 @@ from ctk_android.enums import (
     RunStatus,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import CtkError, RunReport, ValidationDocument
+from ctk_android.types import CtkError, Overwrite, RunReport, ValidationDocument
 from ctk_android.workflows.plan import run_plan
 from ctk_android.workflows.run import run_experiment
 
 
-def run_smoke(paths: Paths, config: Config, overwrite: bool) -> RunReport:
+def run_smoke(paths: Paths, config: Config, overwrite: Overwrite) -> RunReport:
     run_plan(paths, config, ExecutionMode.SMOKE)
     reports = run_experiment(
         paths,

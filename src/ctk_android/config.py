@@ -5,23 +5,13 @@ import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ctk_android.enums import (
-    BudgetLevel,
     ConfigFile,
     Device,
-    EligibilityProfile,
     ErrorMessage,
     ExecutionMode,
-    ExperimentName,
-    ExposureCondition,
-    ExposureMode,
-    FamilyLabelSource,
-    FamilySetName,
-    Grouping,
     LamdaRelease,
-    Learner,
     LibraryOption,
     LogLevel,
-    ModelFamily,
     NoveltyDescriptor,
     SourceFamilyLabel,
     TextEncoding,
@@ -32,19 +22,22 @@ from ctk_android.types import (
     Alpha,
     BatchSize,
     BlendWeight,
+    BudgetRows,
     Confidence,
     DropoutRate,
+    EligibilityRules,
     Epochs,
     ExceedanceCount,
+    ExperimentSpecs,
     Fingerprint,
     Fraction,
+    IncludeAllDose,
     LabelPrefix,
     LearningRate,
     ProximalStrength,
     ResampleCount,
     Rounds,
     RowCount,
-    Salt,
     Seed,
     SupportCount,
     TreeDepth,
@@ -105,14 +98,6 @@ class FamilySelectionConfig(Frozen):
     set_size: SupportCount
 
 
-class EligibilityRule(Frozen):
-    peer_min_fit: SupportCount
-    federation_min_test: SupportCount
-    own_domain_min_test: SupportCount
-    target_min_remaining_fit: SupportCount
-    target_min_fit: SupportCount
-
-
 class NaturalScarcityConfig(Frozen):
     max_target_share: Fraction
     peer_min_fit: SupportCount
@@ -130,7 +115,7 @@ class DataConfig(Frozen):
     play_era_boundary: YearMonth
     partition: PartitionConfig
     family_selection: FamilySelectionConfig
-    eligibility: dict[EligibilityProfile, EligibilityRule]
+    eligibility: EligibilityRules
     natural_scarcity: NaturalScarcityConfig
     smoke_family_set_size: SupportCount
 
@@ -171,32 +156,17 @@ class NoveltyConfig(Frozen):
     primary_descriptor: NoveltyDescriptor
 
 
-class ExperimentSpec(Frozen):
-    modes: tuple[ExecutionMode, ...]
-    model_family: ModelFamily
-    family_set: FamilySetName
-    exposure_mode: ExposureMode
-    family_labels: FamilyLabelSource
-    grouping: Grouping
-    budget: BudgetLevel
-    eligibility: EligibilityProfile
-    salts: tuple[Salt, ...]
-    learners: tuple[Learner, ...]
-    conditions: tuple[ExposureCondition, ...]
-    dose_sweep: bool
-
-
 class ExperimentsConfig(Frozen):
-    budgets: dict[BudgetLevel, RowCount]
+    budgets: BudgetRows
     training: TrainingConfig
     smoke_training: TrainingConfig
     operating: OperatingConfig
     novelty: NoveltyConfig
     dose_levels: tuple[SupportCount, ...]
-    dose_include_all_available: bool
+    dose_include_all_available: IncludeAllDose
     top_family_removal_count: SupportCount
     permutation_seed_offset: Seed
-    experiments: dict[ExperimentName, ExperimentSpec]
+    experiments: ExperimentSpecs
 
 
 class GateConfig(Frozen):

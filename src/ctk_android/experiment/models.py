@@ -6,17 +6,19 @@ from torch import nn
 from ctk_android.config import TrainingConfig
 from ctk_android.enums import Device, ErrorMessage, ModelFamily, RowBlock
 from ctk_android.types import (
-    ByteMatrix,
     Epochs,
     FeatureCount,
-    Float32Array,
-    FloatArray,
-    IntArray,
+    FeatureMatrix,
+    LabelVector,
+    LogitChunk,
+    LogitVector,
     ProximalAnchor,
+    RowIndices,
     Scorer,
     Seed,
     StateDict,
     Stepper,
+    WeightVector,
 )
 
 
@@ -38,7 +40,7 @@ def build_network(family: ModelFamily, features: FeatureCount, config: TrainingC
     return nn.Sequential(*layers)
 
 
-def _tensor(features: ByteMatrix, rows: IntArray, device: Device) -> torch.Tensor:
+def _tensor(features: FeatureMatrix, rows: RowIndices, device: Device) -> torch.Tensor:
     return torch.as_tensor(np.asarray(features[rows], dtype=np.float32)).to(device)
 
 
@@ -50,9 +52,9 @@ def _optimizer(network: nn.Module, config: TrainingConfig) -> Stepper:
 
 def fit_epochs(
     network: nn.Module,
-    features: ByteMatrix,
-    labels: IntArray,
-    rows: IntArray,
+    features: FeatureMatrix,
+    labels: LabelVector,
+    rows: RowIndices,
     epochs: Epochs,
     config: TrainingConfig,
     seed: Seed,
@@ -82,7 +84,7 @@ def fit_epochs(
     network.eval()
 
 
-def average_states(states: list[StateDict], weights: FloatArray) -> StateDict:
+def average_states(states: list[StateDict], weights: WeightVector) -> StateDict:
     normalised = torch.as_tensor((weights / weights.sum()).astype(np.float32))
     return {
         name: torch.stack(
@@ -93,7 +95,11 @@ def average_states(states: list[StateDict], weights: FloatArray) -> StateDict:
 
 
 def fit_trees(
-    features: ByteMatrix, labels: IntArray, rows: IntArray, config: TrainingConfig, seed: Seed
+    features: FeatureMatrix,
+    labels: LabelVector,
+    rows: RowIndices,
+    config: TrainingConfig,
+    seed: Seed,
 ) -> HistGradientBoostingClassifier:
     model = HistGradientBoostingClassifier(
         max_iter=config.trees.max_iter,
@@ -104,13 +110,13 @@ def fit_trees(
     return model.fit(np.asarray(features[rows]), labels[rows])
 
 
-def scorer_logits(scorer: Scorer, features: ByteMatrix, rows: IntArray) -> FloatArray:
+def scorer_logits(scorer: Scorer, features: FeatureMatrix, rows: RowIndices) -> LogitVector:
     if scorer.trees is not None:
         return scorer.trees.decision_function(np.asarray(features[rows])).astype(np.float64)
     if scorer.network is None:
         raise ValueError(ErrorMessage.EMPTY_SCORER)
     scorer.network.to(scorer.device).eval()
-    outputs: list[Float32Array] = []
+    outputs: list[LogitChunk] = []
     with torch.no_grad():
         for start in range(0, rows.size, RowBlock.SCORING):
             chunk = _tensor(features, rows[start : start + RowBlock.SCORING], scorer.device)

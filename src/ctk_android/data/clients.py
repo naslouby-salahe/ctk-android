@@ -2,9 +2,10 @@ import polars as pl
 
 from ctk_android.config import DataConfig
 from ctk_android.enums import ClientId, Column, Market, MarketCount
+from ctk_android.types import AssignmentsTable, ClientSupportTable, JoinedTable
 
 
-def assign_clients(joined: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
+def assign_clients(joined: JoinedTable, config: DataConfig) -> AssignmentsTable:
     single = joined.filter(pl.col(Column.MARKET_COUNT) == MarketCount.SINGLE)
     early_play = pl.col(Column.YEAR_MONTH) < config.play_era_boundary
     client = (
@@ -36,7 +37,7 @@ def assign_clients(joined: pl.DataFrame, config: DataConfig) -> pl.DataFrame:
     )
 
 
-def client_support(assignments: pl.DataFrame) -> pl.DataFrame:
+def client_support(assignments: AssignmentsTable) -> ClientSupportTable:
     return (
         assignments.group_by(Column.CLIENT)
         .agg(

@@ -5,7 +5,6 @@ import polars as pl
 from ctk_android.config import Config
 from ctk_android.data.cache import (
     fingerprint_file,
-    fingerprint_source_tree,
     is_reusable,
     read_record,
     run_provenance,
@@ -38,13 +37,15 @@ from ctk_android.types import (
     RunManifest,
     SourceFingerprint,
     SourceProvenance,
+    Stale,
+    Table,
 )
 from ctk_android.workflows.doctor import git_revision
 from ctk_android.workflows.plan import experiments_for, planned_targets
 
 
-def row_level_columns() -> tuple[Column, Column]:
-    return (Column.SHA256, Column.ROW)
+def row_level_columns() -> list[Column]:
+    return [Column.SHA256, Column.ROW]
 
 
 def evidence_files() -> list[Artifact]:
@@ -63,13 +64,12 @@ def statistics_files() -> list[Artifact]:
     return [Artifact.PAIRED_EFFECTS, Artifact.CLUSTER_BOOTSTRAP]
 
 
-def _stale_runs(paths: Paths, config: Config, mode: ExecutionMode) -> bool:
+def _stale_runs(paths: Paths, config: Config, mode: ExecutionMode) -> Stale:
     for experiment in experiments_for(config, mode):
         for seed in config.project.seeds.for_mode(mode):
             for salt in config.experiments.experiments[experiment].salts:
                 key = RunKey(mode=mode, experiment=experiment, seed=seed, salt=salt)
-                _, targets = planned_targets(paths, key)
-                current = run_provenance(paths, config, key, targets)
+                current = run_provenance(paths, config, key, planned_targets(paths, key).targets)
                 if not is_reusable(paths.provenance_file(paths.run_dir(key)), current):
                     return True
     return False
@@ -109,7 +109,7 @@ def _copy(source: File, target: File) -> ManifestEntry:
     )
 
 
-def _write_csv(frame: pl.DataFrame, target: File) -> ManifestEntry:
+def _write_csv(frame: Table, target: File) -> ManifestEntry:
     target.parent.mkdir(parents=True, exist_ok=True)
     frame.write_csv(target)
     return ManifestEntry(
@@ -168,10 +168,7 @@ def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecis
     )
     write_record(
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.CODE),
-        CodeProvenance(
-            revision=git_revision(paths).detail,
-            fingerprint=fingerprint_source_tree(paths.source_root),
-        ),
+        CodeProvenance(revision=git_revision(paths).detail),
     )
     write_record(
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.PROTOCOL),

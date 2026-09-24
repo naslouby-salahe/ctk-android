@@ -1,7 +1,7 @@
 import numpy as np
 import polars as pl
-import structlog
 
+from ctk_android import logs
 from ctk_android.analysis import novelty
 from ctk_android.analysis.decomposition import decompose, family_effects, family_seed_effects
 from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
@@ -12,6 +12,7 @@ from ctk_android.config import Config
 from ctk_android.data import partitions
 from ctk_android.data.cache import read_record, records_to_frame, write_table
 from ctk_android.enums import (
+    AnalysisStage,
     Artifact,
     ClientId,
     Column,
@@ -24,9 +25,13 @@ from ctk_android.enums import (
     Learner,
     LibraryOption,
     LogEvent,
+    LogField,
+    ReportFigure,
     RunStatus,
+    Separator,
     SplitRole,
 )
+from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.reporting.figures import build_figures
 from ctk_android.reporting.promotion import promote
@@ -34,25 +39,28 @@ from ctk_android.reporting.records import collect_evidence
 from ctk_android.reporting.tables import build_tables
 from ctk_android.types import (
     ArmKey,
+    AssociationMap,
     AssociationRow,
+    ClaimsTable,
     ClusterRow,
+    ClusterTable,
     CtkError,
+    FamilyEffectsTable,
     GateEvidence,
-    IntArray,
-    NoveltyAssociation,
+    GroupIds,
+    HitVectors,
+    Promote,
     PromotionDecision,
     RunEvidence,
     RunKey,
     RunManifest,
 )
 
-log = structlog.get_logger()
-
 
 def _associations(
-    evidence: RunEvidence, family_table: pl.DataFrame, config: Config
-) -> dict[ExperimentName, NoveltyAssociation | None]:
-    result: dict[ExperimentName, NoveltyAssociation | None] = {}
+    evidence: RunEvidence, family_table: FamilyEffectsTable, config: Config
+) -> AssociationMap:
+    result: AssociationMap = {}
     for experiment in (ExperimentName.CONTROLLED_EXPOSURE, ExperimentName.REPLICATION_FAMILY_SET):
         gains = family_table.filter(
             (pl.col(Column.EXPERIMENT) == experiment) & (pl.col(Column.LEARNER) == Learner.FEDAVG)
@@ -70,7 +78,7 @@ def _associations(
 
 def _cluster_intervals(
     paths: Paths, config: Config, mode: ExecutionMode, evidence: RunEvidence
-) -> pl.DataFrame:
+) -> ClusterTable:
     alpha = config.experiments.operating.primary_alpha
     rows: list[ClusterRow] = []
     completed = evidence.index.filter(
@@ -98,11 +106,11 @@ def _cluster_intervals(
         thresholds = pl.read_parquet(paths.run_file(key, Artifact.THRESHOLDS)).filter(
             (pl.col(Column.LEARNER) == Learner.FEDAVG) & (pl.col(Column.ALPHA) == alpha)
         )
-        hits: dict[ExposureCondition, list[IntArray]] = {
+        hits: HitVectors = {
             ExposureCondition.PEER_PRESENT: [],
             ExposureCondition.FAMILY_ABSENT_EVERYWHERE: [],
         }
-        groups: list[IntArray] = []
+        groups: list[GroupIds] = []
         for condition, collected in hits.items():
             arm = ArmKey(learner=Learner.FEDAVG, condition=condition, dose=None)
             scored = pl.read_parquet(paths.run_scores_file(key, arm))
@@ -148,32 +156,67 @@ def _cluster_intervals(
     return records_to_frame(rows)
 
 
-def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
+def _stage_finished(stage: AnalysisStage, watch: Stopwatch) -> None:
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: stage, LogField.SECONDS: watch.seconds()},
+    )
+
+
+def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTable:
     evidence = collect_evidence(paths, config, mode)
+    logs.info(
+        LogEvent.EVIDENCE_COLLECTED,
+        {
+            LogField.MODE: mode,
+            LogField.RUNS: evidence.index.height,
+            LogField.COMPLETED: evidence.index.filter(
+                pl.col(Column.STATUS) == RunStatus.COMPLETED
+            ).height,
+            LogField.FAILED: evidence.index.filter(
+                pl.col(Column.STATUS) == RunStatus.FAILED_VALIDATION
+            ).height,
+        },
+    )
     if evidence.summary.height == 0:
         raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
     alpha = config.experiments.operating.primary_alpha
+    watch = Stopwatch()
     decomposition = decompose(evidence.summary)
+    _stage_finished(AnalysisStage.DECOMPOSITION, watch)
+    watch = Stopwatch()
     effects = paired_effect_table(decomposition, config)
+    _stage_finished(AnalysisStage.STATISTICS, watch)
+    watch = Stopwatch()
     family_seed = family_seed_effects(evidence.families, alpha)
     family_table = family_effects(family_seed)
+    _stage_finished(AnalysisStage.FAMILY_EFFECTS, watch)
+    watch = Stopwatch()
+    dose_runs = evidence.families.filter(
+        pl.col(Column.EXPERIMENT) == ExperimentName.PEER_DOSE_RESPONSE
+    )
     dose = dose_curve(
-        dose_recall(
-            evidence.families.filter(
-                pl.col(Column.EXPERIMENT) == ExperimentName.PEER_DOSE_RESPONSE
-            ),
-            alpha,
-        ),
+        dose_recall(dose_runs, alpha),
         effective_peer_dose(
             evidence.exposure.filter(
                 pl.col(Column.EXPERIMENT) == ExperimentName.PEER_DOSE_RESPONSE
             ),
-            evidence.families.filter(pl.col(Column.EXPERIMENT) == ExperimentName.PEER_DOSE_RESPONSE)
-            .select(Column.EXPERIMENT, Column.SEED, Column.SALT, Column.CLIENT, Column.FAMILY)
-            .unique(),
+            dose_runs.select(
+                Column.EXPERIMENT, Column.SEED, Column.SALT, Column.CLIENT, Column.FAMILY
+            ).unique(),
         ),
     )
+    _stage_finished(AnalysisStage.DOSE_RESPONSE, watch)
+    watch = Stopwatch()
     associations = _associations(evidence, family_table, config)
+    _stage_finished(AnalysisStage.NOVELTY, watch)
+    watch = Stopwatch()
+    robustness = robustness_table(evidence.families, config)
+    _stage_finished(AnalysisStage.ROBUSTNESS, watch)
+    watch = Stopwatch()
+    clusters = _cluster_intervals(paths, config, mode, evidence)
+    _stage_finished(AnalysisStage.CLUSTER_BOOTSTRAP, watch)
+    watch = Stopwatch()
     claims = evaluate_claims(
         GateEvidence(
             effects=effects,
@@ -188,6 +231,17 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFr
         ),
         config,
     )
+    _stage_finished(AnalysisStage.CLAIM_GATES, watch)
+    for claim in claims.iter_rows(named=True):
+        logs.info(
+            LogEvent.CLAIM_EVALUATED,
+            {
+                LogField.CLAIM: claim[Column.CLAIM],
+                LogField.STATUS: claim[Column.CLAIM_STATUS],
+                LogField.SCOPES_PASSED: claim[Column.SCOPES_PASSED],
+                LogField.SCOPES_TOTAL: claim[Column.SCOPES_TOTAL],
+            },
+        )
     write_table(evidence.index, paths.analysis_file(mode, Artifact.RUN_INDEX))
     write_table(evidence.summary, paths.analysis_file(mode, Artifact.ARM_METRICS))
     write_table(decomposition, paths.analysis_file(mode, Artifact.COLLABORATION_DECOMPOSITION))
@@ -219,26 +273,38 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFr
         ),
         paths.analysis_file(mode, Artifact.FEATURE_NOVELTY),
     )
-    write_table(
-        robustness_table(evidence.families, config), paths.analysis_file(mode, Artifact.ROBUSTNESS)
-    )
+    write_table(robustness, paths.analysis_file(mode, Artifact.ROBUSTNESS))
     write_table(effects, paths.statistics_file(mode, Artifact.PAIRED_EFFECTS))
-    write_table(
-        _cluster_intervals(paths, config, mode, evidence),
-        paths.statistics_file(mode, Artifact.CLUSTER_BOOTSTRAP),
-    )
+    write_table(clusters, paths.statistics_file(mode, Artifact.CLUSTER_BOOTSTRAP))
     write_table(claims, paths.statistics_file(mode, Artifact.CLAIM_GATES))
-    log.info(LogEvent.REPORT_WRITTEN, mode=mode)
     return claims
 
 
 def run_report(
-    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: bool
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
 ) -> PromotionDecision | None:
+    watch = Stopwatch()
     run_analysis(paths, config, mode)
-    for name, table in build_tables(paths, config, mode).items():
+    tables = build_tables(paths, config, mode)
+    for name, table in tables.items():
         target = paths.report_table_file(name)
         target.parent.mkdir(parents=True, exist_ok=True)
         table.write_csv(target)
-    build_figures(paths, config, mode)
-    return promote(paths, config, mode) if promote_evidence else None
+    logs.info(LogEvent.TABLES_WRITTEN, {LogField.COUNT: len(tables)})
+    directory = build_figures(paths, config, mode)
+    logs.info(
+        LogEvent.FIGURES_WRITTEN, {LogField.COUNT: len(ReportFigure), LogField.PATH: f"{directory}"}
+    )
+    decision = promote(paths, config, mode) if promote_evidence else None
+    if decision is not None:
+        report = logs.warning if decision.blocks else logs.info
+        report(
+            LogEvent.PROMOTION_DECIDED,
+            {
+                LogField.STATUS: decision.state,
+                LogField.BLOCKS: len(decision.blocks),
+                LogField.REASON: Separator.COMMA.join(decision.blocks),
+            },
+        )
+    logs.info(LogEvent.REPORT_WRITTEN, {LogField.MODE: mode, LogField.SECONDS: watch.seconds()})
+    return decision

@@ -12,45 +12,51 @@ from ctk_android.enums import (
     StatisticsLimit,
 )
 from ctk_android.types import (
-    BoolArray,
+    ActiveMask,
     Correlation,
     DescriptorRow,
-    FamilyName,
-    FloatArray,
+    DescriptorScoreTable,
+    DescriptorTable,
+    DescriptorValues,
+    FamilyMasks,
     Fraction,
-    IntArray,
+    GainVector,
     Interval,
     NoveltyAssociation,
+    NoveltyTable,
+    NoveltyVector,
+    Prevalence,
     Rate,
+    RowIndices,
     Score,
     StudyData,
     TargetPair,
 )
 
 
-def _prevalence(study: StudyData, rows: IntArray) -> FloatArray:
+def _prevalence(study: StudyData, rows: RowIndices) -> Prevalence:
     return np.asarray(study.features[rows], dtype=np.float64).mean(axis=0)
 
 
-def _active(prevalence: FloatArray, threshold: Fraction) -> BoolArray:
+def _active(prevalence: Prevalence, threshold: Fraction) -> ActiveMask:
     return prevalence >= threshold
 
 
-def _jaccard(left: BoolArray, right: BoolArray) -> Rate:
+def _jaccard(left: ActiveMask, right: ActiveMask) -> Rate:
     union = np.logical_or(left, right).sum().item()
     return 1.0 if union == 0 else np.logical_and(left, right).sum().item() / union
 
 
-def _distance(left: FloatArray, right: FloatArray) -> Score:
+def _distance(left: Prevalence, right: Prevalence) -> Score:
     return np.linalg.norm(left - right).item()
 
 
 def family_descriptors(
     study: StudyData,
     targets: tuple[TargetPair, ...],
-    masks: dict[FamilyName, BoolArray],
+    masks: FamilyMasks,
     config: NoveltyConfig,
-) -> pl.DataFrame:
+) -> DescriptorTable:
     table = study.table
     fit = (table[Column.ROLE] == SplitRole.FIT).to_numpy()
     malware = (table[Column.LABEL] == 1).to_numpy()
@@ -86,7 +92,7 @@ def family_descriptors(
         represented = np.logical_and(
             target_active, _active(known_centroid, config.min_active_prevalence)
         ).sum()
-        values: dict[NoveltyDescriptor, Score] = {
+        values: DescriptorValues = {
             NoveltyDescriptor.CENTROID_DISTANCE_TO_KNOWN_MALWARE: _distance(target, known_centroid),
             NoveltyDescriptor.DISTANCE_TO_BENIGN_CENTROID: _distance(
                 target, _prevalence(study, benign_rows)
@@ -106,7 +112,9 @@ def family_descriptors(
     return records_to_frame(rows)
 
 
-def descriptor_by_family(novelty: pl.DataFrame, descriptor: NoveltyDescriptor) -> pl.DataFrame:
+def descriptor_by_family(
+    novelty: NoveltyTable, descriptor: NoveltyDescriptor
+) -> DescriptorScoreTable:
     return (
         novelty.filter(pl.col(Column.DESCRIPTOR) == descriptor)
         .group_by(Column.FAMILY)
@@ -114,12 +122,12 @@ def descriptor_by_family(novelty: pl.DataFrame, descriptor: NoveltyDescriptor) -
     )
 
 
-def _rank_correlation(first: FloatArray, second: FloatArray) -> Correlation:
+def _rank_correlation(first: NoveltyVector, second: GainVector) -> Correlation:
     return np.corrcoef(stats.rankdata(first), stats.rankdata(second))[0, 1].item()
 
 
 def novelty_association(
-    gains: FloatArray, scores: FloatArray, config: StatisticsConfig
+    gains: GainVector, scores: NoveltyVector, config: StatisticsConfig
 ) -> NoveltyAssociation | None:
     if gains.size < StatisticsLimit.ASSOCIATION_FAMILIES:
         return None

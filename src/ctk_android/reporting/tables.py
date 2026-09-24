@@ -15,6 +15,15 @@ from ctk_android.enums import (
     Stage,
 )
 from ctk_android.paths import Paths
+from ctk_android.types import (
+    ArmComparisonTable,
+    ClaimsTable,
+    ClientAuditTable,
+    DecompositionReportTable,
+    DoseReportTable,
+    FamilyLevelTable,
+    ReportTables,
+)
 
 
 def _primary_metrics() -> list[Metric]:
@@ -29,7 +38,7 @@ def _primary_metrics() -> list[Metric]:
     ]
 
 
-def dataset_client_audit(paths: Paths) -> pl.DataFrame:
+def dataset_client_audit(paths: Paths) -> ClientAuditTable:
     support = pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.SUPPORT))
     families = pl.read_parquet(paths.stage_file(Stage.FAMILIES, Artifact.SUPPORT))
     per_client = families.group_by(Column.CLIENT).agg(
@@ -40,7 +49,7 @@ def dataset_client_audit(paths: Paths) -> pl.DataFrame:
     )
 
 
-def primary_arm_comparison(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
+def primary_arm_comparison(paths: Paths, config: Config, mode: ExecutionMode) -> ArmComparisonTable:
     summary = pl.read_parquet(paths.analysis_file(mode, Artifact.ARM_METRICS)).filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.ALPHA) == config.experiments.operating.primary_alpha)
@@ -55,7 +64,7 @@ def primary_arm_comparison(paths: Paths, config: Config, mode: ExecutionMode) ->
     )
 
 
-def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
+def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> DecompositionReportTable:
     effects = pl.read_parquet(paths.statistics_file(mode, Artifact.PAIRED_EFFECTS))
     claims = pl.read_parquet(paths.statistics_file(mode, Artifact.CLAIM_GATES))
     return (
@@ -91,7 +100,7 @@ def collaboration_decomposition(paths: Paths, mode: ExecutionMode) -> pl.DataFra
     )
 
 
-def peer_dose_response(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
+def peer_dose_response(paths: Paths, mode: ExecutionMode) -> DoseReportTable:
     return (
         pl.read_parquet(paths.analysis_file(mode, Artifact.PEER_DOSE_RESPONSE))
         .group_by(Column.LEARNER, Column.DOSE)
@@ -105,7 +114,7 @@ def peer_dose_response(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
     )
 
 
-def family_level(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFrame:
+def family_level(paths: Paths, config: Config, mode: ExecutionMode) -> FamilyLevelTable:
     poor = config.statistics.gates.poor_full_recall
     return (
         pl.read_parquet(paths.analysis_file(mode, Artifact.FAMILY_RESCUE))
@@ -119,13 +128,11 @@ def family_level(paths: Paths, config: Config, mode: ExecutionMode) -> pl.DataFr
     )
 
 
-def claim_gates(paths: Paths, mode: ExecutionMode) -> pl.DataFrame:
+def claim_gates(paths: Paths, mode: ExecutionMode) -> ClaimsTable:
     return pl.read_parquet(paths.statistics_file(mode, Artifact.CLAIM_GATES))
 
 
-def build_tables(
-    paths: Paths, config: Config, mode: ExecutionMode
-) -> dict[ReportTable, pl.DataFrame]:
+def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTables:
     return {
         ReportTable.DATASET_CLIENT_AUDIT: dataset_client_audit(paths),
         ReportTable.PRIMARY_ARM_COMPARISON: primary_arm_comparison(paths, config, mode),
