@@ -47,7 +47,7 @@ ln -s /path/to/AndroZoo data/androzoo/raw
 
 ## Status
 
-The protocol is frozen (see `docs/decisions/protocol-amendments.md`) and the 140 confirmatory runs (seeds 100 to 109) are complete. Claim outcomes are in `results/gates/claims.csv`. Exploratory or local working material should not be read as a confirmed finding.
+The protocol is frozen (see `docs/decisions/protocol-amendments.md`) and the 140 confirmatory runs (seeds 100 to 109) are complete. Claim outcomes are in `results/gates/claims.csv` (9 promoted, 3 rejected after the post-confirmatory dose-gate correction recorded in `docs/decisions/protocol-amendments.md`). The interpreted evidence is in `docs/Results.md`. Exploratory or local working material should not be read as a confirmed finding.
 
 ## Commands and durations
 
@@ -60,7 +60,7 @@ Setup, then one command per experiment. Every `run` regenerates the analysis, ta
 | `uv run ctk-android plan <mode>` | write the run matrix | 0.1 s (6 s for the confirmatory plan) |
 | `uv run ctk-android smoke` | end-to-end smoke run | 13 s |
 | `uv run ctk-android status --mode <mode>` | summarise run status | under 0.1 s |
-| `uv run ctk-android report --mode <mode>` | analysis, claim gates, tables, figures | 7 s development, 16 s confirmatory |
+| `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 16 tables, 10 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
 
 Experiments (`--seed N` runs a single seed; durations are wall-clock per run on one RTX 5060 Ti, measured from the run logs):
 

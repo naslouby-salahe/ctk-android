@@ -527,7 +527,17 @@ ctk-android/
     │   ├── collaboration-decomposition.csv
     │   ├── peer-dose-response.csv
     │   ├── family-level.csv
-    │   └── claim-gates.csv
+    │   ├── claim-gates.csv
+    │   ├── robustness.csv                  (micro-pooled aggregation, per salt)
+    │   ├── ctk-robustness-synthesis.csv    (seed-paired and micro-pooled, labelled)
+    │   ├── anchored-worst-client.csv       (class C, post-confirmatory)
+    │   ├── anchored-client-selection.csv   (class C)
+    │   ├── federated-arm-tradeoff.csv      (class C, descriptive)
+    │   ├── family-mechanism-patterns.csv   (class C, descriptive)
+    │   ├── natural-scarcity-comparison.csv
+    │   ├── permutation-control-audit.csv
+    │   ├── mechanism-headroom.csv
+    │   └── operating-point-fidelity.csv
     │
     └── figures/
         ├── collaboration-decomposition.pdf
@@ -551,8 +561,14 @@ ctk-android/
         ├── known-versus-unseen-tradeoff.pdf
         ├── known-versus-unseen-tradeoff.png
         │
-        ├── robustness-summary.pdf
-        └── robustness-summary.png
+        ├── ctk-robustness-forest.pdf
+        ├── ctk-robustness-forest.png
+        │
+        ├── federated-arm-tradeoff.pdf
+        ├── federated-arm-tradeoff.png
+        │
+        ├── natural-versus-controlled.pdf
+        └── natural-versus-controlled.png
 ```
 
 ### 4.1 Tree interpretation
