@@ -1,0 +1,25 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format --check
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check
+        language: system
+        types: [python]
+      - id: pyright
+        name: pyright strict
+        entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: semgrep
+        name: semgrep project rules
+        entry: uv run semgrep --config quality/semgrep.yml --error src
+        language: system
+        types: [python]
+        pass_filenames: false
