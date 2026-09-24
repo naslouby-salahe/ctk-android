@@ -211,7 +211,7 @@ def scan_androzoo(paths: Paths, wanted: ShaSeries) -> AndroZooTable:
         paths.androzoo_archive(),
         read_options=pacsv.ReadOptions(block_size=ByteBlock.ANDROZOO_SCAN),
         convert_options=pacsv.ConvertOptions(
-            include_columns=[column for column in AndroZooColumn],
+            include_columns=list(AndroZooColumn),
             column_types={
                 AndroZooColumn.SHA256: pa.string(),
                 AndroZooColumn.PACKAGE: pa.string(),

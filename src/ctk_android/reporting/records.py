@@ -44,6 +44,37 @@ def _stale_fields(key: RunKey) -> LogFields:
     }
 
 
+def _run_keys(config: Config, mode: ExecutionMode, fairness: FairnessGrid) -> list[RunKey]:
+    return [
+        RunKey(mode=mode, experiment=experiment, seed=seed, salt=salt)
+        for experiment in experiments_for(config, mode)
+        if config.experiments.experiments[experiment].fairness_grid == fairness
+        for seed in config.project.seeds.for_mode(mode)
+        for salt in config.experiments.experiments[experiment].salts
+    ]
+
+
+def _document(paths: Paths, config: Config, key: RunKey) -> RunStatusDocument:
+    status_file = paths.run_file(key, Artifact.STATUS)
+    if not status_file.is_file():
+        return RunStatusDocument(status=RunStatus.INCOMPLETE, reason=None)
+    document = read_record(status_file, RunStatusDocument)
+    if document.status is RunStatus.COMPLETED and _is_stale(paths, config, key):
+        logs.warning(LogEvent.RUN_STALE, _stale_fields(key))
+        return RunStatusDocument(status=RunStatus.STALE, reason=document.reason)
+    return document
+
+
+def _load_tables(paths: Paths, key: RunKey, tables: FrameLists) -> None:
+    for artifact, frames in tables.items():
+        file = (
+            paths.run_file(key, artifact)
+            if artifact in (Artifact.EXPOSURE, Artifact.NOVELTY)
+            else paths.run_metric_file(key, artifact)
+        )
+        frames.append(_tagged(pl.read_parquet(file), key))
+
+
 def collect_evidence(
     paths: Paths, config: Config, mode: ExecutionMode, fairness: FairnessGrid
 ) -> RunEvidence:
@@ -55,44 +86,16 @@ def collect_evidence(
         Artifact.EXPOSURE: [],
         Artifact.NOVELTY: [],
     }
-    for experiment in experiments_for(config, mode):
-        if config.experiments.experiments[experiment].fairness_grid != fairness:
-            continue
-        for seed in config.project.seeds.for_mode(mode):
-            for salt in config.experiments.experiments[experiment].salts:
-                key = RunKey(mode=mode, experiment=experiment, seed=seed, salt=salt)
-                status_file = paths.run_file(key, Artifact.STATUS)
-                document = (
-                    read_record(status_file, RunStatusDocument)
-                    if status_file.is_file()
-                    else RunStatusDocument(status=RunStatus.INCOMPLETE, reason=None)
-                )
-                index.append(
-                    _tagged(
-                        pl.DataFrame(
-                            {Column.STATUS: [document.status], Column.REASON: [document.reason]}
-                        ),
-                        key,
-                    )
-                )
-                if document.status is RunStatus.COMPLETED and _is_stale(paths, config, key):
-                    logs.warning(LogEvent.RUN_STALE, _stale_fields(key))
-                    index[-1] = _tagged(
-                        pl.DataFrame(
-                            {Column.STATUS: [RunStatus.STALE], Column.REASON: [document.reason]}
-                        ),
-                        key,
-                    )
-                    continue
-                if document.status is not RunStatus.COMPLETED:
-                    continue
-                for artifact, frames in tables.items():
-                    file = (
-                        paths.run_file(key, artifact)
-                        if artifact in (Artifact.EXPOSURE, Artifact.NOVELTY)
-                        else paths.run_metric_file(key, artifact)
-                    )
-                    frames.append(_tagged(pl.read_parquet(file), key))
+    for key in _run_keys(config, mode, fairness):
+        document = _document(paths, config, key)
+        index.append(
+            _tagged(
+                pl.DataFrame({Column.STATUS: [document.status], Column.REASON: [document.reason]}),
+                key,
+            )
+        )
+        if document.status is RunStatus.COMPLETED:
+            _load_tables(paths, key, tables)
     return RunEvidence(
         index=_concat(index),
         summary=_concat(tables[Artifact.SUMMARY]),

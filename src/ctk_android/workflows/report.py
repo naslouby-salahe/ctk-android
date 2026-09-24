@@ -39,6 +39,7 @@ from ctk_android.reporting.promotion import promote
 from ctk_android.reporting.records import collect_evidence
 from ctk_android.reporting.tables import build_tables
 from ctk_android.types import (
+    Alpha,
     ArmKey,
     AssociationMap,
     AssociationRow,
@@ -78,86 +79,92 @@ def _associations(
     return result
 
 
+def _cluster_row(paths: Paths, config: Config, key: RunKey, alpha: Alpha) -> ClusterRow | None:
+    manifest = read_record(paths.run_file(key, Artifact.MANIFEST), RunManifest)
+    study = partitions.load_study(
+        paths,
+        manifest.partition,
+        config.data,
+        FamilyLabelSource.OBSERVED,
+        config.experiments.permutation_seed_offset,
+    )
+    table = study.table
+    roles, labels = table[Column.ROLE].to_numpy(), table[Column.LABEL].to_numpy()
+    names, components = table[Column.FAMILY].to_numpy(), table[Column.COMPONENT].to_numpy()
+    thresholds = pl.read_parquet(paths.run_file(key, Artifact.THRESHOLDS)).filter(
+        (pl.col(Column.LEARNER) == Learner.FEDAVG)
+        & (pl.col(Column.ALPHA) == alpha)
+        & pl.col(Column.DOSE).is_null()
+    )
+    hits: HitVectors = {
+        ExposureCondition.PEER_PRESENT: [],
+        ExposureCondition.FAMILY_ABSENT_EVERYWHERE: [],
+    }
+    groups: list[GroupIds] = []
+    for condition, collected in hits.items():
+        arm = ArmKey(learner=Learner.FEDAVG, condition=condition, dose=None)
+        scored = pl.read_parquet(paths.run_scores_file(key, arm))
+        for client in ClientId:
+            families = [pair.family for pair in manifest.targets if pair.client is client]
+            own = scored.filter(pl.col(Column.TARGET_CLIENT) == client)
+            pool = own[Column.ROW].to_numpy()
+            unseen = (
+                (roles[pool] == SplitRole.TEST)
+                & (labels[pool] == 1)
+                & np.isin(names[pool], families)
+            )
+            threshold = thresholds.filter(
+                (pl.col(Column.CLIENT) == client) & (pl.col(Column.CONDITION) == condition)
+            )[Column.THRESHOLD].item()
+            collected.append((own[Column.SCORE].to_numpy()[unseen] > threshold).astype(np.int64))
+            if condition is ExposureCondition.PEER_PRESENT:
+                groups.append(components[pool][unseen].astype(np.int64))
+    peer = np.concatenate(hits[ExposureCondition.PEER_PRESENT])
+    absent = np.concatenate(hits[ExposureCondition.FAMILY_ABSENT_EVERYWHERE])
+    group_ids = np.unique(np.concatenate(groups), return_inverse=True)[1].reshape(-1)
+    interval = cluster_bootstrap_difference(
+        peer,
+        absent,
+        np.ones(peer.size, dtype=np.int64),
+        group_ids,
+        config.statistics.cluster_bootstrap_resamples,
+        config.statistics.statistics_seed,
+        config.statistics.confidence_level,
+    )
+    if interval is None:
+        return None
+    return ClusterRow(
+        experiment=key.experiment,
+        seed=key.seed,
+        salt=key.salt,
+        ci_low=interval.low,
+        ci_high=interval.high,
+    )
+
+
 def _cluster_intervals(
     paths: Paths, config: Config, mode: ExecutionMode, evidence: RunEvidence
 ) -> ClusterTable:
     alpha = config.experiments.operating.primary_alpha
-    rows: list[ClusterRow] = []
     completed = evidence.index.filter(
         (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
         & (pl.col(Column.STATUS) == RunStatus.COMPLETED)
     )
-    for record in completed.iter_rows(named=True):
-        key = RunKey(
-            mode=mode,
-            experiment=record[Column.EXPERIMENT],
-            seed=record[Column.SEED],
-            salt=record[Column.SALT],
-        )
-        manifest = read_record(paths.run_file(key, Artifact.MANIFEST), RunManifest)
-        study = partitions.load_study(
+    rows = [
+        _cluster_row(
             paths,
-            manifest.partition,
-            config.data,
-            FamilyLabelSource.OBSERVED,
-            config.experiments.permutation_seed_offset,
+            config,
+            RunKey(
+                mode=mode,
+                experiment=record[Column.EXPERIMENT],
+                seed=record[Column.SEED],
+                salt=record[Column.SALT],
+            ),
+            alpha,
         )
-        table = study.table
-        roles, labels = table[Column.ROLE].to_numpy(), table[Column.LABEL].to_numpy()
-        names, components = table[Column.FAMILY].to_numpy(), table[Column.COMPONENT].to_numpy()
-        thresholds = pl.read_parquet(paths.run_file(key, Artifact.THRESHOLDS)).filter(
-            (pl.col(Column.LEARNER) == Learner.FEDAVG)
-            & (pl.col(Column.ALPHA) == alpha)
-            & pl.col(Column.DOSE).is_null()
-        )
-        hits: HitVectors = {
-            ExposureCondition.PEER_PRESENT: [],
-            ExposureCondition.FAMILY_ABSENT_EVERYWHERE: [],
-        }
-        groups: list[GroupIds] = []
-        for condition, collected in hits.items():
-            arm = ArmKey(learner=Learner.FEDAVG, condition=condition, dose=None)
-            scored = pl.read_parquet(paths.run_scores_file(key, arm))
-            for client in ClientId:
-                families = [pair.family for pair in manifest.targets if pair.client is client]
-                own = scored.filter(pl.col(Column.TARGET_CLIENT) == client)
-                pool = own[Column.ROW].to_numpy()
-                unseen = (
-                    (roles[pool] == SplitRole.TEST)
-                    & (labels[pool] == 1)
-                    & np.isin(names[pool], families)
-                )
-                threshold = thresholds.filter(
-                    (pl.col(Column.CLIENT) == client) & (pl.col(Column.CONDITION) == condition)
-                )[Column.THRESHOLD].item()
-                collected.append(
-                    (own[Column.SCORE].to_numpy()[unseen] > threshold).astype(np.int64)
-                )
-                if condition is ExposureCondition.PEER_PRESENT:
-                    groups.append(components[pool][unseen].astype(np.int64))
-        peer = np.concatenate(hits[ExposureCondition.PEER_PRESENT])
-        absent = np.concatenate(hits[ExposureCondition.FAMILY_ABSENT_EVERYWHERE])
-        group_ids = np.unique(np.concatenate(groups), return_inverse=True)[1].reshape(-1)
-        interval = cluster_bootstrap_difference(
-            peer,
-            absent,
-            np.ones(peer.size, dtype=np.int64),
-            group_ids,
-            config.statistics.cluster_bootstrap_resamples,
-            config.statistics.statistics_seed,
-            config.statistics.confidence_level,
-        )
-        if interval is not None:
-            rows.append(
-                ClusterRow(
-                    experiment=key.experiment,
-                    seed=key.seed,
-                    salt=key.salt,
-                    ci_low=interval.low,
-                    ci_high=interval.high,
-                )
-            )
-    return records_to_frame(rows)
+        for record in completed.iter_rows(named=True)
+    ]
+    return records_to_frame([row for row in rows if row is not None])
 
 
 def _stage_finished(stage: AnalysisStage, watch: Stopwatch) -> None:

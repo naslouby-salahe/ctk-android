@@ -1,5 +1,6 @@
 import platform
 import sys
+from dataclasses import dataclass
 from importlib.metadata import version
 
 import numpy as np
@@ -48,18 +49,26 @@ from ctk_android.paths import Paths
 from ctk_android.types import (
     ArmKey,
     ArmResult,
+    ClientCountsTable,
     ClientPools,
     ClientScorers,
     CtkError,
+    DiscriminationTable,
     DoseRequest,
     EnvironmentRecord,
     Epochs,
     ExperimentSpec,
     ExposureSetting,
+    ExposureTable,
+    FamilyCountsTable,
+    FamilyMasks,
     File,
     LogFields,
+    OperatingTable,
     Overwrite,
     PartitionKey,
+    Priorities,
+    Provenance,
     ProximalStrength,
     ResultsByArm,
     RowCount,
@@ -70,6 +79,8 @@ from ctk_android.types import (
     Seed,
     StudyData,
     SummaryTable,
+    SupportCount,
+    TargetPair,
     TrainingByArm,
     TrainingRows,
     TuningPoint,
@@ -331,6 +342,284 @@ def _environment(device: Device) -> EnvironmentRecord:
     )
 
 
+@dataclass(frozen=True)
+class LocalArm:
+    result: ArmResult
+    rows: TrainingRows
+
+
+@dataclass(frozen=True)
+class TrainedArms:
+    arms: ResultsByArm
+    trainings: TrainingByArm
+
+
+@dataclass(frozen=True)
+class RunTables:
+    operating: OperatingTable
+    summary: SummaryTable
+    clients: ClientCountsTable
+    families: FamilyCountsTable
+    discrimination: DiscriminationTable
+
+
+def _run_local(
+    spec: ExperimentSpec,
+    key: RunKey,
+    context: training.TrainingContext,
+    study: StudyData,
+    masks: FamilyMasks,
+    pools: ClientPools,
+    orders: TrainingRows,
+    targets: tuple[TargetPair, ...],
+    budget: SupportCount,
+) -> LocalArm:
+    local_rows = exposure.select_training(
+        orders,
+        masks,
+        exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
+        {},
+        budget,
+    )
+    arm_watch = Stopwatch()
+    local = _train_local(context, local_rows, study, pools, context.config.local_epochs)
+    logs.info(
+        LogEvent.ARM_TRAINED,
+        {
+            **_run_fields(key),
+            LogField.ARM: local_arm().label(),
+            LogField.TRAIN_ROWS: sum(rows.size for rows in local_rows.values()),
+            LogField.SECONDS: arm_watch.seconds(),
+        },
+    )
+    return LocalArm(result=local, rows=local_rows)
+
+
+def _train_setting(
+    spec: ExperimentSpec,
+    key: RunKey,
+    context: training.TrainingContext,
+    study: StudyData,
+    pools: ClientPools,
+    setting: ExposureSetting,
+    rows: TrainingRows,
+    local: ArmResult | None,
+) -> ResultsByArm:
+    condition, dose = setting.condition, setting.dose
+    reported = tuple(learner for learner in global_learners() if learner in spec.learners)
+    results: ResultsByArm = {}
+    federated: ArmResult | None = None
+    for learner in global_learners():
+        needed = learner in reported or (
+            learner is Learner.FEDAVG and {Learner.FEDAVG_FINETUNE, Learner.BLEND} & set(reported)
+        )
+        if not needed:
+            continue
+        arm_watch = Stopwatch()
+        result = _train_learner(learner, context, rows, study, pools, local, federated)
+        if learner is Learner.FEDAVG:
+            federated = result
+        if learner in reported:
+            arm = ArmKey(learner=learner, condition=condition, dose=dose)
+            results[arm] = result
+            logs.info(
+                LogEvent.ARM_TRAINED,
+                {
+                    **_run_fields(key),
+                    LogField.ARM: arm.label(),
+                    LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
+                    LogField.SECONDS: arm_watch.seconds(),
+                },
+            )
+    return results
+
+
+def _train_arms(
+    spec: ExperimentSpec,
+    config: Config,
+    key: RunKey,
+    context: training.TrainingContext,
+    study: StudyData,
+    masks: FamilyMasks,
+    pools: ClientPools,
+    orders: TrainingRows,
+    priorities: Priorities,
+    targets: tuple[TargetPair, ...],
+    budget: SupportCount,
+) -> TrainedArms:
+    results: ResultsByArm = {}
+    trainings: TrainingByArm = {}
+    if spec.fairness_grid:
+        grid_rows = exposure.select_training(
+            orders,
+            masks,
+            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
+            {},
+            budget,
+        )
+        results.update(
+            _train_grid(context, grid_rows, study, pools, config.experiments.fairness_grids, key)
+        )
+        trainings.update(dict.fromkeys(results, grid_rows))
+    local: ArmResult | None = None
+    if not spec.fairness_grid and {Learner.LOCAL, Learner.BLEND} & set(spec.learners):
+        trained_local = _run_local(spec, key, context, study, masks, pools, orders, targets, budget)
+        local, local_rows = trained_local.result, trained_local.rows
+        if Learner.LOCAL in spec.learners:
+            results[local_arm()] = local
+            trainings[local_arm()] = local_rows
+    for setting in settings_for(spec, config):
+        base = ArmKey(learner=Learner.CENTRAL, condition=setting.condition, dose=setting.dose)
+        exposure_spec = exposure.exposure_spec(base, spec.exposure_mode, targets)
+        allowed = exposure.allowed_dose_rows(study, masks, exposure_spec, priorities)
+        rows = exposure.select_training(orders, masks, exposure_spec, allowed, budget)
+        logs.info(
+            LogEvent.EXPOSURE_SELECTED,
+            {
+                **_run_fields(key),
+                LogField.CONDITION: setting.condition,
+                LogField.DOSE: setting.dose,
+                LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
+            },
+        )
+        trained = _train_setting(spec, key, context, study, pools, setting, rows, local)
+        results.update(trained)
+        trainings.update(dict.fromkeys(trained, rows))
+    return TrainedArms(arms=results, trainings=trainings)
+
+
+def _write_tables(
+    paths: Paths,
+    key: RunKey,
+    config: Config,
+    study: StudyData,
+    targets: tuple[TargetPair, ...],
+    masks: FamilyMasks,
+    pools: ClientPools,
+    results: ResultsByArm,
+    tables: RunTables,
+    exposure_table: ExposureTable,
+) -> None:
+    operating, summary = tables.operating, tables.summary
+    clients, family_table, discrimination = tables.clients, tables.families, tables.discrimination
+    write_table(
+        family_descriptors(study, targets, masks, config.experiments.novelty),
+        paths.run_file(key, Artifact.NOVELTY),
+    )
+    write_table(exposure_table, paths.run_file(key, Artifact.EXPOSURE))
+    write_table(operating, paths.run_file(key, Artifact.THRESHOLDS))
+    write_table(summary, paths.run_metric_file(key, Artifact.SUMMARY))
+    write_table(clients, paths.run_metric_file(key, Artifact.CLIENT_METRICS))
+    write_table(family_table, paths.run_metric_file(key, Artifact.FAMILY_METRICS))
+    write_table(discrimination, paths.run_metric_file(key, Artifact.DISCRIMINATION))
+    benign = clients.filter(pl.col(Column.POPULATION) == EvaluationPopulation.BENIGN)
+    write_table(
+        operating.join(
+            benign.select(
+                *metrics.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
+            ),
+            on=[*metrics.arm_columns(), Column.CLIENT, Column.ALPHA],
+            nulls_equal=True,
+        ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
+        paths.run_metric_file(key, Artifact.OPERATING_POINTS),
+    )
+    for arm, result in results.items():
+        write_table(
+            pl.concat(
+                [
+                    pl.DataFrame(
+                        {
+                            Column.TARGET_CLIENT: [client] * pools[client].size,
+                            Column.ROW: pools[client],
+                            Column.SCORE: result.scores[client].astype(np.float32),
+                        }
+                    )
+                    for client in ClientId
+                ]
+            ),
+            paths.run_scores_file(key, arm),
+        )
+        _save_models(paths.run_models_file(key, arm), result.scorers)
+
+
+@dataclass(frozen=True)
+class EvaluatedArms:
+    evaluations: list[evaluation.ArmEvaluation]
+    tables: RunTables
+
+
+def _evaluate_arms(
+    results: ResultsByArm,
+    pools: ClientPools,
+    attributes: evaluation.RowAttributes,
+    targets: tuple[TargetPair, ...],
+    config: Config,
+    spec: ExperimentSpec,
+) -> EvaluatedArms:
+    evaluations = [
+        evaluation.evaluate_arm(
+            arm, result.scores, pools, attributes, targets, config.experiments.operating
+        )
+        for arm, result in results.items()
+    ]
+    operating = pl.concat([item.operating for item in evaluations])
+    clients = pl.concat([item.clients for item in evaluations])
+    families = pl.concat([item.families for item in evaluations if item.families.height])
+    discrimination = pl.concat(
+        [item.discrimination for item in evaluations if item.discrimination.height]
+    )
+    rule = config.data.eligibility[spec.eligibility]
+    summary = metrics.summarize(
+        clients, families, discrimination, operating, rule.own_domain_min_test
+    )
+    return EvaluatedArms(
+        evaluations=evaluations,
+        tables=RunTables(
+            operating=operating,
+            summary=summary,
+            clients=clients,
+            families=families,
+            discrimination=discrimination,
+        ),
+    )
+
+
+def _record_infeasible(paths: Paths, key: RunKey, provenance: Provenance) -> RunReport:
+    directory = paths.run_dir(key)
+    write_record(
+        paths.run_file(key, Artifact.STATUS),
+        RunStatusDocument(status=RunStatus.INFEASIBLE, reason=FailureReason.NO_ELIGIBLE_TARGETS),
+    )
+    logs.warning(
+        LogEvent.RUN_INFEASIBLE,
+        {**_run_fields(key), LogField.REASON: FailureReason.NO_ELIGIBLE_TARGETS},
+    )
+    write_provenance(paths.provenance_file(directory), provenance)
+    return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
+
+
+def _log_validations(
+    key: RunKey, validations: list[ValidationRecord], summary: SummaryTable
+) -> None:
+    for record in validations:
+        report = logs.info if record.passed else logs.warning
+        report(
+            LogEvent.VALIDATION_PASSED if record.passed else LogEvent.VALIDATION_FAILED,
+            {
+                **_run_fields(key),
+                LogField.CHECK: record.check,
+                LogField.DETAIL: record.detail,
+            },
+        )
+    unresolved = summary.filter(
+        pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE
+    )[Column.ALPHA].unique()
+    for alpha in unresolved.to_list():
+        logs.warning(
+            LogEvent.OPERATING_POINT_UNRESOLVED, {**_run_fields(key), LogField.ALPHA: alpha}
+        )
+
+
 def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite) -> RunReport:
     directory = paths.run_dir(key)
     planned = planned_targets(paths, key)
@@ -340,18 +629,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         logs.info(LogEvent.RUN_REUSED, _run_fields(key))
         return RunReport(key=key, status=RunStatus.COMPLETED, reused=True, directory=directory)
     if planned_status is RunStatus.INFEASIBLE:
-        write_record(
-            paths.run_file(key, Artifact.STATUS),
-            RunStatusDocument(
-                status=RunStatus.INFEASIBLE, reason=FailureReason.NO_ELIGIBLE_TARGETS
-            ),
-        )
-        logs.warning(
-            LogEvent.RUN_INFEASIBLE,
-            {**_run_fields(key), LogField.REASON: FailureReason.NO_ELIGIBLE_TARGETS},
-        )
-        write_provenance(paths.provenance_file(directory), provenance)
-        return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
+        return _record_infeasible(paths, key, provenance)
     spec = config.experiments.experiments[key.experiment]
     train_config = config.training_for(key.mode)
     partition_key = PartitionKey(
@@ -392,106 +670,16 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         },
     )
 
-    results: ResultsByArm = {}
-    trainings: TrainingByArm = {}
-    fit_pool = orders
-    need_local = not spec.fairness_grid and (
-        Learner.LOCAL in spec.learners or Learner.BLEND in spec.learners
+    trained = _train_arms(
+        spec, config, key, context, study, masks, pools, orders, priorities, targets, budget
     )
-    if spec.fairness_grid:
-        grid_rows = exposure.select_training(
-            orders,
-            masks,
-            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
-            {},
-            budget,
-        )
-        results.update(
-            _train_grid(context, grid_rows, study, pools, config.experiments.fairness_grids, key)
-        )
-        trainings.update(dict.fromkeys(results, grid_rows))
-    local: ArmResult | None = None
-    if need_local:
-        local_rows = exposure.select_training(
-            orders,
-            masks,
-            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
-            {},
-            budget,
-        )
-        arm_watch = Stopwatch()
-        local = _train_local(context, local_rows, study, pools, context.config.local_epochs)
-        logs.info(
-            LogEvent.ARM_TRAINED,
-            {
-                **_run_fields(key),
-                LogField.ARM: local_arm().label(),
-                LogField.TRAIN_ROWS: sum(rows.size for rows in local_rows.values()),
-                LogField.SECONDS: arm_watch.seconds(),
-            },
-        )
-        if Learner.LOCAL in spec.learners:
-            results[local_arm()] = local
-            trainings[local_arm()] = local_rows
-    reported = tuple(learner for learner in global_learners() if learner in spec.learners)
-    for setting in settings_for(spec, config):
-        condition, dose = setting.condition, setting.dose
-        base = ArmKey(learner=Learner.CENTRAL, condition=condition, dose=dose)
-        exposure_spec = exposure.exposure_spec(base, spec.exposure_mode, targets)
-        allowed = exposure.allowed_dose_rows(study, masks, exposure_spec, priorities)
-        rows = exposure.select_training(orders, masks, exposure_spec, allowed, budget)
-        logs.info(
-            LogEvent.EXPOSURE_SELECTED,
-            {
-                **_run_fields(key),
-                LogField.CONDITION: condition,
-                LogField.DOSE: dose,
-                LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
-            },
-        )
-        federated: ArmResult | None = None
-        for learner in global_learners():
-            needed = learner in reported or (
-                learner is Learner.FEDAVG
-                and {Learner.FEDAVG_FINETUNE, Learner.BLEND} & set(reported)
-            )
-            if not needed:
-                continue
-            arm_watch = Stopwatch()
-            result = _train_learner(learner, context, rows, study, pools, local, federated)
-            if learner is Learner.FEDAVG:
-                federated = result
-            if learner in reported:
-                arm = ArmKey(learner=learner, condition=condition, dose=dose)
-                results[arm] = result
-                trainings[arm] = rows
-                logs.info(
-                    LogEvent.ARM_TRAINED,
-                    {
-                        **_run_fields(key),
-                        LogField.ARM: arm.label(),
-                        LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
-                        LogField.SECONDS: arm_watch.seconds(),
-                    },
-                )
+    results, trainings = trained.arms, trained.trainings
+    fit_pool = orders
 
     evaluation_watch = Stopwatch()
-    evaluations = [
-        evaluation.evaluate_arm(
-            arm, result.scores, pools, attributes, targets, config.experiments.operating
-        )
-        for arm, result in results.items()
-    ]
-    operating = pl.concat([item.operating for item in evaluations])
-    clients = pl.concat([item.clients for item in evaluations])
-    family_table = pl.concat([item.families for item in evaluations if item.families.height])
-    discrimination = pl.concat(
-        [item.discrimination for item in evaluations if item.discrimination.height]
-    )
+    evaluated = _evaluate_arms(results, pools, attributes, targets, config, spec)
+    evaluations, summary = evaluated.evaluations, evaluated.tables.summary
     rule = config.data.eligibility[spec.eligibility]
-    summary = metrics.summarize(
-        clients, family_table, discrimination, operating, rule.own_domain_min_test
-    )
 
     logs.info(
         LogEvent.EVALUATION_FINISHED,
@@ -511,66 +699,24 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         *_pool_validations(attributes, pools, evaluations),
     ]
     validations.append(_operating_validation(summary, config))
-    for record in validations:
-        report = logs.info if record.passed else logs.warning
-        report(
-            LogEvent.VALIDATION_PASSED if record.passed else LogEvent.VALIDATION_FAILED,
-            {
-                **_run_fields(key),
-                LogField.CHECK: record.check,
-                LogField.DETAIL: record.detail,
-            },
-        )
-    unresolved = summary.filter(
-        pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.INSUFFICIENT_EVIDENCE
-    )[Column.ALPHA].unique()
-    for alpha in unresolved.to_list():
-        logs.warning(
-            LogEvent.OPERATING_POINT_UNRESOLVED, {**_run_fields(key), LogField.ALPHA: alpha}
-        )
+    _log_validations(key, validations, summary)
     structural = [v for v in validations if v.check is not ValidationCheck.OPERATING_POINT_REALISED]
     status = (
         RunStatus.COMPLETED if all(v.passed for v in structural) else RunStatus.FAILED_VALIDATION
     )
 
-    write_table(
-        family_descriptors(study, targets, masks, config.experiments.novelty),
-        paths.run_file(key, Artifact.NOVELTY),
+    _write_tables(
+        paths,
+        key,
+        config,
+        study,
+        targets,
+        masks,
+        pools,
+        results,
+        evaluated.tables,
+        exposure_table,
     )
-    write_table(exposure_table, paths.run_file(key, Artifact.EXPOSURE))
-    write_table(operating, paths.run_file(key, Artifact.THRESHOLDS))
-    write_table(summary, paths.run_metric_file(key, Artifact.SUMMARY))
-    write_table(clients, paths.run_metric_file(key, Artifact.CLIENT_METRICS))
-    write_table(family_table, paths.run_metric_file(key, Artifact.FAMILY_METRICS))
-    write_table(discrimination, paths.run_metric_file(key, Artifact.DISCRIMINATION))
-    benign = clients.filter(pl.col(Column.POPULATION) == EvaluationPopulation.BENIGN)
-    write_table(
-        operating.join(
-            benign.select(
-                *metrics.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
-            ),
-            on=[*metrics.arm_columns(), Column.CLIENT, Column.ALPHA],
-            nulls_equal=True,
-        ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
-        paths.run_metric_file(key, Artifact.OPERATING_POINTS),
-    )
-    for arm, result in results.items():
-        write_table(
-            pl.concat(
-                [
-                    pl.DataFrame(
-                        {
-                            Column.TARGET_CLIENT: [client] * pools[client].size,
-                            Column.ROW: pools[client],
-                            Column.SCORE: result.scores[client].astype(np.float32),
-                        }
-                    )
-                    for client in ClientId
-                ]
-            ),
-            paths.run_scores_file(key, arm),
-        )
-        _save_models(paths.run_models_file(key, arm), result.scorers)
     write_record(
         paths.run_file(key, Artifact.VALIDATION), ValidationDocument(validations=tuple(validations))
     )

@@ -107,7 +107,8 @@ def fit_trees(
         learning_rate=config.trees.learning_rate,
         random_state=seed,
     )
-    return model.fit(np.asarray(features[rows]), labels[rows])
+    model.fit(np.asarray(features[rows]), labels[rows])
+    return model
 
 
 def scorer_logits(scorer: Scorer, features: FeatureMatrix, rows: RowIndices) -> LogitVector:

@@ -21,6 +21,7 @@ from ctk_android.types import (
     ExposureTable,
     FamilyMasks,
     FamilyName,
+    Passed,
     Priorities,
     RowCount,
     RowIndices,
@@ -63,28 +64,36 @@ def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> Priorities:
     return rng.random(study.table.height)
 
 
+def _excluded_families(
+    arm: ArmKey, mode: ExposureMode, targets: tuple[TargetPair, ...]
+) -> ExcludedFamilies:
+    if arm.condition is ExposureCondition.FAMILY_ABSENT_EVERYWHERE:
+        families = tuple(dict.fromkeys(pair.family for pair in targets))
+        return dict.fromkeys(ClientId, families)
+    if mode is ExposureMode.HIDE_FROM_TARGET and arm.condition is ExposureCondition.PEER_PRESENT:
+        return {
+            client: tuple(pair.family for pair in targets if pair.client is client)
+            for client in ClientId
+        }
+    return dict.fromkeys(ClientId, ())
+
+
 def exposure_spec(
     arm: ArmKey,
     mode: ExposureMode,
     targets: tuple[TargetPair, ...],
 ) -> ExposureSpec:
-    families = tuple(dict.fromkeys(pair.family for pair in targets))
-    hide = mode is ExposureMode.HIDE_FROM_TARGET
-    excluded: ExcludedFamilies = {client: () for client in ClientId}
-    if arm.condition is ExposureCondition.FAMILY_ABSENT_EVERYWHERE:
-        excluded = {client: families for client in ClientId}
-    elif hide and arm.condition is ExposureCondition.PEER_PRESENT:
-        excluded = {
-            client: tuple(pair.family for pair in targets if pair.client is client)
-            for client in ClientId
-        }
     dose_caps: DoseCaps = {}
     dose_targets: DoseTargets = {}
     if arm.dose is not None and arm.condition is ExposureCondition.PEER_PRESENT:
         for pair in targets:
             dose_caps[pair.family] = arm.dose
             dose_targets[pair.family] = pair.client
-    return ExposureSpec(excluded=excluded, dose_caps=dose_caps, dose_targets=dose_targets)
+    return ExposureSpec(
+        excluded=_excluded_families(arm, mode, targets),
+        dose_caps=dose_caps,
+        dose_targets=dose_targets,
+    )
 
 
 def allowed_dose_rows(
@@ -148,6 +157,40 @@ def exposure_counts(
     )
 
 
+def _hidden_absent(
+    per_client: TrainingRows, masks: FamilyMasks, targets: tuple[TargetPair, ...]
+) -> Passed:
+    return all(not masks[pair.family][per_client[pair.client]].any().item() for pair in targets)
+
+
+def _peer_supported(
+    per_client: TrainingRows,
+    masks: FamilyMasks,
+    targets: tuple[TargetPair, ...],
+    fit_pool: TrainingRows,
+    peer_min_fit: SupportCount,
+) -> Passed:
+    def peer_rows(pool: TrainingRows, pair: TargetPair) -> RowCount:
+        return sum(
+            masks[pair.family][rows].sum().item()
+            for client, rows in pool.items()
+            if client is not pair.client
+        )
+
+    return all(
+        peer_rows(per_client, pair) > 0 and peer_rows(fit_pool, pair) >= peer_min_fit
+        for pair in targets
+    )
+
+
+def _absent_everywhere(
+    per_client: TrainingRows, masks: FamilyMasks, targets: tuple[TargetPair, ...]
+) -> Passed:
+    return not any(
+        masks[pair.family][rows].any().item() for pair in targets for rows in per_client.values()
+    )
+
+
 def validate_exposure(
     study: StudyData,
     training: TrainingByArm,
@@ -171,25 +214,11 @@ def validate_exposure(
             arm.condition is ExposureCondition.PEER_PRESENT
             and mode is ExposureMode.HIDE_FROM_TARGET
         ):
-            for pair in targets:
-                hidden_zero &= not masks[pair.family][per_client[pair.client]].any().item()
-                if arm.dose is None:
-                    peers = sum(
-                        masks[pair.family][rows].sum().item()
-                        for client, rows in per_client.items()
-                        if client is not pair.client
-                    )
-                    available = sum(
-                        masks[pair.family][rows].sum().item()
-                        for client, rows in fit_pool.items()
-                        if client is not pair.client
-                    )
-                    peer_present &= peers > 0 and available >= peer_min_fit
+            hidden_zero &= _hidden_absent(per_client, masks, targets)
+            if arm.dose is None:
+                peer_present &= _peer_supported(per_client, masks, targets, fit_pool, peer_min_fit)
         if arm.condition is ExposureCondition.FAMILY_ABSENT_EVERYWHERE:
-            for pair in targets:
-                absent_zero &= not any(
-                    masks[pair.family][rows].any().item() for rows in per_client.values()
-                )
+            absent_zero &= _absent_everywhere(per_client, masks, targets)
     matched = all(len(values) == 1 for values in sizes.values())
     return [
         ValidationRecord(

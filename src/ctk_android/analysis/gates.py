@@ -257,13 +257,11 @@ def dose_response(evidence: GateEvidence, config: Config) -> ClaimResult:
         for family in family_gains[Column.FAMILY]
     )
     passed = [monotone, improves, not_one_family]
-    status = (
-        ClaimStatus.PROMOTED
-        if all(passed)
-        else ClaimStatus.REJECTED
-        if not any(passed)
-        else ClaimStatus.NARROWED
-    )
+    status = ClaimStatus.NARROWED
+    if all(passed):
+        status = ClaimStatus.PROMOTED
+    elif not any(passed):
+        status = ClaimStatus.REJECTED
     return _result(ClaimName.DOSE_RESPONSE, status, sum(passed), len(passed))
 
 

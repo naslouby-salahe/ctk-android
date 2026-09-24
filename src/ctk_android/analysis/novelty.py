@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import numpy as np
 import polars as pl
 from scipy import stats
@@ -13,6 +15,7 @@ from ctk_android.enums import (
 )
 from ctk_android.types import (
     ActiveMask,
+    AttributeColumn,
     Correlation,
     DescriptorRow,
     DescriptorScoreTable,
@@ -51,6 +54,32 @@ def _distance(left: Prevalence, right: Prevalence) -> Score:
     return np.linalg.norm(left - right).item()
 
 
+@dataclass(frozen=True)
+class KnownFamilyGaps:
+    distances: list[Score]
+    jaccards: list[Rate]
+
+
+def _known_family_gaps(
+    study: StudyData,
+    target: Prevalence,
+    known_named: ActiveMask,
+    family: AttributeColumn,
+    config: NoveltyConfig,
+) -> KnownFamilyGaps:
+    target_active = _active(target, config.min_active_prevalence)
+    distances: list[Score] = []
+    jaccards: list[Rate] = []
+    for name in np.unique(family[known_named]):
+        group = np.flatnonzero(known_named & (family == name))
+        if group.size < config.min_known_family_rows:
+            continue
+        centroid = _prevalence(study, group)
+        distances.append(_distance(target, centroid))
+        jaccards.append(_jaccard(target_active, _active(centroid, config.min_active_prevalence)))
+    return KnownFamilyGaps(distances=distances, jaccards=jaccards)
+
+
 def family_descriptors(
     study: StudyData,
     targets: tuple[TargetPair, ...],
@@ -78,17 +107,8 @@ def family_descriptors(
         target = _prevalence(study, peer_rows)
         known_centroid = _prevalence(study, known_rows)
         target_active = _active(target, config.min_active_prevalence)
-        distances: list[Score] = []
-        jaccards: list[Rate] = []
-        for name in np.unique(family[known_mask & named]):
-            group = np.flatnonzero(known_mask & named & (family == name))
-            if group.size < config.min_known_family_rows:
-                continue
-            centroid = _prevalence(study, group)
-            distances.append(_distance(target, centroid))
-            jaccards.append(
-                _jaccard(target_active, _active(centroid, config.min_active_prevalence))
-            )
+        gaps = _known_family_gaps(study, target, known_mask & named, family, config)
+        distances, jaccards = gaps.distances, gaps.jaccards
         represented = np.logical_and(
             target_active, _active(known_centroid, config.min_active_prevalence)
         ).sum()
