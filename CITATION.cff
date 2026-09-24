@@ -6,6 +6,7 @@ type: software
 authors:
   - family-names: Naslouby
     given-names: Salaheddine
+repository-code: "https://github.com/naslouby-salahe/ctk-android"
 license: MIT
 keywords:
   - CTK-Android
