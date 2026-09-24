@@ -14,6 +14,8 @@ from ctk_android.enums import (
     Stage,
 )
 from ctk_android.paths import Paths
+from ctk_android.workflows.plan import experiments_for, run_plan
+from ctk_android.workflows.run import run_experiment
 from ctk_android.workflows.smoke import run_smoke
 from tests.architecture.source_index import REPO_ROOT
 
@@ -61,3 +63,23 @@ def test_smoke_run_logs_its_full_lifecycle_with_counts_and_timings() -> None:
         run_smoke(PATHS, config, overwrite=False)
     assert LogEvent.RUN_REUSED in [entry["event"] for entry in reused]
     assert LogEvent.ARM_TRAINED not in [entry["event"] for entry in reused]
+
+
+def test_every_smoke_planned_experiment_executes_and_passes_validation() -> None:
+    if not PATHS.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS).is_file():
+        pytest.skip("preprocessing outputs are not available; run `ctk-android preprocess`")
+    config = load_config(PATHS)
+    run_plan(PATHS, config, ExecutionMode.SMOKE)
+    planned = experiments_for(config, ExecutionMode.SMOKE)
+    assert len(planned) > 1
+    for experiment in planned:
+        reports = run_experiment(
+            PATHS,
+            config,
+            experiment,
+            ExecutionMode.SMOKE,
+            config.project.seeds.smoke,
+            overwrite=False,
+        )
+        assert reports
+        assert all(report.status is RunStatus.COMPLETED for report in reports), experiment

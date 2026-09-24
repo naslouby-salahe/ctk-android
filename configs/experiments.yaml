@@ -135,7 +135,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   replication-family-set:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: replication
     exposure_mode: hide-from-target
@@ -149,7 +149,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   model-family-replication-linear:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: linear
     family_set: primary
     exposure_mode: hide-from-target
@@ -163,7 +163,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   model-family-replication-trees:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: gradient-boosted-trees
     family_set: primary
     exposure_mode: hide-from-target
@@ -177,7 +177,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   training-support-sensitivity:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: primary
     exposure_mode: hide-from-target
@@ -191,7 +191,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   partition-salt-sensitivity:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: primary
     exposure_mode: hide-from-target
@@ -205,7 +205,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   family-support-sensitivity-low:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: primary
     exposure_mode: hide-from-target
@@ -219,7 +219,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   family-support-sensitivity-high:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: primary
     exposure_mode: hide-from-target
@@ -233,7 +233,7 @@ experiments:
     dose_sweep: false
     fairness_grid: false
   package-only-grouping:
-    modes: [confirmatory]
+    modes: [smoke, confirmatory]
     model_family: mlp
     family_set: primary
     exposure_mode: hide-from-target
