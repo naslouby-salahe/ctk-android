@@ -33,7 +33,11 @@ def top_support_families(families: FamilyCountsTable, count: SupportCount) -> li
 
 
 def micro_ctk_by_seed(
-    families: FamilyCountsTable, alpha: Alpha, excluded: list[FamilyName]
+    families: FamilyCountsTable,
+    alpha: Alpha,
+    excluded: list[FamilyName],
+    hits: Column = Column.HITS,
+    trials: Column = Column.TRIALS,
 ) -> MicroGainTable:
     def pooled(condition: ExposureCondition, name: Column) -> PooledRecallTable:
         return (
@@ -46,7 +50,7 @@ def micro_ctk_by_seed(
                 & ~is_one_of(Column.FAMILY, excluded)
             )
             .group_by(Column.EXPERIMENT, Column.SEED, Column.SALT)
-            .agg((pl.col(Column.HITS).sum() / pl.col(Column.TRIALS).sum()).alias(name))
+            .agg((pl.col(hits).sum() / pl.col(trials).sum()).alias(name))
         )
 
     return (
@@ -65,11 +69,12 @@ def robustness_table(families: FamilyCountsTable, config: Config) -> RobustnessT
     alpha = config.experiments.operating.primary_alpha
     removed = top_support_families(families, config.experiments.top_family_removal_count)
     rows: list[RobustnessRow] = []
-    for sensitivity, excluded in (
-        (Sensitivity.ALL_FAMILIES, []),
-        (Sensitivity.TOP_FAMILY_REMOVAL, removed),
+    for sensitivity, excluded, hits, trials in (
+        (Sensitivity.ALL_FAMILIES, [], Column.HITS, Column.TRIALS),
+        (Sensitivity.TOP_FAMILY_REMOVAL, removed, Column.HITS, Column.TRIALS),
+        (Sensitivity.DEDUPLICATED_TEST, [], Column.UNIQUE_HITS, Column.UNIQUE_TRIALS),
     ):
-        gains = micro_ctk_by_seed(families, alpha, excluded)
+        gains = micro_ctk_by_seed(families, alpha, excluded, hits, trials)
         for experiment in gains[Column.EXPERIMENT].unique():
             values = gains.filter(pl.col(Column.EXPERIMENT) == experiment)[
                 Column.CTK_GAIN

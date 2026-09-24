@@ -56,6 +56,8 @@ def _summary() -> pl.DataFrame:
                 family="alpha",
                 hits=8,
                 trials=10,
+                unique_hits=4,
+                unique_trials=5,
             )
         ]
     )

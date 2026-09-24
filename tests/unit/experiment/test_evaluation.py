@@ -71,3 +71,17 @@ def test_a_tail_target_without_calibration_support_is_labelled_insufficient() ->
         Column.OPERATING_STATUS
     ]
     assert set(statuses.to_list()) == {OperatingPointStatus.INSUFFICIENT_EVIDENCE}
+
+
+def testfirst_occurrence_counts_each_feature_identity_once() -> None:
+    ids = np.array([5, 5, 7, 5, 7, 9])
+    mask = np.array([True, True, True, False, True, True])
+    first = evaluation.first_occurrence(mask, ids)
+    assert first.tolist() == [True, False, True, False, False, True]
+
+
+def test_unique_counts_never_exceed_raw_counts() -> None:
+    result = evaluation.evaluate_arm(ARM, _scores(0), POOLS, ATTRIBUTES, TARGETS, OPERATING)
+    families = result.families
+    assert (families[Column.UNIQUE_TRIALS] <= families[Column.TRIALS]).all()
+    assert (families[Column.UNIQUE_HITS] <= families[Column.UNIQUE_TRIALS]).all()

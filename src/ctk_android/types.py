@@ -394,6 +394,8 @@ class ClientCountRow(ArmRow):
 
 class FamilyCountRow(ClientCountRow):
     family: FamilyName
+    unique_hits: SupportCount
+    unique_trials: SupportCount
 
 
 class DiscriminationRow(ArmRow):

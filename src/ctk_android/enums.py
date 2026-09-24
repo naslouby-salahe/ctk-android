@@ -321,6 +321,9 @@ class Column(StrEnum):
     POPULATION = "population"
     HITS = "hits"
     TRIALS = "trials"
+    UNIQUE_HITS = "unique_hits"
+    UNIQUE_TRIALS = "unique_trials"
+    SENSITIVITY = "sensitivity"
     OPERATING_STATUS = "operating_status"
     SCORE = "score"
     TARGET_CLIENT = "target_client"
@@ -754,6 +757,7 @@ class AllowedWording(StrEnum):
 class Sensitivity(StrEnum):
     ALL_FAMILIES = "all-families"
     TOP_FAMILY_REMOVAL = "top-family-removal"
+    DEDUPLICATED_TEST = "deduplicated-test"
 
 
 class ReportTable(StrEnum):
@@ -763,6 +767,7 @@ class ReportTable(StrEnum):
     PEER_DOSE_RESPONSE = "peer-dose-response"
     FAMILY_LEVEL = "family-level"
     CLAIM_GATES = "claim-gates"
+    ROBUSTNESS = "robustness"
 
 
 class ReportFigure(StrEnum):

@@ -24,6 +24,7 @@ from ctk_android.types import (
     DoseReportTable,
     FamilyLevelTable,
     ReportTables,
+    RobustnessTable,
 )
 
 
@@ -136,6 +137,12 @@ def claim_gates(paths: Paths, mode: ExecutionMode) -> ClaimsTable:
     return pl.read_parquet(paths.statistics_file(mode, Artifact.CLAIM_GATES))
 
 
+def robustness(paths: Paths, mode: ExecutionMode) -> RobustnessTable:
+    return pl.read_parquet(paths.analysis_file(mode, Artifact.ROBUSTNESS)).sort(
+        Column.EXPERIMENT, Column.SENSITIVITY
+    )
+
+
 def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTables:
     return {
         ReportTable.DATASET_CLIENT_AUDIT: dataset_client_audit(paths),
@@ -144,4 +151,5 @@ def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTab
         ReportTable.PEER_DOSE_RESPONSE: peer_dose_response(paths, mode),
         ReportTable.FAMILY_LEVEL: family_level(paths, config, mode),
         ReportTable.CLAIM_GATES: claim_gates(paths, mode),
+        ReportTable.ROBUSTNESS: robustness(paths, mode),
     }

@@ -1,6 +1,7 @@
 import numpy as np
 import polars as pl
 
+from ctk_android.data.identity import feature_identities
 from ctk_android.enums import ClientId, Column, EligibilityReason, SplitRole
 from ctk_android.types import StudyData, TargetPair
 
@@ -30,6 +31,7 @@ def synthetic_study() -> StudyData:
     table = pl.DataFrame(rows).with_row_index(Column.ROW)
     rng = np.random.default_rng(0)
     features = (rng.random((table.height, FEATURES)) < 0.5).astype(np.uint8)
+    table = table.with_columns(pl.Series(Column.FEATURE_ID, feature_identities(features)))
     return StudyData(table=table, features=features)
 
 

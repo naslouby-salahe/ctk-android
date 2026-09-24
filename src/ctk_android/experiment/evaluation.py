@@ -47,6 +47,7 @@ class RowAttributes:
     labels: LabelVector
     clients: AttributeColumn
     roles: AttributeColumn
+    feature_ids: AttributeColumn
     masks: FamilyMasks
 
 
@@ -65,6 +66,7 @@ def row_attributes(study: StudyData, masks: FamilyMasks) -> RowAttributes:
         labels=table[Column.LABEL].to_numpy().astype(np.int64),
         clients=table[Column.CLIENT].to_numpy(),
         roles=table[Column.ROLE].to_numpy(),
+        feature_ids=table[Column.FEATURE_ID].to_numpy(),
         masks=masks,
     )
 
@@ -78,6 +80,14 @@ def _unseen_mask(attributes: RowAttributes, families: tuple[FamilyName, ...]) ->
     for family in families:
         mask |= attributes.masks[family]
     return mask
+
+
+def first_occurrence(mask: RowMask, feature_ids: AttributeColumn) -> RowMask:
+    first = np.zeros(mask.size, dtype=bool)
+    rows = np.flatnonzero(mask)
+    _, position = np.unique(feature_ids[rows], return_index=True)
+    first[rows[position]] = True
+    return first
 
 
 def build_pools(attributes: RowAttributes, targets: tuple[TargetPair, ...]) -> ClientPools:
@@ -205,6 +215,7 @@ def evaluate_arm(
                     (EvaluationPopulation.FEDERATION_WIDE, test),
                 ):
                     mask = scope & member
+                    unique = first_occurrence(mask, attributes.feature_ids[rows])
                     family_rows.append(
                         FamilyCountRow(
                             **base,
@@ -214,6 +225,8 @@ def evaluate_arm(
                             family=family,
                             hits=(flagged & mask).sum().item(),
                             trials=mask.sum().item(),
+                            unique_hits=(flagged & unique).sum().item(),
+                            unique_trials=unique.sum().item(),
                         )
                     )
     return ArmEvaluation(
