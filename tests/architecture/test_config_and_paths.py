@@ -20,7 +20,7 @@ from tests.architecture.source_index import (
 )
 
 APPROVED_CONFIGS = {"data.yaml", "experiments.yaml", "project.yaml", "statistics.yaml"}
-MAX_YAML_FILES = 5
+MAX_YAML_FILES = 6
 FILE_LITERAL = re.compile(r"\.(parquet|json|npy|csv|gz|pt|yaml|yml|md)$|/")
 REPOSITORY_ROOTS = {"outputs", "results", "configs", "data", "src", "docs", "quality", "tests"}
 

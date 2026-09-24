@@ -41,9 +41,9 @@ def _axes(figure: PlotFigure) -> PlotAxes:
     return figure.add_subplot()
 
 
-def _save(figure: PlotFigure, paths: Paths, name: ReportFigure) -> None:
+def _save(figure: PlotFigure, paths: Paths, mode: ExecutionMode, name: ReportFigure) -> None:
     for suffix in (FileSuffix.PDF, FileSuffix.PNG):
-        target = paths.report_figure_file(name, suffix)
+        target = paths.report_figure_file(mode, name, suffix)
         target.parent.mkdir(parents=True, exist_ok=True)
         figure.savefig(target, dpi=PlotGeometry.DPI, bbox_inches=LibraryOption.BBOX_TIGHT)
 
@@ -147,7 +147,7 @@ def collaboration_decomposition(paths: Paths, config: Config, mode: ExecutionMod
     axes.set_ylabel(PlotText.RECALL)
     axes.set_title(PlotText.DECOMPOSITION_TITLE)
     axes.legend()
-    _save(figure, paths, ReportFigure.COLLABORATION_DECOMPOSITION)
+    _save(figure, paths, mode, ReportFigure.COLLABORATION_DECOMPOSITION)
 
 
 def mean_versus_worst_client(paths: Paths, config: Config, mode: ExecutionMode) -> None:
@@ -194,7 +194,7 @@ def mean_versus_worst_client(paths: Paths, config: Config, mode: ExecutionMode) 
         axes.set_title(title)
     recall_axes.legend()
     figure.suptitle(PlotText.MEAN_VERSUS_WORST_TITLE)
-    _save(figure, paths, ReportFigure.MEAN_VERSUS_WORST_CLIENT)
+    _save(figure, paths, mode, ReportFigure.MEAN_VERSUS_WORST_CLIENT)
 
 
 def own_domain_versus_federation_wide(paths: Paths, config: Config, mode: ExecutionMode) -> None:
@@ -221,7 +221,7 @@ def own_domain_versus_federation_wide(paths: Paths, config: Config, mode: Execut
     axes.set_ylabel(PlotText.GAIN)
     axes.set_title(PlotText.DOMAIN_TITLE)
     axes.legend()
-    _save(figure, paths, ReportFigure.OWN_DOMAIN_VERSUS_FEDERATION_WIDE)
+    _save(figure, paths, mode, ReportFigure.OWN_DOMAIN_VERSUS_FEDERATION_WIDE)
 
 
 def peer_dose_response(paths: Paths, mode: ExecutionMode) -> None:
@@ -246,7 +246,7 @@ def peer_dose_response(paths: Paths, mode: ExecutionMode) -> None:
     axes.set_ylabel(PlotText.RECALL)
     axes.set_title(PlotText.DOSE_TITLE)
     axes.legend()
-    _save(figure, paths, ReportFigure.PEER_DOSE_RESPONSE)
+    _save(figure, paths, mode, ReportFigure.PEER_DOSE_RESPONSE)
 
 
 def _family_rescue(paths: Paths, mode: ExecutionMode) -> FamilyRescueTable:
@@ -269,7 +269,7 @@ def family_rescue_map(paths: Paths, mode: ExecutionMode) -> None:
     axes.set_yticks(range(table.height), table[Column.FAMILY].to_list())
     axes.set_title(PlotText.RESCUE_TITLE)
     figure.colorbar(image, ax=axes)
-    _save(figure, paths, ReportFigure.FAMILY_RESCUE_MAP)
+    _save(figure, paths, mode, ReportFigure.FAMILY_RESCUE_MAP)
 
 
 def feature_novelty_versus_ctk_gain(paths: Paths, mode: ExecutionMode) -> None:
@@ -286,7 +286,7 @@ def feature_novelty_versus_ctk_gain(paths: Paths, mode: ExecutionMode) -> None:
     axes.set_xlabel(PlotText.NOVELTY)
     axes.set_ylabel(PlotText.GAIN)
     axes.set_title(PlotText.NOVELTY_TITLE)
-    _save(figure, paths, ReportFigure.FEATURE_NOVELTY_VERSUS_CTK_GAIN)
+    _save(figure, paths, mode, ReportFigure.FEATURE_NOVELTY_VERSUS_CTK_GAIN)
 
 
 def known_versus_unseen_tradeoff(paths: Paths, config: Config, mode: ExecutionMode) -> None:
@@ -303,7 +303,7 @@ def known_versus_unseen_tradeoff(paths: Paths, config: Config, mode: ExecutionMo
     axes.set_ylabel(PlotText.KNOWN_RECALL)
     axes.set_title(PlotText.TRADEOFF_TITLE)
     axes.legend()
-    _save(figure, paths, ReportFigure.KNOWN_VERSUS_UNSEEN_TRADEOFF)
+    _save(figure, paths, mode, ReportFigure.KNOWN_VERSUS_UNSEEN_TRADEOFF)
 
 
 def robustness_summary(paths: Paths, mode: ExecutionMode) -> None:
@@ -327,7 +327,7 @@ def robustness_summary(paths: Paths, mode: ExecutionMode) -> None:
     axes.set_yticks(range(len(labels)), labels)
     axes.set_xlabel(PlotText.GAIN)
     axes.set_title(PlotText.ROBUSTNESS_TITLE)
-    _save(figure, paths, ReportFigure.ROBUSTNESS_SUMMARY)
+    _save(figure, paths, mode, ReportFigure.ROBUSTNESS_SUMMARY)
 
 
 def build_figures(paths: Paths, config: Config, mode: ExecutionMode) -> Directory:
@@ -339,4 +339,4 @@ def build_figures(paths: Paths, config: Config, mode: ExecutionMode) -> Director
     feature_novelty_versus_ctk_gain(paths, mode)
     known_versus_unseen_tradeoff(paths, config, mode)
     robustness_summary(paths, mode)
-    return paths.report_figure_file(ReportFigure.ROBUSTNESS_SUMMARY, FileSuffix.PNG).parent
+    return paths.report_figure_file(mode, ReportFigure.ROBUSTNESS_SUMMARY, FileSuffix.PNG).parent

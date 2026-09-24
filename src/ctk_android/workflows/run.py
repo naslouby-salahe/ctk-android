@@ -77,6 +77,7 @@ from ctk_android.types import (
     ValidationRecord,
 )
 from ctk_android.workflows.plan import planned_targets
+from ctk_android.workflows.report import run_report
 
 
 def local_arm() -> ArmKey:
@@ -645,4 +646,17 @@ def run_experiment(
                         key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory
                     )
                 )
+    return reports
+
+
+def run_and_report(
+    paths: Paths,
+    config: Config,
+    experiment: ExperimentName,
+    mode: ExecutionMode,
+    seeds: tuple[Seed, ...],
+    overwrite: Overwrite,
+) -> list[RunReport]:
+    reports = run_experiment(paths, config, experiment, mode, seeds, overwrite)
+    run_report(paths, config, mode, promote_evidence=False)
     return reports

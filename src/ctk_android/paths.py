@@ -144,12 +144,14 @@ class Paths:
     def statistics_file(self, mode: ExecutionMode, artifact: Artifact) -> File:
         return self.outputs / WorkspaceDirectory.STATISTICS / mode / artifact
 
-    def report_table_file(self, name: ReportTable) -> File:
-        directory = self.outputs / WorkspaceDirectory.REPORT / WorkspaceDirectory.TABLES
+    def report_table_file(self, mode: ExecutionMode, name: ReportTable) -> File:
+        directory = self.outputs / WorkspaceDirectory.REPORT / mode / WorkspaceDirectory.TABLES
         return directory / f"{name}{FileSuffix.CSV}"
 
-    def report_figure_file(self, name: ReportFigure, suffix: FileSuffix) -> File:
-        directory = self.outputs / WorkspaceDirectory.REPORT / WorkspaceDirectory.FIGURES
+    def report_figure_file(
+        self, mode: ExecutionMode, name: ReportFigure, suffix: FileSuffix
+    ) -> File:
+        directory = self.outputs / WorkspaceDirectory.REPORT / mode / WorkspaceDirectory.FIGURES
         return directory / f"{name}{suffix}"
 
     def run_dir(self, key: RunKey) -> Directory:

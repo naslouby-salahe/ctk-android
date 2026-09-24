@@ -36,11 +36,13 @@ def test_report_regenerates_every_table_and_figure_from_saved_evidence() -> None
     decision = run_report(PATHS, config, MODE, promote_evidence=False)
     assert decision is None
     for table in ReportTable:
-        assert PATHS.report_table_file(table).stat().st_size > 0
+        assert PATHS.report_table_file(MODE, table).stat().st_size > 0
     for figure in ReportFigure:
         for suffix in (FileSuffix.PDF, FileSuffix.PNG):
-            assert PATHS.report_figure_file(figure, suffix).stat().st_size > 0
-    decomposition = pl.read_csv(PATHS.report_table_file(ReportTable.COLLABORATION_DECOMPOSITION))
+            assert PATHS.report_figure_file(MODE, figure, suffix).stat().st_size > 0
+    decomposition = pl.read_csv(
+        PATHS.report_table_file(MODE, ReportTable.COLLABORATION_DECOMPOSITION)
+    )
     assert {Column.ALPHA, Column.P_HOLM, Column.CI_LOW, Column.CI_HIGH} <= set(
         decomposition.columns
     )

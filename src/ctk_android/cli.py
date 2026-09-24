@@ -135,7 +135,7 @@ def run(
     context = _context(CliCommand.RUN)
     seeds = context.config.project.seeds.for_mode(mode) if seed is None else (seed,)
     try:
-        reports = run_workflow.run_experiment(
+        reports = run_workflow.run_and_report(
             context.paths, context.config, experiment, mode, seeds, overwrite
         )
     except CtkError as error:

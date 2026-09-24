@@ -292,7 +292,7 @@ def run_report(
     run_fairness(paths, config, mode)
     tables = build_tables(paths, config, mode)
     for name, table in tables.items():
-        target = paths.report_table_file(name)
+        target = paths.report_table_file(mode, name)
         target.parent.mkdir(parents=True, exist_ok=True)
         table.write_csv(target)
     logs.info(LogEvent.TABLES_WRITTEN, {LogField.COUNT: len(tables)})

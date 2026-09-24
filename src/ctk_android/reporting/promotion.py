@@ -147,13 +147,15 @@ def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecis
     for table in ReportTable:
         entries.append(
             _copy(
-                paths.report_table_file(table),
-                paths.results_file(ResultsDirectory.TABLES, paths.report_table_file(table).name),
+                paths.report_table_file(mode, table),
+                paths.results_file(
+                    ResultsDirectory.TABLES, paths.report_table_file(mode, table).name
+                ),
             )
         )
     for figure in ReportFigure:
         for suffix in (FileSuffix.PDF, FileSuffix.PNG):
-            source = paths.report_figure_file(figure, suffix)
+            source = paths.report_figure_file(mode, figure, suffix)
             entries.append(_copy(source, paths.results_file(ResultsDirectory.FIGURES, source.name)))
     write_record(
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.SOURCE_DATA),
