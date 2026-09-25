@@ -30,6 +30,7 @@ class ExecutionMode(StrEnum):
     SMOKE = "smoke"
     DEVELOPMENT = "development"
     CONFIRMATORY = "confirmatory"
+    EXTENSION = "extension"
 
 
 class ExperimentName(StrEnum):
@@ -225,6 +226,9 @@ class AndroZooColumn(StrEnum):
 
 class Artifact(StrEnum):
     CLIENT_CTK = "client-ctk-analysis.parquet"
+    FAMILY_CLIENT_CTK = "family-client-ctk.parquet"
+    CTK_VARIANCE = "ctk-variance-components.parquet"
+    FAMILY_ASSOCIATIONS = "family-associations.parquet"
     ANCHORED_WORST_CLIENT = "anchored-worst-client.parquet"
     ANCHORED_CLIENT_SELECTION = "anchored-client-selection.parquet"
     ARM_TRADEOFF = "federated-arm-tradeoff.parquet"
@@ -407,6 +411,7 @@ class Column(StrEnum):
     LINEAR_FULL_RECALL = "linear_full_recall"
     TREES_FULL_RECALL = "trees_full_recall"
     AGGREGATION = "aggregation"
+    SHARE = "share"
     OBSERVATIONS = "observations"
     OBSERVATIONS_MET = "observations_meeting_criterion"
 
@@ -821,6 +826,22 @@ class EvidenceClass(StrEnum):
     POST_CONFIRMATORY = "C-post-confirmatory-evidence-preserving"
 
 
+class VarianceSource(StrEnum):
+    FAMILY = "family"
+    SEED = "seed"
+    RESIDUAL = "family-by-seed-residual"
+
+
+class FamilyPredictor(StrEnum):
+    LOCAL_RECALL = "local-recall"
+    POOLING_GAIN = "pooling-gain"
+
+
+class FamilyOutcomeMeasure(StrEnum):
+    CTK_GAIN = "ctk-gain"
+    TOTAL_GAIN = "total-gain"
+
+
 class IntervalStatus(StrEnum):
     EXPLORATORY_BCA = "exploratory-bca-interval"
     OMITTED_NOT_COMPUTABLE = "interval-omitted-not-computable"
@@ -869,6 +890,9 @@ class Sensitivity(StrEnum):
 
 
 class ReportTable(StrEnum):
+    FAMILY_CLIENT_CTK = "family-client-ctk"
+    CTK_VARIANCE = "ctk-variance-components"
+    FAMILY_ASSOCIATIONS = "family-associations"
     CLIENT_CTK = "client-ctk-analysis"
     ANCHORED_WORST_CLIENT = "anchored-worst-client"
     ANCHORED_CLIENT_SELECTION = "anchored-client-selection"
@@ -997,6 +1021,7 @@ class ResultsDirectory(StrEnum):
     TABLES = "tables"
     FIGURES = "figures"
     PROVENANCE = "provenance"
+    EXTENSION = "extension"
 
 
 class ResultsFile(StrEnum):
@@ -1007,6 +1032,7 @@ class ResultsFile(StrEnum):
     PROTOCOL = "protocol.json"
     SEED_STATUS = "seed-status.csv"
     CLAIMS = "claims.csv"
+    EXTENSION_AUDIT = "permutation-control-audit.csv"
 
 
 class PromotionBlock(StrEnum):

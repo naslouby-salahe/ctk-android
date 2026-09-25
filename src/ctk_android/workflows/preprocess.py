@@ -22,6 +22,7 @@ from ctk_android.enums import (
     DatasetName,
     DetailMessage,
     ErrorMessage,
+    ExecutionMode,
     FailureReason,
     FamilySetName,
     LogEvent,
@@ -56,8 +57,10 @@ from ctk_android.types import (
 
 def required_partition_keys(config: Config) -> list[PartitionKey]:
     keys: list[PartitionKey] = []
-    for spec in config.experiments.experiments.values():
-        for mode in spec.modes:
+    for name, spec in config.experiments.experiments.items():
+        for mode in ExecutionMode:
+            if not config.experiments.runs_in(name, mode):
+                continue
             for seed in config.project.seeds.for_mode(mode):
                 for salt in spec.salts:
                     key = PartitionKey(

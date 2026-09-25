@@ -61,6 +61,9 @@ def evidence_files() -> list[Artifact]:
         Artifact.FEATURE_NOVELTY,
         Artifact.ROBUSTNESS,
         Artifact.CLIENT_CTK,
+        Artifact.FAMILY_CLIENT_CTK,
+        Artifact.CTK_VARIANCE,
+        Artifact.FAMILY_ASSOCIATIONS,
         Artifact.ANCHORED_WORST_CLIENT,
         Artifact.ANCHORED_CLIENT_SELECTION,
         Artifact.ARM_TRADEOFF,
@@ -148,7 +151,47 @@ def _first_run_written(paths: Paths, index: RunIndexTable, mode: ExecutionMode) 
     return datetime.fromtimestamp(min(written), tz=UTC)
 
 
+def _extension_blocks(
+    paths: Paths, config: Config, mode: ExecutionMode
+) -> tuple[PromotionBlock, ...]:
+    index = pl.read_parquet(paths.analysis_file(mode, Artifact.RUN_INDEX))
+    blocks: list[PromotionBlock] = []
+    if index.filter(pl.col(Column.STATUS) == RunStatus.FAILED_VALIDATION).height:
+        blocks.append(PromotionBlock.VALIDATION_FAILED)
+    if index.filter(pl.col(Column.STATUS) != RunStatus.COMPLETED).height:
+        blocks.append(PromotionBlock.RUNS_INCOMPLETE)
+    if _stale_runs(paths, config, mode):
+        blocks.append(PromotionBlock.PROVENANCE_STALE)
+    return tuple(blocks)
+
+
+def _promote_extension(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecision:
+    blocks = _extension_blocks(paths, config, mode)
+    if blocks:
+        return PromotionDecision(state=PromotionState.BLOCKED, blocks=blocks)
+    index = pl.read_parquet(paths.analysis_file(mode, Artifact.RUN_INDEX))
+    for artifact, source in (
+        (Artifact.RUN_INDEX, paths.analysis_file(mode, Artifact.RUN_INDEX)),
+        (Artifact.PERMUTATION_AUDIT, paths.analysis_file(mode, Artifact.PERMUTATION_AUDIT)),
+        (Artifact.PAIRED_EFFECTS, paths.statistics_file(mode, Artifact.PAIRED_EFFECTS)),
+    ):
+        _copy(source, paths.results_file(ResultsDirectory.EXTENSION, artifact))
+    audit = pl.read_parquet(paths.analysis_file(mode, Artifact.PERMUTATION_AUDIT))
+    _write_csv(audit, paths.results_file(ResultsDirectory.EXTENSION, ResultsFile.EXTENSION_AUDIT))
+    write_record(
+        paths.results_file(ResultsDirectory.EXTENSION, ResultsFile.CODE),
+        CodeProvenance(
+            execution_revision=revision_at_or_before(paths, _first_run_written(paths, index, mode)),
+            analysis_revision=git_revision(paths).detail,
+            analysis_sources_clean=sources_are_clean(paths),
+        ),
+    )
+    return PromotionDecision(state=PromotionState.PROMOTED, blocks=())
+
+
 def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecision:
+    if mode is ExecutionMode.EXTENSION:
+        return _promote_extension(paths, config, mode)
     blocks = promotion_blocks(paths, config, mode)
     if blocks:
         return PromotionDecision(state=PromotionState.BLOCKED, blocks=blocks)

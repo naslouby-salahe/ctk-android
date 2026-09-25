@@ -2,5 +2,6 @@ seeds:
   smoke: [0]
   development: [1, 2, 3, 4, 5]
   confirmatory: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
+  extension: [200, 201, 202, 203, 204, 205, 206, 207, 208, 209]
 device: cuda
 logging_level: INFO

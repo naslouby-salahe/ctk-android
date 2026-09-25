@@ -7,6 +7,11 @@ from ctk_android.analysis.decomposition import decompose, family_effects, family
 from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
 from ctk_android.analysis.fairness import frozen_drift, select_hyperparameters
 from ctk_android.analysis.gates import evaluate_claims
+from ctk_android.analysis.heterogeneity import (
+    ctk_variance_components,
+    family_associations,
+    family_client_ctk,
+)
 from ctk_android.analysis.post_confirmatory import (
     anchored_client_selection,
     anchored_worst_client,
@@ -273,6 +278,16 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTab
     write_table(
         client_ctk_analysis(evidence.clients, evidence.families, config),
         paths.analysis_file(mode, Artifact.CLIENT_CTK),
+    )
+    write_table(
+        family_client_ctk(evidence.families, config),
+        paths.analysis_file(mode, Artifact.FAMILY_CLIENT_CTK),
+    )
+    write_table(
+        ctk_variance_components(family_seed), paths.analysis_file(mode, Artifact.CTK_VARIANCE)
+    )
+    write_table(
+        family_associations(family_table), paths.analysis_file(mode, Artifact.FAMILY_ASSOCIATIONS)
     )
     write_table(
         anchored_client_selection(evidence.clients, config),

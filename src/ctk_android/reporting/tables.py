@@ -171,6 +171,9 @@ def build_tables(paths: Paths, config: Config, mode: ExecutionMode) -> ReportTab
         ReportTable.FAMILY_LEVEL: family_level(paths, config, mode),
         ReportTable.CLAIM_GATES: claim_gates(paths, mode),
         ReportTable.ROBUSTNESS: robustness(paths, mode),
+        ReportTable.FAMILY_CLIENT_CTK: _analysis(paths, mode, Artifact.FAMILY_CLIENT_CTK),
+        ReportTable.CTK_VARIANCE: _analysis(paths, mode, Artifact.CTK_VARIANCE),
+        ReportTable.FAMILY_ASSOCIATIONS: _analysis(paths, mode, Artifact.FAMILY_ASSOCIATIONS),
         ReportTable.CLIENT_CTK: _analysis(paths, mode, Artifact.CLIENT_CTK),
         ReportTable.ANCHORED_WORST_CLIENT: _analysis(paths, mode, Artifact.ANCHORED_WORST_CLIENT),
         ReportTable.ANCHORED_CLIENT_SELECTION: _analysis(

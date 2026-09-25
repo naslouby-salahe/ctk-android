@@ -760,7 +760,7 @@ def run_experiment(
     overwrite: Overwrite,
 ) -> list[RunReport]:
     spec = config.experiments.experiments[experiment]
-    if mode not in spec.modes:
+    if not config.experiments.runs_in(experiment, mode):
         raise CtkError(
             FailureReason.NO_ELIGIBLE_TARGETS,
             ErrorMessage.EXPERIMENT_MODE.format(experiment=experiment, mode=mode),

@@ -34,6 +34,7 @@ fairness_grids:
   finetune_epochs: [2, 5, 10]
   fedprox_mu: [0.001, 0.01, 0.1]
 permutation_seed_offset: 7919
+extension_experiments: [family-permutation-control]
 smoke_training:
   batch_size: 128
   learning_rate: 0.001

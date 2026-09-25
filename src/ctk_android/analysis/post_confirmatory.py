@@ -75,7 +75,7 @@ def _ordered(frame: Table, *columns: Column) -> Table:
     return frame.sort(*columns) if frame.height else frame
 
 
-def _summary(values: SeedEffects, config: StatisticsConfig) -> SeedSummary | None:
+def summarize_seeds(values: SeedEffects, config: StatisticsConfig) -> SeedSummary | None:
     finite = values[np.isfinite(values)]
     if finite.size == 0:
         return None
@@ -167,7 +167,7 @@ def anchored_worst_client(clients: ClientCountsTable, config: Config) -> Anchore
                 followed[Column.FULL_RECALL].to_numpy() - local_recall
             )
         for estimand, values in estimands.items():
-            summary = _summary(values, config.statistics)
+            summary = summarize_seeds(values, config.statistics)
             if summary is not None:
                 rows.append(
                     AnchoredEffectRow(
@@ -290,7 +290,7 @@ def federated_arm_tradeoff(summary: SummaryTable, config: Config) -> TradeoffTab
             values = _measure(summary, learner, measure, alpha)
             if values is None:
                 continue
-            versus_local = _summary(values, config.statistics)
+            versus_local = summarize_seeds(values, config.statistics)
             if versus_local is None:
                 continue
             rows.append(
@@ -307,7 +307,7 @@ def federated_arm_tradeoff(summary: SummaryTable, config: Config) -> TradeoffTab
             )
             if learner is Learner.FEDAVG or reference is None:
                 continue
-            difference = _summary(values - reference, config.statistics)
+            difference = summarize_seeds(values - reference, config.statistics)
             if difference is None:
                 continue
             rows.append(
@@ -486,7 +486,7 @@ def mechanism_headroom(summary: SummaryTable, config: Config) -> HeadroomTable:
             peer = _series(summary, learner, ExposureCondition.PEER_PRESENT, metric, alpha)
             if full is None or peer is None:
                 continue
-            gap = _summary(full - peer, config.statistics)
+            gap = summarize_seeds(full - peer, config.statistics)
             if gap is None:
                 continue
             rows.append(
@@ -791,7 +791,7 @@ def client_ctk_analysis(
                 1,
                 Column.BENIGN_FPR,
             )
-            known_change = _summary(
+            known_change = summarize_seeds(
                 (known[Column.KNOWN_PEER_RECALL] - known[Column.KNOWN_LOCAL_RECALL]).to_numpy(),
                 config.statistics,
             )
@@ -805,9 +805,9 @@ def client_ctk_analysis(
                 peer = wide[Column.PEER_RECALL].to_numpy()
                 absent = wide[Column.ABSENT_RECALL].to_numpy()
                 base = wide[Column.LOCAL_RECALL].to_numpy()
-                total = _summary(peer - base, config.statistics)
-                pooling = _summary(absent - base, config.statistics)
-                ctk = _summary(peer - absent, config.statistics)
+                total = summarize_seeds(peer - base, config.statistics)
+                pooling = summarize_seeds(absent - base, config.statistics)
+                ctk = summarize_seeds(peer - absent, config.statistics)
                 if total is None or pooling is None or ctk is None:
                     continue
                 total_ci, pooling_ci, ctk_ci = (

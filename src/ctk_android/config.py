@@ -9,6 +9,7 @@ from ctk_android.enums import (
     Device,
     ErrorMessage,
     ExecutionMode,
+    ExperimentName,
     LamdaRelease,
     LibraryOption,
     LogLevel,
@@ -40,6 +41,7 @@ from ctk_android.types import (
     ResampleCount,
     Rounds,
     RowCount,
+    RunsInMode,
     Seed,
     SupportCount,
     TreeDepth,
@@ -60,10 +62,11 @@ class SeedConfig(Frozen):
     smoke: tuple[Seed, ...]
     development: tuple[Seed, ...]
     confirmatory: tuple[Seed, ...]
+    extension: tuple[Seed, ...]
 
     @model_validator(mode=LibraryOption.VALIDATE_AFTER)
     def _disjoint_roles(self) -> Self:
-        every_seed = (*self.smoke, *self.development, *self.confirmatory)
+        every_seed = (*self.smoke, *self.development, *self.confirmatory, *self.extension)
         if len(every_seed) != len(set(every_seed)):
             raise ValueError(ErrorMessage.SEED_ROLES)
         return self
@@ -73,6 +76,8 @@ class SeedConfig(Frozen):
             return self.smoke
         if mode is ExecutionMode.DEVELOPMENT:
             return self.development
+        if mode is ExecutionMode.EXTENSION:
+            return self.extension
         return self.confirmatory
 
 
@@ -175,7 +180,13 @@ class ExperimentsConfig(Frozen):
     top_family_removal_count: SupportCount
     fairness_grids: FairnessGrids
     permutation_seed_offset: Seed
+    extension_experiments: tuple[ExperimentName, ...]
     experiments: ExperimentSpecs
+
+    def runs_in(self, experiment: ExperimentName, mode: ExecutionMode) -> RunsInMode:
+        if mode is ExecutionMode.EXTENSION:
+            return experiment in self.extension_experiments
+        return mode in self.experiments[experiment].modes
 
 
 class GateConfig(Frozen):

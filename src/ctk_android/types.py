@@ -33,6 +33,8 @@ from ctk_android.enums import (
     ExposureMode,
     FailureReason,
     FamilyLabelSource,
+    FamilyOutcomeMeasure,
+    FamilyPredictor,
     FamilySetName,
     Grouping,
     IntervalStatus,
@@ -58,6 +60,7 @@ from ctk_android.enums import (
     TradeoffMeasure,
     TunedParameter,
     ValidationCheck,
+    VarianceSource,
 )
 
 NonNegativeInt = Annotated[int, Field(ge=0)]
@@ -208,6 +211,11 @@ PatternTable = pl.DataFrame
 FidelityTable = pl.DataFrame
 ComparisonTable = pl.DataFrame
 ClientCtkTable = pl.DataFrame
+VarianceTable = pl.DataFrame
+SeedMatrix = FloatArray
+AssociationTable = pl.DataFrame
+FamilyClientTable = pl.DataFrame
+RunsInMode = bool
 ArmSeries = pl.DataFrame
 PositiveOrZeroFloat = NonNegativeFloat
 ScopeMap = dict[ExperimentName, RobustnessScope]
@@ -653,6 +661,36 @@ class AnchoredSelectionRow(FrozenRecord):
     client: ClientId
     seeds_selected: RowCount
     mean_local_recall: Fraction
+
+
+class VarianceRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    experiment: ExperimentName
+    learner: Learner
+    source: VarianceSource
+    sum_squares: NonNegativeFloat
+    degrees_of_freedom: RowCount
+    share: Fraction
+
+
+class FamilyAssociationRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    experiment: ExperimentName
+    predictor: FamilyPredictor
+    outcome_measure: FamilyOutcomeMeasure
+    rho: Correlation
+    p_value: PValue
+    families: RowCount
+
+
+class FamilyClientRow(EvidenceRow):
+    experiment: ExperimentName
+    client: ClientId
+    family: FamilyName
+    local_recall: Fraction
+    absent_recall: Fraction
+    peer_recall: Fraction
+    hidden_trials_per_seed: NonNegativeFloat
 
 
 class ArmSpec(FrozenRecord):

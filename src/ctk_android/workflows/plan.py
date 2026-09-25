@@ -38,7 +38,9 @@ from ctk_android.workflows.preprocess import read_family_set
 
 
 def experiments_for(config: Config, mode: ExecutionMode) -> list[ExperimentName]:
-    return [name for name, spec in config.experiments.experiments.items() if mode in spec.modes]
+    return [
+        name for name in config.experiments.experiments if config.experiments.runs_in(name, mode)
+    ]
 
 
 def set_members(
