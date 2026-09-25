@@ -6,7 +6,7 @@ from ctk_android.config import Config
 from ctk_android.data import clients, families, identity, joins, partitions, sources
 from ctk_android.data.cache import (
     combine_fingerprints,
-    fingerprint_model,
+    fingerprint_file,
     is_reusable,
     load_features,
     read_record,
@@ -21,10 +21,14 @@ from ctk_android.enums import (
     Column,
     DatasetName,
     DetailMessage,
+    EligibilityProfile,
     ErrorMessage,
     ExecutionMode,
+    ExperimentDesign,
     FailureReason,
     FamilySetName,
+    Grouping,
+    LibraryOption,
     LogEvent,
     LogField,
     Stage,
@@ -37,17 +41,23 @@ from ctk_android.types import (
     Directory,
     FamilyName,
     FamilySetDocument,
+    File,
     IdentitiesTable,
+    IncludeDesigns,
+    LabelledTable,
     LamdaCounts,
     LamdaSchema,
+    LargeFamilySelection,
     LinkageCounts,
     LinkageSchema,
+    ModeSelection,
     Overwrite,
     PartitionKey,
     PartitionManifest,
     Provenance,
     Reusable,
     Reused,
+    RoleSeries,
     SourceInventory,
     StageReport,
     ValidationDocument,
@@ -55,13 +65,21 @@ from ctk_android.types import (
 )
 
 
-def required_partition_keys(config: Config) -> list[PartitionKey]:
+def required_partition_keys(
+    config: Config,
+    modes: ModeSelection = tuple(ExecutionMode),
+    include_designs: IncludeDesigns = True,
+) -> list[PartitionKey]:
     keys: list[PartitionKey] = []
     for name, spec in config.experiments.experiments.items():
-        for mode in ExecutionMode:
+        if spec.representation is not None:
+            continue
+        if spec.design is not ExperimentDesign.STANDARD and not include_designs:
+            continue
+        for mode in modes:
             if not config.experiments.runs_in(name, mode):
                 continue
-            for seed in config.project.seeds.for_mode(mode):
+            for seed in config.seeds_for(name, mode):
                 for salt in spec.salts:
                     key = PartitionKey(
                         seed=seed, salt=salt, grouping=spec.grouping, profile=spec.eligibility
@@ -71,7 +89,7 @@ def required_partition_keys(config: Config) -> list[PartitionKey]:
     return sorted(keys, key=lambda key: (key.seed, key.salt, key.grouping, key.profile))
 
 
-def _record(
+def record_validations(
     paths: Paths, records: list[ValidationRecord], directory: Directory, stage: Stage
 ) -> None:
     write_record(paths.audit_file(directory), ValidationDocument(validations=tuple(records)))
@@ -105,7 +123,7 @@ def _record(
         )
 
 
-def _reuse(
+def reuse_stage(
     paths: Paths, directory: Directory, provenance: Provenance, overwrite: Overwrite
 ) -> Reusable:
     reusable = not overwrite and is_reusable(paths.provenance_file(directory), provenance)
@@ -121,7 +139,7 @@ def _reuse(
     return reusable
 
 
-def _stage_report(directory: Directory, provenance: Provenance, reused: Reused) -> StageReport:
+def stage_report(directory: Directory, provenance: Provenance, reused: Reused) -> StageReport:
     return StageReport(
         stage=provenance.stage,
         directory=directory,
@@ -130,7 +148,7 @@ def _stage_report(directory: Directory, provenance: Provenance, reused: Reused) 
     )
 
 
-def _finish(
+def finish_stage(
     paths: Paths, directory: Directory, provenance: Provenance, watch: Stopwatch
 ) -> StageReport:
     write_provenance(paths.provenance_file(directory), provenance)
@@ -143,7 +161,7 @@ def _finish(
             LogField.SECONDS: watch.seconds(),
         },
     )
-    return _stage_report(directory, provenance, reused=False)
+    return stage_report(directory, provenance, reused=False)
 
 
 def _known_inventory(paths: Paths, dataset: DatasetName) -> SourceInventory:
@@ -158,13 +176,13 @@ def source_audit(paths: Paths, config: Config, overwrite: Overwrite) -> StageRep
     )
     az_scan = sources.fingerprint_androzoo(paths, _known_inventory(paths, DatasetName.ANDROZOO))
     lamda_fp, az_fp = lamda_scan.fingerprint, az_scan.fingerprint
-    config_fp = fingerprint_model(config.data)
+    config_fp = config.data.stable_fingerprint()
     provenance = Provenance(
         stage=Stage.SOURCE_AUDIT,
         inputs=combine_fingerprints(sources.sources_fingerprint(lamda_fp, az_fp), config_fp),
     )
-    if _reuse(paths, paths.linkage_dir, provenance, overwrite):
-        return _stage_report(paths.linkage_dir, provenance, reused=True)
+    if reuse_stage(paths, paths.linkage_dir, provenance, overwrite):
+        return stage_report(paths.linkage_dir, provenance, reused=True)
 
     lamda = sources.load_lamda(paths, config.data)
     azoo = sources.scan_androzoo(paths, lamda.metadata[Column.SHA256])
@@ -203,22 +221,22 @@ def source_audit(paths: Paths, config: Config, overwrite: Overwrite) -> StageRep
     write_table(lamda.metadata, paths.source_file(DatasetName.LAMDA, Artifact.METADATA))
     write_table(azoo, paths.linkage_file(Artifact.HASH_LINKAGE))
     write_table(result.unmatched, paths.linkage_file(Artifact.UNMATCHED))
-    _record(paths, validations, paths.linkage_dir, Stage.SOURCE_AUDIT)
-    return _finish(paths, paths.linkage_dir, provenance, watch)
+    record_validations(paths, validations, paths.linkage_dir, Stage.SOURCE_AUDIT)
+    return finish_stage(paths, paths.linkage_dir, provenance, watch)
 
 
 def join_stage(paths: Paths, upstream: StageReport, overwrite: Overwrite) -> StageReport:
     watch = Stopwatch()
     directory = paths.stage_dir(Stage.JOINED)
     provenance = Provenance(stage=Stage.JOINED, inputs=upstream.fingerprint)
-    if _reuse(paths, directory, provenance, overwrite):
-        return _stage_report(directory, provenance, reused=True)
+    if reuse_stage(paths, directory, provenance, overwrite):
+        return stage_report(directory, provenance, reused=True)
     metadata = pl.read_parquet(paths.source_file(DatasetName.LAMDA, Artifact.METADATA))
     linked = pl.read_parquet(paths.linkage_file(Artifact.HASH_LINKAGE))
     result = joins.join_sources(metadata, linked)
     write_table(result.joined, paths.stage_file(Stage.JOINED, Artifact.DATASET))
-    _record(paths, list(result.validations), directory, Stage.JOINED)
-    return _finish(paths, directory, provenance, watch)
+    record_validations(paths, list(result.validations), directory, Stage.JOINED)
+    return finish_stage(paths, directory, provenance, watch)
 
 
 def clients_stage(
@@ -227,8 +245,8 @@ def clients_stage(
     watch = Stopwatch()
     directory = paths.stage_dir(Stage.CLIENTS)
     provenance = Provenance(stage=Stage.CLIENTS, inputs=upstream.fingerprint)
-    if _reuse(paths, directory, provenance, overwrite):
-        return _stage_report(directory, provenance, reused=True)
+    if reuse_stage(paths, directory, provenance, overwrite):
+        return stage_report(directory, provenance, reused=True)
     joined = pl.read_parquet(paths.stage_file(Stage.JOINED, Artifact.DATASET))
     assignments = clients.assign_clients(joined, config.data)
     lamda = sources.load_lamda(paths, config.data)
@@ -255,7 +273,7 @@ def clients_stage(
         )
     write_table(support, paths.stage_file(Stage.CLIENTS, Artifact.SUPPORT))
     present = {ClientId(name) for name in support[Column.CLIENT].to_list()}
-    _record(
+    record_validations(
         paths,
         [
             ValidationRecord(
@@ -267,15 +285,15 @@ def clients_stage(
         directory,
         Stage.CLIENTS,
     )
-    return _finish(paths, directory, provenance, watch)
+    return finish_stage(paths, directory, provenance, watch)
 
 
 def identity_stage(paths: Paths, upstream: StageReport, overwrite: Overwrite) -> StageReport:
     watch = Stopwatch()
     directory = paths.stage_dir(Stage.IDENTITY)
     provenance = Provenance(stage=Stage.IDENTITY, inputs=upstream.fingerprint)
-    if _reuse(paths, directory, provenance, overwrite):
-        return _stage_report(directory, provenance, reused=True)
+    if reuse_stage(paths, directory, provenance, overwrite):
+        return stage_report(directory, provenance, reused=True)
     assignments = pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS))
     features = load_features(paths.cache_file(Artifact.FEATURES))
     identities = identity.build_identities(assignments, np.asarray(features))
@@ -301,7 +319,7 @@ def identity_stage(paths: Paths, upstream: StageReport, overwrite: Overwrite) ->
         summary,
         paths.stage_file(Stage.IDENTITY, Artifact.COMPONENT_SUMMARY),
     )
-    return _finish(paths, directory, provenance, watch)
+    return finish_stage(paths, directory, provenance, watch)
 
 
 def families_stage(
@@ -310,8 +328,8 @@ def families_stage(
     watch = Stopwatch()
     directory = paths.stage_dir(Stage.FAMILIES)
     provenance = Provenance(stage=Stage.FAMILIES, inputs=upstream.fingerprint)
-    if _reuse(paths, directory, provenance, overwrite):
-        return _stage_report(directory, provenance, reused=True)
+    if reuse_stage(paths, directory, provenance, overwrite):
+        return stage_report(directory, provenance, reused=True)
     labelled = families.classify_labels(
         pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)), config.data
     )
@@ -328,7 +346,7 @@ def families_stage(
             {LogField.FAMILY_SET: name, LogField.COUNT: len(members)},
         )
     overlap = set(sets[FamilySetName.PRIMARY]) & set(sets[FamilySetName.REPLICATION])
-    _record(
+    record_validations(
         paths,
         [
             ValidationRecord(
@@ -340,7 +358,7 @@ def families_stage(
         directory,
         Stage.FAMILIES,
     )
-    return _finish(paths, directory, provenance, watch)
+    return finish_stage(paths, directory, provenance, watch)
 
 
 def read_family_set(paths: Paths, name: FamilySetName) -> tuple[FamilyName, ...]:
@@ -348,7 +366,11 @@ def read_family_set(paths: Paths, name: FamilySetName) -> tuple[FamilyName, ...]
 
 
 def partition_stage(
-    paths: Paths, config: Config, upstream: StageReport, overwrite: Overwrite
+    paths: Paths,
+    config: Config,
+    upstream: StageReport,
+    overwrite: Overwrite,
+    modes: ModeSelection,
 ) -> list[StageReport]:
     labelled = families.classify_labels(
         pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)), config.data
@@ -359,15 +381,15 @@ def partition_stage(
         *read_family_set(paths, FamilySetName.REPLICATION),
     )
     reports: list[StageReport] = []
-    for key in required_partition_keys(config):
+    for key in required_partition_keys(config, modes):
         directory = paths.partition_dir(key)
         watch = Stopwatch()
         provenance = Provenance(
             stage=Stage.PARTITIONS,
             inputs=combine_fingerprints(upstream.fingerprint, key.model_dump_json()),
         )
-        if _reuse(paths, directory, provenance, overwrite):
-            reports.append(_stage_report(directory, provenance, reused=True))
+        if reuse_stage(paths, directory, provenance, overwrite):
+            reports.append(stage_report(directory, provenance, reused=True))
             continue
         if identities is None:
             identities = pl.read_parquet(paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS))
@@ -404,12 +426,146 @@ def partition_stage(
                 LogField.COUNT: result.natural.filter(pl.col(Column.ELIGIBLE)).height,
             },
         )
-        _record(paths, list(result.validations), directory, Stage.PARTITIONS)
-        reports.append(_finish(paths, directory, provenance, watch))
+        record_validations(paths, list(result.validations), directory, Stage.PARTITIONS)
+        reports.append(finish_stage(paths, directory, provenance, watch))
     return reports
 
 
-def run_preprocess(paths: Paths, config: Config, overwrite: Overwrite) -> list[StageReport]:
+def large_partition_keys(config: Config, modes: ModeSelection) -> list[PartitionKey]:
+    large = set(families.large_family_sets())
+    wanted = {
+        (spec.grouping, spec.eligibility)
+        for spec in config.experiments.experiments.values()
+        if spec.family_set in large
+    }
+    return [
+        key
+        for key in required_partition_keys(config, modes, include_designs=False)
+        if (key.grouping, key.profile) in wanted and key.salt == 0
+    ]
+
+
+def _read_selection(paths: Paths) -> LargeFamilySelection:
+    return LargeFamilySelection(
+        table=pl.read_parquet(paths.stage_file(Stage.FAMILIES, Artifact.LARGE_SELECTION)),
+        sets={name: read_family_set(paths, name) for name in families.large_family_sets()},
+    )
+
+
+def large_selection_stage(
+    paths: Paths, config: Config, upstream: StageReport, overwrite: Overwrite
+) -> StageReport:
+    watch = Stopwatch()
+    directory = paths.stage_dir(Stage.FAMILIES)
+    key = PartitionKey(
+        seed=config.project.seeds.smoke[0],
+        salt=0,
+        grouping=Grouping.COMPONENT,
+        profile=EligibilityProfile.PRIMARY,
+    )
+    roles_file = paths.partition_file(key, Artifact.ASSIGNMENTS)
+    rule = config.data.eligibility[key.profile]
+    provenance = Provenance(
+        stage=Stage.FAMILIES,
+        inputs=combine_fingerprints(
+            upstream.fingerprint,
+            key.model_dump_json(),
+            rule.model_dump_json(),
+            fingerprint_file(roles_file),
+        ),
+    )
+    provenance_file = paths.stage_file(Stage.FAMILIES, Artifact.LARGE_PROVENANCE)
+    if not overwrite and is_reusable(provenance_file, provenance):
+        return stage_report(directory, provenance, reused=True)
+    labelled = families.classify_labels(
+        pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)), config.data
+    )
+    roles = _aligned_roles(labelled, roles_file)
+    selection = families.select_large_family_sets(
+        labelled, roles, partitions.client_fit_rows(labelled, roles), rule
+    )
+    write_table(selection.table, paths.stage_file(Stage.FAMILIES, Artifact.LARGE_SELECTION))
+    for name, members in selection.sets.items():
+        write_record(paths.family_set_file(name), FamilySetDocument(families=members))
+        logs.info(
+            LogEvent.FAMILIES_SELECTED, {LogField.FAMILY_SET: name, LogField.COUNT: len(members)}
+        )
+    write_provenance(provenance_file, provenance)
+    logs.info(
+        LogEvent.STAGE_BUILT,
+        {
+            LogField.STAGE: provenance.stage,
+            LogField.PATH: f"{directory}",
+            LogField.REUSED: False,
+            LogField.SECONDS: watch.seconds(),
+        },
+    )
+    return stage_report(directory, provenance, reused=False)
+
+
+def _aligned_roles(labelled: LabelledTable, roles_file: File) -> RoleSeries:
+    return (
+        labelled.select(Column.ROW)
+        .join(pl.read_parquet(roles_file), on=Column.ROW, how=LibraryOption.JOIN_LEFT)[Column.ROLE]
+        .alias(Column.ROLE)
+    )
+
+
+def large_pairs_stage(
+    paths: Paths,
+    config: Config,
+    selection: StageReport,
+    modes: ModeSelection,
+    overwrite: Overwrite,
+) -> list[StageReport]:
+    keys = large_partition_keys(config, modes)
+    chosen = _read_selection(paths)
+    universe = tuple(family for members in chosen.sets.values() for family in members)
+    labelled: LabelledTable | None = None
+    reports: list[StageReport] = []
+    for key in keys:
+        directory = paths.partition_dir(key)
+        provenance = Provenance(
+            stage=Stage.PARTITIONS,
+            inputs=combine_fingerprints(
+                selection.fingerprint,
+                key.model_dump_json(),
+                fingerprint_file(paths.partition_file(key, Artifact.ASSIGNMENTS)),
+            ),
+        )
+        provenance_file = paths.partition_file(key, Artifact.LARGE_PROVENANCE)
+        if not overwrite and is_reusable(provenance_file, provenance):
+            reports.append(stage_report(directory, provenance, reused=True))
+            continue
+        if labelled is None:
+            labelled = families.classify_labels(
+                pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)), config.data
+            )
+        roles = _aligned_roles(labelled, paths.partition_file(key, Artifact.ASSIGNMENTS))
+        tables = partitions.evaluate_partition(labelled, roles, universe, config.data, key)
+        write_table(tables.controlled, paths.partition_file(key, Artifact.LARGE_CONTROLLED_PAIRS))
+        write_table(tables.natural, paths.partition_file(key, Artifact.LARGE_NATURAL_PAIRS))
+        write_provenance(provenance_file, provenance)
+        logs.info(
+            LogEvent.PARTITION_BUILT,
+            {
+                LogField.SEED: key.seed,
+                LogField.SALT: key.salt,
+                LogField.ATTEMPT: 0,
+                LogField.ELIGIBLE: tables.controlled.filter(pl.col(Column.ELIGIBLE)).height,
+                LogField.COUNT: tables.natural.filter(pl.col(Column.ELIGIBLE)).height,
+            },
+        )
+        reports.append(stage_report(directory, provenance, reused=False))
+    return reports
+
+
+def run_preprocess(
+    paths: Paths,
+    config: Config,
+    overwrite: Overwrite,
+    modes: ModeSelection = tuple(ExecutionMode),
+) -> list[StageReport]:
     audit = source_audit(paths, config, overwrite)
     joined = join_stage(paths, audit, overwrite)
     assigned = clients_stage(paths, config, joined, overwrite)
@@ -421,11 +577,25 @@ def run_preprocess(paths: Paths, config: Config, overwrite: Overwrite) -> list[S
         reused=identified.reused and family_report.reused,
         fingerprint=combine_fingerprints(identified.fingerprint, family_report.fingerprint),
     )
+    partition_reports = partition_stage(paths, config, upstream, overwrite, modes)
+    selection = large_selection_stage(
+        paths,
+        config,
+        StageReport(
+            stage=Stage.PARTITIONS,
+            directory=paths.stage_dir(Stage.PARTITIONS),
+            reused=upstream.reused,
+            fingerprint=upstream.fingerprint,
+        ),
+        overwrite,
+    )
     return [
         audit,
         joined,
         assigned,
         identified,
         family_report,
-        *partition_stage(paths, config, upstream, overwrite),
+        *partition_reports,
+        selection,
+        *large_pairs_stage(paths, config, selection, modes, overwrite),
     ]

@@ -10,7 +10,7 @@ import torch
 from ctk_android import logs
 from ctk_android.analysis.novelty import family_descriptors
 from ctk_android.config import Config, FairnessGrids
-from ctk_android.data import partitions
+from ctk_android.data import representation
 from ctk_android.data.cache import (
     fingerprint_model,
     is_reusable,
@@ -20,6 +20,7 @@ from ctk_android.data.cache import (
     write_table,
 )
 from ctk_android.enums import (
+    Aggregation,
     Artifact,
     ClientId,
     Column,
@@ -28,6 +29,7 @@ from ctk_android.enums import (
     ErrorMessage,
     EvaluationPopulation,
     ExecutionMode,
+    ExperimentDesign,
     ExperimentName,
     ExposureCondition,
     FailureReason,
@@ -43,7 +45,9 @@ from ctk_android.enums import (
     ValidationCheck,
 )
 from ctk_android.experiment import evaluation, exposure, metrics, training
+from ctk_android.experiment.designs import DesignInputs, run_fields, train_design_arms
 from ctk_android.experiment.models import resolve_device
+from ctk_android.experiment.training import learner_stream
 from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
@@ -63,7 +67,6 @@ from ctk_android.types import (
     FamilyCountsTable,
     FamilyMasks,
     File,
-    LogFields,
     OperatingTable,
     Overwrite,
     PartitionKey,
@@ -80,6 +83,7 @@ from ctk_android.types import (
     StudyData,
     SummaryTable,
     SupportCount,
+    Table,
     TargetPair,
     TrainingByArm,
     TrainingRows,
@@ -99,26 +103,17 @@ def global_learners() -> list[Learner]:
     return [learner for learner in Learner if learner is not Learner.LOCAL]
 
 
-def learner_stream(learner: Learner) -> Seed:
-    return list(Learner).index(learner) + 1
-
-
 def planned_arm_count(spec: ExperimentSpec, config: Config) -> RowCount:
+    if spec.design is ExperimentDesign.EXACT_DOSE:
+        return len(spec.learners) * (2 + len(config.experiments.exact_dose_levels))
+    if spec.design is ExperimentDesign.PLACEBO_ROBUST:
+        return len(spec.learners) * (len(spec.conditions) + 2 * len(Aggregation))
     if spec.fairness_grid:
         grids = config.experiments.fairness_grids
         return 1 + len(grids.local_epochs) + len(grids.fedprox_mu) + len(grids.finetune_epochs)
     local = 1 if Learner.LOCAL in spec.learners else 0
     shared = sum(learner is not Learner.LOCAL for learner in spec.learners)
     return local + shared * len(settings_for(spec, config))
-
-
-def _run_fields(key: RunKey) -> LogFields:
-    return {
-        LogField.EXPERIMENT: key.experiment,
-        LogField.MODE: key.mode,
-        LogField.SEED: key.seed,
-        LogField.SALT: key.salt,
-    }
 
 
 def settings_for(spec: ExperimentSpec, config: Config) -> list[ExposureSetting]:
@@ -230,7 +225,7 @@ def _log_arm(key: RunKey, arm: ArmKey, rows: TrainingRows, watch: Stopwatch) -> 
     logs.info(
         LogEvent.ARM_TRAINED,
         {
-            **_run_fields(key),
+            **run_fields(key),
             LogField.ARM: arm.label(),
             LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
             LogField.SECONDS: watch.seconds(),
@@ -352,6 +347,8 @@ class LocalArm:
 class TrainedArms:
     arms: ResultsByArm
     trainings: TrainingByArm
+    checks: tuple[ValidationRecord, ...] = ()
+    placebo: Table | None = None
 
 
 @dataclass(frozen=True)
@@ -386,7 +383,7 @@ def _run_local(
     logs.info(
         LogEvent.ARM_TRAINED,
         {
-            **_run_fields(key),
+            **run_fields(key),
             LogField.ARM: local_arm().label(),
             LogField.TRAIN_ROWS: sum(rows.size for rows in local_rows.values()),
             LogField.SECONDS: arm_watch.seconds(),
@@ -425,7 +422,7 @@ def _train_setting(
             logs.info(
                 LogEvent.ARM_TRAINED,
                 {
-                    **_run_fields(key),
+                    **run_fields(key),
                     LogField.ARM: arm.label(),
                     LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
                     LogField.SECONDS: arm_watch.seconds(),
@@ -447,6 +444,27 @@ def _train_arms(
     targets: tuple[TargetPair, ...],
     budget: SupportCount,
 ) -> TrainedArms:
+    if spec.design not in (ExperimentDesign.STANDARD, ExperimentDesign.REPRESENTATION):
+        designed = train_design_arms(
+            DesignInputs(
+                spec=spec,
+                config=config,
+                key=key,
+                context=context,
+                study=study,
+                masks=masks,
+                pools=pools,
+                orders=orders,
+                targets=targets,
+                budget=budget,
+            )
+        )
+        return TrainedArms(
+            arms=designed.arms,
+            trainings=designed.trainings,
+            checks=designed.checks,
+            placebo=designed.placebo,
+        )
     results: ResultsByArm = {}
     trainings: TrainingByArm = {}
     if spec.fairness_grid:
@@ -476,7 +494,7 @@ def _train_arms(
         logs.info(
             LogEvent.EXPOSURE_SELECTED,
             {
-                **_run_fields(key),
+                **run_fields(key),
                 LogField.CONDITION: setting.condition,
                 LogField.DOSE: setting.dose,
                 LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
@@ -592,7 +610,7 @@ def _record_infeasible(paths: Paths, key: RunKey, provenance: Provenance) -> Run
     )
     logs.warning(
         LogEvent.RUN_INFEASIBLE,
-        {**_run_fields(key), LogField.REASON: FailureReason.NO_ELIGIBLE_TARGETS},
+        {**run_fields(key), LogField.REASON: FailureReason.NO_ELIGIBLE_TARGETS},
     )
     write_provenance(paths.provenance_file(directory), provenance)
     return RunReport(key=key, status=RunStatus.INFEASIBLE, reused=False, directory=directory)
@@ -606,7 +624,7 @@ def _log_validations(
         report(
             LogEvent.VALIDATION_PASSED if record.passed else LogEvent.VALIDATION_FAILED,
             {
-                **_run_fields(key),
+                **run_fields(key),
                 LogField.CHECK: record.check,
                 LogField.DETAIL: record.detail,
             },
@@ -616,7 +634,7 @@ def _log_validations(
     )[Column.ALPHA].unique()
     for alpha in unresolved.to_list():
         logs.warning(
-            LogEvent.OPERATING_POINT_UNRESOLVED, {**_run_fields(key), LogField.ALPHA: alpha}
+            LogEvent.OPERATING_POINT_UNRESOLVED, {**run_fields(key), LogField.ALPHA: alpha}
         )
 
 
@@ -626,7 +644,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     planned_status, targets = planned.status, planned.targets
     provenance = run_provenance(paths, config, key, targets)
     if not overwrite and is_reusable(paths.provenance_file(directory), provenance):
-        logs.info(LogEvent.RUN_REUSED, _run_fields(key))
+        logs.info(LogEvent.RUN_REUSED, run_fields(key))
         return RunReport(key=key, status=RunStatus.COMPLETED, reused=True, directory=directory)
     if planned_status is RunStatus.INFEASIBLE:
         return _record_infeasible(paths, key, provenance)
@@ -635,13 +653,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
-    study = partitions.load_study(
-        paths,
-        partition_key,
-        config.data,
-        spec.family_labels,
-        config.experiments.permutation_seed_offset,
-    )
+    study = representation.load_study(paths, config, spec, partition_key)
     families = tuple(dict.fromkeys(pair.family for pair in targets))
     masks = exposure.family_masks(study, families)
     attributes = evaluation.row_attributes(study, masks)
@@ -654,6 +666,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         family=spec.model_family,
         device=device,
         seed=training.derive_seed(key.seed, key.salt),
+        transform_rule=representation.transform_rule(spec.representation, config),
     )
     orders = exposure.training_orders(study, key.seed, key.salt)
     priorities = exposure.row_priorities(study, key.seed, key.salt)
@@ -662,7 +675,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     logs.info(
         LogEvent.RUN_STARTED,
         {
-            **_run_fields(key),
+            **run_fields(key),
             LogField.DEVICE: device,
             LogField.TARGETS: len(targets),
             LogField.BUDGET: budget,
@@ -684,7 +697,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     logs.info(
         LogEvent.EVALUATION_FINISHED,
         {
-            **_run_fields(key),
+            **run_fields(key),
             LogField.ARMS: len(results),
             LogField.SECONDS: evaluation_watch.seconds(),
         },
@@ -698,6 +711,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         ),
         *_pool_validations(attributes, pools, evaluations),
     ]
+    validations.extend(trained.checks)
     validations.append(_operating_validation(summary, config))
     _log_validations(key, validations, summary)
     structural = [v for v in validations if v.check is not ValidationCheck.OPERATING_POINT_REALISED]
@@ -717,6 +731,8 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         evaluated.tables,
         exposure_table,
     )
+    if trained.placebo is not None:
+        write_table(trained.placebo, paths.run_file(key, Artifact.PLACEBO_PAIRS))
     write_record(
         paths.run_file(key, Artifact.VALIDATION), ValidationDocument(validations=tuple(validations))
     )
@@ -742,7 +758,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     logs.info(
         LogEvent.RUN_FINISHED,
         {
-            **_run_fields(key),
+            **run_fields(key),
             LogField.STATUS: status,
             LogField.ARMS: len(results),
             LogField.SECONDS: watch.seconds(),
@@ -765,7 +781,7 @@ def run_experiment(
             FailureReason.NO_ELIGIBLE_TARGETS,
             ErrorMessage.EXPERIMENT_MODE.format(experiment=experiment, mode=mode),
         )
-    outside = [seed for seed in seeds if seed not in config.project.seeds.for_mode(mode)]
+    outside = [seed for seed in seeds if seed not in config.seeds_for(experiment, mode)]
     if outside:
         raise CtkError(
             FailureReason.NO_ELIGIBLE_TARGETS,
@@ -785,7 +801,7 @@ def run_experiment(
                 )
                 logs.error(
                     LogEvent.RUN_INFEASIBLE,
-                    {**_run_fields(key), LogField.REASON: error.reason, LogField.ERROR: f"{error}"},
+                    {**run_fields(key), LogField.REASON: error.reason, LogField.ERROR: f"{error}"},
                 )
                 reports.append(
                     RunReport(
@@ -804,5 +820,7 @@ def run_and_report(
     overwrite: Overwrite,
 ) -> list[RunReport]:
     reports = run_experiment(paths, config, experiment, mode, seeds, overwrite)
-    run_report(paths, config, mode, promote_evidence=False)
+    designed = config.experiments.experiments[experiment].design is not ExperimentDesign.STANDARD
+    if experiment not in config.experiments.extension_b_experiments and not designed:
+        run_report(paths, config, mode, promote_evidence=False)
     return reports

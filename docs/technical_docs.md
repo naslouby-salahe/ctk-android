@@ -219,6 +219,8 @@ ctk-android/
 │       │   ├── exposure.py
 │       │   ├── models.py
 │       │   ├── training.py
+│       │   ├── substitution.py
+│       │   ├── designs.py
 │       │   ├── thresholds.py
 │       │   ├── evaluation.py
 │       │   └── metrics.py
@@ -228,6 +230,11 @@ ctk-android/
 │       │   ├── decomposition.py
 │       │   ├── dose_response.py
 │       │   ├── novelty.py
+│       │   ├── hidden_family.py
+│       │   ├── large_family.py
+│       │   ├── extension_effects.py
+│       │   ├── dose_extension.py
+│       │   ├── controls_extension.py
 │       │   ├── robustness.py
 │       │   ├── statistics.py
 │       │   └── gates.py
@@ -247,7 +254,13 @@ ctk-android/
 │           ├── smoke.py
 │           ├── run.py
 │           ├── status.py
-│           └── report.py
+│           ├── report.py
+│           ├── posthoc.py
+│           ├── largefamily.py
+│           ├── doseextension.py
+│           ├── controlsextension.py
+│           ├── representationprep.py
+│           └── representationextension.py
 │
 ├── tests/
 │   ├── conftest.py
@@ -266,6 +279,8 @@ ctk-android/
 │   │   │   ├── test_exposure.py
 │   │   │   ├── test_models.py
 │   │   │   ├── test_training.py
+│   │   │   ├── test_substitution.py
+│   │   │   ├── test_designs.py
 │   │   │   ├── test_thresholds.py
 │   │   │   ├── test_evaluation.py
 │   │   │   └── test_metrics.py
@@ -274,6 +289,11 @@ ctk-android/
 │   │   │   ├── test_decomposition.py
 │   │   │   ├── test_dose_response.py
 │   │   │   ├── test_novelty.py
+│   │   │   ├── test_hidden_family.py
+│   │   │   ├── test_large_family.py
+│   │   │   ├── test_extension_effects.py
+│   │   │   ├── test_dose_extension.py
+│   │   │   ├── test_controls_extension.py
 │   │   │   ├── test_robustness.py
 │   │   │   ├── test_statistics.py
 │   │   │   └── test_gates.py
@@ -507,7 +527,10 @@ ctk-android/
     │   ├── feature-novelty.parquet
     │   ├── known-family-cost.parquet
     │   ├── representation-limits.parquet
-    │   └── robustness.parquet
+    │   ├── robustness.parquet
+    │   ├── ctk-heterogeneity-components.parquet
+    │   ├── aggregate-metric-masking.parquet
+    │   └── negative-transfer-decomposition.parquet
     │
     ├── statistics/
     │   ├── paired-effects.parquet
@@ -538,7 +561,19 @@ ctk-android/
     │   ├── natural-scarcity-comparison.csv
     │   ├── permutation-control-audit.csv
     │   ├── mechanism-headroom.csv
+    │   ├── ctk-heterogeneity-components.csv   (class C, post-confirmatory)
+    │   ├── aggregate-metric-masking.csv       (class C, post-confirmatory)
+    │   ├── negative-transfer-decomposition.csv (class C, post-confirmatory)
     │   └── operating-point-fidelity.csv
+    │
+    ├── extension-b/                        (separate prospective extension, never pooled)
+    │   ├── code.json, controls-code.json, dose-code.json
+    │   ├── run-index, large-family-{selection,ctk,seed-ctk,summary}
+    │   ├── exact-dose-{run-index,seed-effects,effects,family-curves,consistency,verdicts}
+    │   ├── controls-{run-index,seed-effects,effects,placebo-pairs,verdicts}
+    │   ├── representation-code.json
+    │   └── representation-{run-index,seed-effects,effects,levels,verdicts,eligibility}
+    │       (each as .parquet and .csv)
     │
     └── figures/
         ├── collaboration-decomposition.pdf
@@ -704,6 +739,24 @@ Keep `src/` compact.
 `workflows/`
 
 - CLI-facing orchestration only.
+
+Extension modules (`extension-b`, see 23.2):
+
+- `experiment/substitution.py`: row-count-preserving substitution (exact-dose draws, placebo family choice and row selection);
+- `experiment/designs.py`: trains the exact-dose and placebo-robust arms and their validation checks;
+- `analysis/hidden_family.py`: post-hoc heterogeneity components, aggregate-metric masking, negative-transfer decomposition;
+- `analysis/large_family.py`: large-family CTK tables, association and precision summary;
+- `analysis/extension_effects.py`: shared seed-paired contrasts, BCa/Wilcoxon/Holm helpers;
+- `analysis/dose_extension.py`, `analysis/controls_extension.py`: exact-dose and placebo/robust effects, curves, consistency, verdicts;
+- `workflows/{posthoc,largefamily,doseextension,controlsextension}.py`: one CLI command each.
+
+Representation-replication modules (EXT-REP, see 23.2):
+
+- `src/ctk_android/data/mcndroid.py`: scans, fingerprints and loads the McNdroid static, call-graph and report-JSON shards (`init_2013` processed data), aligned to LAMDA rows by sha256;
+- `src/ctk_android/data/representation.py`: builds the overlap namespace, feature caches and per-seed partitions; loads raw representation features at run time and names the transform rule per representation (`transform_rule`); every learned transform is fitted in `src/ctk_android/experiment/models.py` (`fit_transform`) from the training rows of the model being trained and carried by its `Scorer`;
+- `analysis/representation_extension.py`: recall and CTK contrasts per representation, verdicts, eligibility table;
+- `workflows/representationprep.py`: the `representation-preprocess` stage;
+- `workflows/representationextension.py`: the `representation-extension` command.
 
 ### 5.2 Avoid package proliferation
 
@@ -1058,6 +1111,8 @@ status
 report
 ```
 
+Post-hoc and extension analyses have their own commands (`posthoc`, `large-family`, `dose-extension`, `controls-extension`, `representation-extension`); each takes `--mode` and `--promote`, and `preprocess` takes repeatable `--mode` to restrict which modes' partitions are built (default: all).
+
 Do not create one CLI command per scientific condition.
 
 Do not duplicate experiment implementation behind separate commands.
@@ -1275,7 +1330,8 @@ outputs/
 │   ├── clients/
 │   ├── families/
 │   ├── partitions/
-│   └── cache/
+│   ├── cache/
+│   └── representation/                 (EXT-REP feature caches and partitions, see 23.2)
 │
 ├── plans/
 │   ├── smoke/
@@ -1401,8 +1457,44 @@ results/
 ├── statistics/
 ├── gates/
 ├── tables/
+├── extension-b/
 └── figures/
 ```
+
+### 23.2 Extension-b mode
+
+`ExecutionMode.EXTENSION_B` (`extension-b`) is a second prospective extension, separate from `extension` (seeds 200 to 209, unchanged). Seeds (`configs/project.yaml`) are 300 to 309 (large-family), 310 to 319 (exact dose), 320 to 329 (controls) and 330 to 339 (EXT-REP, `extension_representation`); `ProjectSeeds.for_design` and `Config.seeds_for(experiment, mode)` select them by experiment design. Seed roles must stay disjoint.
+
+Experiments (`configs/experiments.yaml`):
+
+- `large-family-set-1..4` (family sets `large-1..4`, standard design; listed in `extension_b_experiments`, so they run in `extension-b`);
+- `exact-effective-dose-primary` / `-replication` (`design: exact-dose`, eligibility profile `dose`: peer_min_fit 200, federation_min_test 50);
+- `placebo-robust-primary` / `-replication` (`design: placebo-robust`, learner `fedavg` only);
+- `representation-r0..r3` (`design: representation`, primary family set, salt 0, learners local/central/fedavg, conditions peer-present, family-absent-everywhere, full-exposure; also listed for `development`): R0 `lamda-static` restricted to the overlap, R1 `mcndroid-static`, R2 `call-graph`, R3 `report-json`.
+
+Arm definitions:
+
+- exact dose: `exact-dose` arms replace rows so each target pair's peers hold exactly `d` fit rows of the hidden family (`exact_dose_levels: [0, 10, 25, 50, 100, 200]`), zero at the target, total training volume unchanged; dose 0 must equal the family-absent rows. Learners: central and fedavg.
+- placebo: for each hidden family a distinct unhidden placebo family (at least `placebo_min_malware_rows`=400 malware rows, closest peer fit count, ties by name) supplies the same per-client row counts as the hidden family had in the peer-present arm (reallocated across clients when a client lacks rows); the hidden family stays absent everywhere.
+- robust aggregation (fedavg, placebo-robust only): `Aggregation.TRIMMED_MEAN` (drop `robust_trim_per_side`=1 lowest and highest per coordinate) and `COORDINATE_MEDIAN` replace the weighted average of client states, alongside the plain fedavg arm.
+- each design records validation checks (`exact-dose-realised-at-peers`, `exact-dose-zero-at-target`, `dose-zero-rows-equal-absent-rows`, `placebo-counts-match-hidden-family`, `placebo-family-unhidden-and-unique`, `placebo-arm-hidden-family-absent`).
+
+Determinism: exact-dose draws use `SeedSequence([seed, salt, 991])` (`DrawStream.DOSE`); placebo row draws use stream 992 (`DrawStream.PLACEBO`). `DataConfig.stable_json` excludes the `dose` profile, so adding these designs does not change existing partition fingerprints; design fingerprints add the profile and design parameters only for non-standard designs.
+
+Commands and outputs (written to `outputs/analysis/<mode>/`, promoted only with `--promote`):
+
+- `posthoc [--mode confirmatory] --promote` writes `ctk-heterogeneity-components`, `aggregate-metric-masking`, `negative-transfer-decomposition` (parquet) and copies them, plus CSV, into `results/evidence/` and `results/tables/`, appending to the manifest. Promotion is blocked unless the mode is confirmatory and all runs completed.
+- `large-family`, `dose-extension`, `controls-extension` (each `--mode extension-b --promote`) write the tables listed under `results/extension-b/` (parquet and CSV) with a `code.json` / `dose-code.json` / `controls-code.json` provenance record. Promotion is blocked for other modes and for incomplete or stale runs.
+
+EXT-REP (representation replication, seeds 330 to 339): asks whether the family-specific limits seen with LAMDA static features persist under other representations of the same apps. All four experiments use only the rows present in LAMDA and in all three McNdroid representations (matched by sha256), so R0 to R3 differ in features alone. Priority (hiddad, gappusin, revmob), contrast (leadbolt, airpush, dowgin) and separate (adwo) families, the focus family (hiddad) and the minimum prevalence 0.01 are set in `configs/experiments.yaml`. Verdicts: H-REP-1 (R1 CTK lower bound above `ctk_min_gain`), H-REP-2 (hiddad), and an interpretation (`rep1-met-rep2-met`, `rep1-met-rep2-not-met`, `rep1-not-met`, `undetermined`).
+
+- `representation-preprocess [--mode ...]` (default modes: development and extension-b) must run before `plan extension-b`: it builds `outputs/preprocessing/representation/` (overlap table and manifest, aligned row identities, source inventory and fingerprint, `features-r0.npy` and `features-r1.npy`, call-graph and report-JSON as CSR files `graph-*`/`json-*`, all 17,483 report-JSON columns) and per-seed `partitions/<run>/` (assignments, controlled and natural pairs). Compact dtypes: R0/R1 feature caches as saved by `cache.save_features`; call-graph CSR data float32; report-JSON CSR data float16 (signed log), int32 indices, int64 indptr. Planning and runs fail with `representation namespace missing` if it was not run. Stages are fingerprinted and reused unless `--overwrite`.
+- `representation-extension --mode extension-b [--promote]` writes `outputs/analysis/extension-b/representation-{run-index,seed-effects,effects,levels,verdicts,eligibility}.parquet`; `--promote` copies them (parquet and CSV) to `results/extension-b/` with `representation-code.json`, blocked for incomplete or stale runs.
+- Run order: `doctor`, `preprocess`, `representation-preprocess`, `plan extension-b`, `run representation-r0..r3 --mode extension-b`, `representation-extension --mode extension-b --promote`. Timings are not measured yet.
+
+Determinism and limitations (Amendment A3): R2 and R3 are standardised, and R3 columns are selected (share of positive values at least 0.01), by each trained model from exactly its own training rows: a local model from its client's rows, a central or FedAvg model from the pooled rows of its arm (the federated sufficient statistics); fine-tuning keeps the parent model's transform. The transform is applied unchanged to calibration and test rows; no statistic uses rows a model is not trained on, and there is no whole-overlap pre-filter. R0 and R1 use the cached static features as they are (no transform). McNdroid features are the provider's processed `init_2013` data, so provider-side feature selection is outside our control and representations differ in dimensionality as well as content; the overlap is smaller than the LAMDA population.
+
+Original-artefact guarantee: these commands (including `representation-preprocess`, which writes only under `outputs/preprocessing/representation/`) only add files; they never rewrite existing confirmatory or `extension` evidence (the manifest gains entries only), and `results/extension-b/` is never pooled with the original campaign.
 
 ### 24.1 Allowed content
 

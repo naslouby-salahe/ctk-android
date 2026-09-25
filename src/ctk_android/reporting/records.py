@@ -6,9 +6,11 @@ from ctk_android.data.cache import is_reusable, normalise_arm_columns, read_reco
 from ctk_android.enums import Artifact, Column, ExecutionMode, LogEvent, LogField, RunStatus
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    ExperimentScope,
     FairnessGrid,
     FrameLists,
     LogFields,
+    PlaceboTable,
     RunEvidence,
     RunIndexTable,
     RunKey,
@@ -44,12 +46,19 @@ def _stale_fields(key: RunKey) -> LogFields:
     }
 
 
-def _run_keys(config: Config, mode: ExecutionMode, fairness: FairnessGrid) -> list[RunKey]:
+def _run_keys(
+    config: Config, mode: ExecutionMode, fairness: FairnessGrid, only: ExperimentScope
+) -> list[RunKey]:
     return [
         RunKey(mode=mode, experiment=experiment, seed=seed, salt=salt)
         for experiment in experiments_for(config, mode)
         if config.experiments.experiments[experiment].fairness_grid == fairness
-        for seed in config.project.seeds.for_mode(mode)
+        and (
+            experiment in only
+            if only is not None
+            else config.experiments.experiments[experiment].representation is None
+        )
+        for seed in config.seeds_for(experiment, mode)
         for salt in config.experiments.experiments[experiment].salts
     ]
 
@@ -75,8 +84,39 @@ def _load_tables(paths: Paths, key: RunKey, tables: FrameLists) -> None:
         frames.append(_tagged(pl.read_parquet(file), key))
 
 
+def collect_placebo_pairs(paths: Paths, index: RunIndexTable, mode: ExecutionMode) -> PlaceboTable:
+    completed = index.filter(pl.col(Column.STATUS) == RunStatus.COMPLETED)
+    frames = [
+        _tagged(
+            pl.read_parquet(
+                paths.run_file(
+                    RunKey(
+                        mode=mode,
+                        experiment=row[Column.EXPERIMENT],
+                        seed=row[Column.SEED],
+                        salt=row[Column.SALT],
+                    ),
+                    Artifact.PLACEBO_PAIRS,
+                )
+            ),
+            RunKey(
+                mode=mode,
+                experiment=row[Column.EXPERIMENT],
+                seed=row[Column.SEED],
+                salt=row[Column.SALT],
+            ),
+        )
+        for row in completed.iter_rows(named=True)
+    ]
+    return _concat(frames)
+
+
 def collect_evidence(
-    paths: Paths, config: Config, mode: ExecutionMode, fairness: FairnessGrid
+    paths: Paths,
+    config: Config,
+    mode: ExecutionMode,
+    fairness: FairnessGrid,
+    only: ExperimentScope = None,
 ) -> RunEvidence:
     index: list[RunIndexTable] = []
     tables: FrameLists = {
@@ -86,7 +126,7 @@ def collect_evidence(
         Artifact.EXPOSURE: [],
         Artifact.NOVELTY: [],
     }
-    for key in _run_keys(config, mode, fairness):
+    for key in _run_keys(config, mode, fairness, only):
         document = _document(paths, config, key)
         index.append(
             _tagged(

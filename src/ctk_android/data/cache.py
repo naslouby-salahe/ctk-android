@@ -17,8 +17,8 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    BinaryMatrix,
     CtkError,
-    FeatureMatrix,
     File,
     Fingerprint,
     LabelValues,
@@ -65,12 +65,12 @@ def is_reusable(file: File, expected: Provenance) -> Reusable:
     return stored == expected
 
 
-def save_features(path: File, features: FeatureMatrix) -> None:
+def save_features(path: File, features: BinaryMatrix) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     np.save(path, features, allow_pickle=False)
 
 
-def load_features(path: File) -> FeatureMatrix:
+def load_features(path: File) -> BinaryMatrix:
     return np.load(path, mmap_mode=LibraryOption.MMAP_READ, allow_pickle=False)
 
 
@@ -112,7 +112,9 @@ def run_provenance(
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
-    partition_file = paths.provenance_file(paths.partition_dir(partition_key))
+    partition_file = paths.provenance_file(
+        paths.partition_dir_for(partition_key, spec.representation)
+    )
     try:
         partition = read_record(partition_file, Provenance)
     except (ValidationError, FileNotFoundError) as error:

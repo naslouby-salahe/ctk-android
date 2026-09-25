@@ -243,7 +243,7 @@ def peer_dose_response(paths: Paths, mode: ExecutionMode) -> None:
     curve = pl.read_parquet(paths.analysis_file(mode, Artifact.PEER_DOSE_RESPONSE))
     figure = _blank()
     axes = _axes(figure)
-    for learner in curve[Column.LEARNER].unique():
+    for learner in sorted(curve[Column.LEARNER].unique().to_list()):
         rows = (
             curve.filter(pl.col(Column.LEARNER) == learner)
             .group_by(Column.DOSE)

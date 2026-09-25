@@ -1,0 +1,918 @@
+{
+  "studies": [
+    {
+      "name": "EXT-1",
+      "mode": "extension",
+      "seeds": [
+        200,
+        201,
+        202,
+        203,
+        204,
+        205,
+        206,
+        207,
+        208,
+        209
+      ],
+      "evidence_class": "D-prospective-extension",
+      "protocol": {
+        "name": "docs/temp/extension-protocol/EXT-1-permutation-replication.md",
+        "sha256": "faa2b302efc65965de1a1560eee2c48304985ac5899e0b73ee540bf93355aa83"
+      },
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "family-permutation-control",
+          "fingerprint": "b4338ba7f3c7bb38a72c1b2e5acfdc9fcfceba6aa8b6c439fb3262f4639f2bda"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": null
+      },
+      "code": {
+        "execution_revision": "4070d00061e70bbbb19dc96b1b8a8120cac34632",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension/run-index.parquet",
+          "digest": "7081f23d09478300cede21aae6d383889a17c794381b763c75e57864a3e8e5de",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension/permutation-control-audit.parquet",
+          "digest": "e75f90db9519c73510754395913b9ecc5d80a5292a30ed83d06a575e7d66a4ae",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension/paired-effects.parquet",
+          "digest": "e53b7d40cf5d96f3792e1485997caee2303d83dcdf445b1c0041f99823cbcd87",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension/permutation-control-audit.csv",
+          "digest": "b57f220bc7d5b24e50012669adae46d75aed6999c98a979d66260776f044db7c",
+          "evidence_class": "D-prospective-extension"
+        }
+      ],
+      "superseded": []
+    },
+    {
+      "name": "EXT-LFAM",
+      "mode": "extension-b",
+      "seeds": [
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309
+      ],
+      "evidence_class": "D-prospective-extension",
+      "protocol": {
+        "name": "docs/temp/extension-protocol/EXT-LARGEFAM-larger-family-explanation.md",
+        "sha256": "09f2854283dc260924c48fdd43f4071f9a9893996d61c6e0842d1d7de3e33254"
+      },
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "large-family-set-1",
+          "fingerprint": "cab4ab8d342abd2f9b506ecd8dd1019040d61887301758fce47a5f6894965c41"
+        },
+        {
+          "experiment": "large-family-set-2",
+          "fingerprint": "c1996eb10cfb6c38bece45824aedced3010b6230ba0add0b1c5eb5f5f46ae668"
+        },
+        {
+          "experiment": "large-family-set-3",
+          "fingerprint": "9f8527981a64466f34da43ca5d032473f26813ad1c53fd9a10da33be27019b08"
+        },
+        {
+          "experiment": "large-family-set-4",
+          "fingerprint": "3a37bb34d106c11df526baa1b71e4676212439d66a641b895889f5a768b90246"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": null
+      },
+      "code": {
+        "execution_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension-b/run-index.parquet",
+          "digest": "327800c1c5ff2ca44cca0bc5716bc31b0cfd70e83fa16c1e05ea4d8aab1734e7",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/run-index.csv",
+          "digest": "561b2cf8b7727226367904597dd2277b8aad69b97fd9dbd9fde5059ad05383e1",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-ctk.parquet",
+          "digest": "4c61ccbfdd627307e3d72421689c9f0494077576f2bd81b43e38a3948704419e",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-ctk.csv",
+          "digest": "22f13458ba13feab98427c23ebc367fd222603b4bf09a107028ef3942a98ca93",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-seed-ctk.parquet",
+          "digest": "77d123cc6519a8c09206ffd9e4ded068d0a50fa374a46e5ebe3c22fcd9fba4c9",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-seed-ctk.csv",
+          "digest": "5aff89a310b027c800d35f5404c93e7f07e076a804a71788e7f6fc05a2b03831",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-summary.parquet",
+          "digest": "29860352eb1209efb40a3061d3bb9ac5343d8737c6e191f95a615e956b528cbc",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-summary.csv",
+          "digest": "51c00837f7cf0a5758cb398419b930cf67ef5874da0457ca2f77cb6227af8b60",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-selection.parquet",
+          "digest": "5efcbac119a37eda5767d47696bd61df16bc1f9e338910f16d8806d7b0bcdf4f",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-selection.csv",
+          "digest": "68f6c6a6619ac0bdfac742c915ed14bcee426d600bf454fb2c3a3382f9fa1ebe",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability.parquet",
+          "digest": "9d9649ff0e0270b856b92fcc1bf1a73a87396a68fd12edd612f00caa6a5e9f0a",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability.csv",
+          "digest": "7dc227065d74cf0a517d8aaabfe17cccf8b17e0dba3ef1a90ec122d6250467b1",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability-seeds.parquet",
+          "digest": "bddcd7c83d4cd715a61b03d5ecebf754638671f70fb39c78bd0e929282519e85",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability-seeds.csv",
+          "digest": "6f848c876dbdf4795806165ba6b4e00fcff13570d8c7c2d150f623a290549982",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability-summary.parquet",
+          "digest": "65a954b0be9f02f91fe3bb7ef4754e710021b202cbb505d3236b5a782aa22766",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/large-family-eligibility-stability-summary.csv",
+          "digest": "4d775e0eb6c980aa19834b51b7c04c8cc8762dc6d025ca370c3779e0bb467737",
+          "evidence_class": "D-prospective-extension"
+        }
+      ],
+      "superseded": []
+    },
+    {
+      "name": "EXT-DOSE",
+      "mode": "extension-b",
+      "seeds": [
+        310,
+        311,
+        312,
+        313,
+        314,
+        315,
+        316,
+        317,
+        318,
+        319
+      ],
+      "evidence_class": "D-prospective-extension",
+      "protocol": {
+        "name": "docs/temp/extension-protocol/EXT-DOSE-effective-dose.md",
+        "sha256": "e462aff6559b1cdcec3bc053344f06f31b87b6074a1071aabfafa7e8f5b30f24"
+      },
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "exact-effective-dose-primary",
+          "fingerprint": "9d915eccbddf6c6d3f1751e9358a674b2be6d2c4dbb6a592de3bc03cec6c0c57"
+        },
+        {
+          "experiment": "exact-effective-dose-replication",
+          "fingerprint": "435ea4b2bdb9234860d6cfcff315992a8e058fb65fc0edbaf55fb00a4bb47359"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": null
+      },
+      "code": {
+        "execution_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension-b/exact-dose-run-index.parquet",
+          "digest": "fa4befdfe189ea3ba1f01794d87117e0b41b9231d2ef9d8eeda200157d0090c9",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-run-index.csv",
+          "digest": "a3474041b8c19cebd7981aaa34143b937aaef01ab7ab9bb71ca6636c9fad769c",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-seed-effects.parquet",
+          "digest": "68bc4ba7cade631fcad1bc1d258ec1e9c410c1ba6f2d3a17c348205a614449e6",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-seed-effects.csv",
+          "digest": "f3c6f68519305f0798013891c690a4db98953493d219920168f3c750512ccbbd",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-effects.parquet",
+          "digest": "9e577b306585e2fedcb65cc098b6d7d176d8810e593f1e14328139228c47716e",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-effects.csv",
+          "digest": "33c27561e11e92e6c9e41e348c82d8c55ebfe96b635cca2cf6a9b964d119194b",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-family-curves.parquet",
+          "digest": "6b3502ab24a8325ad56fdc7ca9b797a27ff8dd2f9a89a2b54ef4cadbc66723f0",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-family-curves.csv",
+          "digest": "81160f19579ebcf2c7a355828d666607d04347900888749b6bc85ee53f5b9fdd",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-consistency.parquet",
+          "digest": "e30f46a21373e39ef39782be30d3614993610fca100ccb3e35ec3915fce62fb7",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-consistency.csv",
+          "digest": "d3a39ba2e5bd49c26dfec5c11cfc806806b8214e2417fe42333d4faf1c07de2a",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-verdicts.parquet",
+          "digest": "fd5b3d25ad845af576c50630195d5c6d98f56241da5fdd3b6a0f632064932d24",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/exact-dose-verdicts.csv",
+          "digest": "0da7f10dc5e0aee2a86b8f88c742081842b5588713bbaf3f306daaffede4da3f",
+          "evidence_class": "D-prospective-extension"
+        }
+      ],
+      "superseded": []
+    },
+    {
+      "name": "EXT-CTRL",
+      "mode": "extension-b",
+      "seeds": [
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329
+      ],
+      "evidence_class": "D-prospective-extension",
+      "protocol": {
+        "name": "docs/temp/extension-protocol/EXT-CONTROLS-placebo-and-robust-aggregation.md",
+        "sha256": "e2b6795a5b87009e97f0df376af7ad4e2e70ab397e126e9911146a741209dc9e"
+      },
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "placebo-robust-primary",
+          "fingerprint": "55bcd9e52d3b772a74d1e16cd4794b8e3d695ad4e7de957da3101776ab6c87b3"
+        },
+        {
+          "experiment": "placebo-robust-replication",
+          "fingerprint": "5a02798f727b4768d289bb7a26ec475c8dd7a1a237e8641dcadae53bc683663e"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": null
+      },
+      "code": {
+        "execution_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension-b/controls-run-index.parquet",
+          "digest": "3996b971882670a01904e01b408150089c4f29be451e1f9a94089e1b685d223e",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-run-index.csv",
+          "digest": "c9e1a5b0db3152fa247a8ad8b5f328be94a65b714b14144a151e9aebce29af76",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-seed-effects.parquet",
+          "digest": "4ad5f3313835d42609407afa04528eb1893070034d3ac5e99010fdc5fd553e59",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-seed-effects.csv",
+          "digest": "be07a2b33a48a0bab5c7f42a8b7e5c4fe9bdfc26af2225a27c9a0505c04ac28e",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-effects.parquet",
+          "digest": "3e7203dd1b9741c92d13b24dd840afeeb19cf4f2810f3dd07134ced584457e56",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-effects.csv",
+          "digest": "413e020bcee9f981d2693d4950436fe6e8322037086f0a271a911bf9a42d9e0c",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-placebo-pairs.parquet",
+          "digest": "a30fe8cc58081dec37c75aa3b10ac653f84e277dba33fbac84f3a39e2fb71813",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-placebo-pairs.csv",
+          "digest": "a5fcd518c576d49b7bce8135f22aca112d7513a6fa786bcbe3bf49fd62faf307",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-verdicts.parquet",
+          "digest": "061f78821a3cc89fc29ef5706a66be46e9bfd98c4f71971e7ae5c74379a51b16",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/controls-verdicts.csv",
+          "digest": "9e9e7d9787f9258da154904185a731c77ab362a4c309b72713737ded50a5c418",
+          "evidence_class": "D-prospective-extension"
+        }
+      ],
+      "superseded": []
+    },
+    {
+      "name": "EXT-REP",
+      "mode": "extension-b",
+      "seeds": [
+        330,
+        331,
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339
+      ],
+      "evidence_class": "D-prospective-extension",
+      "protocol": {
+        "name": "docs/temp/extension-protocol/EXT-REP-representation-replication.md",
+        "sha256": "54c6ff0c11040412198cdf9ed53ec6cae4761c51969f52e05d2b05399e427ac3"
+      },
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "representation-r0",
+          "fingerprint": "0246174eb3b38aa0c59a0d9dfe6d050ea55d123299389aff9704d909c325a0bf"
+        },
+        {
+          "experiment": "representation-r1",
+          "fingerprint": "425f8558919962026e565370d200605d365cc69144ccbcf47b492a271d624ecb"
+        },
+        {
+          "experiment": "representation-r2",
+          "fingerprint": "13895b88c29c8d817f372945a5a801d84bc77f2d3bf40573ccccbbc152eee93f"
+        },
+        {
+          "experiment": "representation-r3",
+          "fingerprint": "c47c39619bc51b3a5ba0a74d4cf67327dfa26b444b5b242b4b63cc92677a4be2"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": "42c3e316f30ee03c3c1a3ae7cc1dca61385e2d6cede01e3dbdebe75a8ca01b70"
+      },
+      "code": {
+        "execution_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension-b/representation-run-index.parquet",
+          "digest": "0d4ac4524a56990122d1ac1e694209af59e68a27e9c8efcf3a2c93891500b288",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-run-index.csv",
+          "digest": "affbe635c928374102edfe53667562011f6ec722f0adde2f5d55a08cbc2b1657",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-seed-effects.parquet",
+          "digest": "2339403e8efebe10d7fe9fa58308aeaba22c2c7e2d76abfef2edd5bbccd4aee6",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-seed-effects.csv",
+          "digest": "0d6cd5d28ab89076be75867e45bf9d9d20ebe52877755a62849c1b6e9312ebfc",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-effects.parquet",
+          "digest": "aaec4c719b6140af329fb851afad252f6350dc399271f880bde50aebe31c76ed",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-effects.csv",
+          "digest": "54536fc82acbdec0864d7c1edd3e26fbbedc3f27bb35f2db161bf9a933dfa318",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-levels.parquet",
+          "digest": "fe4c1861c827c48d233dc18f82c444439a02d6414c96f0b6e99072c74d64d7c4",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-levels.csv",
+          "digest": "45226afd76a1c05018e6c59045b197100b3e74fa12d2cbc286b350bcbd2c954c",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-verdicts.parquet",
+          "digest": "d470bb1f35df62e2806b00457655bc3041d5cff09b9c7b1b229ac1765ea0eff1",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-verdicts.csv",
+          "digest": "2b8ceffcdece3302d2fd7bd067edb0bf2d8000a98456740ec114fdb2dc4758ee",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-eligibility.parquet",
+          "digest": "7046d70c1deb6e4b54072b505478b9350092c3eedce16ba47c0a6358529ec96e",
+          "evidence_class": "D-prospective-extension"
+        },
+        {
+          "name": "extension-b/representation-eligibility.csv",
+          "digest": "03766d842ac4545faa0f991ef1e7a575722dfb9de56f872f79a5cd0cfd268095",
+          "evidence_class": "D-prospective-extension"
+        }
+      ],
+      "superseded": [
+        {
+          "name": "superseded/ext-rep-transductive-transform/SHA256SUMS",
+          "sha256": "13c451ee44049c9374a3c42b296c28f856d3818c14beba3de079e010dd56abd3"
+        }
+      ]
+    },
+    {
+      "name": "EXT-DIAG",
+      "mode": "extension-b",
+      "seeds": [
+        300,
+        301,
+        302,
+        303,
+        304,
+        305,
+        306,
+        307,
+        308,
+        309,
+        310,
+        311,
+        312,
+        313,
+        314,
+        315,
+        316,
+        317,
+        318,
+        319,
+        320,
+        321,
+        322,
+        323,
+        324,
+        325,
+        326,
+        327,
+        328,
+        329,
+        330,
+        331,
+        332,
+        333,
+        334,
+        335,
+        336,
+        337,
+        338,
+        339
+      ],
+      "evidence_class": "D-post-hoc-diagnostic",
+      "protocol": null,
+      "config_fingerprint": "8b8ba9ec20552400024ff4d8ed70a3b16134f74b27ed7893d89abbd32b2aade8",
+      "run_fingerprints": [
+        {
+          "experiment": "large-family-set-1",
+          "fingerprint": "cab4ab8d342abd2f9b506ecd8dd1019040d61887301758fce47a5f6894965c41"
+        },
+        {
+          "experiment": "large-family-set-2",
+          "fingerprint": "c1996eb10cfb6c38bece45824aedced3010b6230ba0add0b1c5eb5f5f46ae668"
+        },
+        {
+          "experiment": "large-family-set-3",
+          "fingerprint": "9f8527981a64466f34da43ca5d032473f26813ad1c53fd9a10da33be27019b08"
+        },
+        {
+          "experiment": "large-family-set-4",
+          "fingerprint": "3a37bb34d106c11df526baa1b71e4676212439d66a641b895889f5a768b90246"
+        },
+        {
+          "experiment": "exact-effective-dose-primary",
+          "fingerprint": "9d915eccbddf6c6d3f1751e9358a674b2be6d2c4dbb6a592de3bc03cec6c0c57"
+        },
+        {
+          "experiment": "exact-effective-dose-replication",
+          "fingerprint": "435ea4b2bdb9234860d6cfcff315992a8e058fb65fc0edbaf55fb00a4bb47359"
+        },
+        {
+          "experiment": "placebo-robust-primary",
+          "fingerprint": "55bcd9e52d3b772a74d1e16cd4794b8e3d695ad4e7de957da3101776ab6c87b3"
+        },
+        {
+          "experiment": "placebo-robust-replication",
+          "fingerprint": "5a02798f727b4768d289bb7a26ec475c8dd7a1a237e8641dcadae53bc683663e"
+        },
+        {
+          "experiment": "representation-r0",
+          "fingerprint": "0246174eb3b38aa0c59a0d9dfe6d050ea55d123299389aff9704d909c325a0bf"
+        },
+        {
+          "experiment": "representation-r1",
+          "fingerprint": "425f8558919962026e565370d200605d365cc69144ccbcf47b492a271d624ecb"
+        },
+        {
+          "experiment": "representation-r2",
+          "fingerprint": "13895b88c29c8d817f372945a5a801d84bc77f2d3bf40573ccccbbc152eee93f"
+        },
+        {
+          "experiment": "representation-r3",
+          "fingerprint": "c47c39619bc51b3a5ba0a74d4cf67327dfa26b444b5b242b4b63cc92677a4be2"
+        }
+      ],
+      "data": {
+        "lamda": "e9908f9a50ba1068a362f9fc943017afed2bb05dbccaaa1579d093c1ead677a9",
+        "androzoo": "f0d118739757cf9135830e2f20f444fb28adb426fe4a3c3329178c7084a97904",
+        "mcndroid_inventory": "42c3e316f30ee03c3c1a3ae7cc1dca61385e2d6cede01e3dbdebe75a8ca01b70"
+      },
+      "code": {
+        "execution_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_revision": "37f61154cd9c2af6853a5fb89aae602a789b2514",
+        "analysis_sources_clean": false
+      },
+      "artifacts": [
+        {
+          "name": "extension-b/diagnostic-representation-operating-targets.parquet",
+          "digest": "3cf7889170dff30ac2a62f70a1346c869ad956867dfc9de4d0a8274ddb16120f",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-representation-operating-targets.csv",
+          "digest": "1c56564c98e5984cf0dfe09fee95b46472fc85a4cf5914c522cce3bde1fb112f",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-representation-score-health.parquet",
+          "digest": "536bda7784905db7506b59a56187dcf020be2a007c59cb4d1da3fd664225ca40",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-representation-score-health.csv",
+          "digest": "30283d2b4543de50391ead1876b3fdff98e93892702a38db2f8ebd4e4d263001",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-representation-equal-fpr-effects.parquet",
+          "digest": "bb04ef261e7f722f1506e7f07b81c0b621112de47e01df221ffd6e442ef6ac79",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-representation-equal-fpr-effects.csv",
+          "digest": "5748e951274f69ecbbd4be13ec005f442b84ff57ed2a559e931d6133306f9b82",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-large-family-influence.parquet",
+          "digest": "d0da4efa847b090c823051925827448414a831a013db88192bfec57880df3a39",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-large-family-influence.csv",
+          "digest": "31b58c2b4787f3a3b4f6a62b2da2b99171c0ef807145161292b482c6b2e5fe9c",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-large-family-stability.parquet",
+          "digest": "f9db2c8bd5c876b3594ba32d650b019dafe69ad165c76fc9eb4511aac99270ff",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-large-family-stability.csv",
+          "digest": "15666f9997da4c452f06b78c7c3853bbef4ae2c0efea0811d6f76c7f15c9d3b5",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-ctk-by-dose.parquet",
+          "digest": "8e8da40c6fbb8089a81a807d40d069481b8322d502b042d283c9bc2ab60247e0",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-ctk-by-dose.csv",
+          "digest": "3b6b1984a6fa361e47983cf2c90efed490db81ca52dbe023ea7661db7f48ebb3",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-increments.parquet",
+          "digest": "f4628431fee75f04c6fd5d83f1252d36e440feac41a895f459553c9bcf6e62a9",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-increments.csv",
+          "digest": "b2e7c7b4ae63720f411bcd9c689f63a63c546af532b72ead7e3213aef579ce6c",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-curves.parquet",
+          "digest": "3386a02bfcec086585a0ef7b55aa7ace2712018a82462e4bea393e04d6c68f34",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-curves.csv",
+          "digest": "60f780bca1c3371863be443cd2d43ed1c632791fd0d12419ce86d074b1ffde83",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-summary.parquet",
+          "digest": "6a2343f506fb4f14282fe8826ddcfe7703313286c4ceb04a7cccf5fe21e731bc",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-summary.csv",
+          "digest": "df727d4c6043056bad5be4b20efd33b168e5e7a6e520b45ba169ad7c61315f14",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-associations.parquet",
+          "digest": "d250440508dc57564afd96da8ce1fc2a4ffc964dd86a3125b8f51db0b021448f",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-family-associations.csv",
+          "digest": "bf041c6f076bdcad3ed3ffbdc6bfe4f18f2cc062f01b85a87e6cc76fbe1e32c5",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-client-curves.parquet",
+          "digest": "efee2ebe41ded2c2ff25baa768795978b8e227b0465769d7f3dbda20b5b41bef",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-client-curves.csv",
+          "digest": "106c98ec9126a3c5a393af09728957614178dd4bd5d41db3d6baa3be0d976234",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-model-fits.parquet",
+          "digest": "15fa01e5ee792f9e08aa9ae5f771cff07b73560900b58fac60cd8f34b1d153c8",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-model-fits.csv",
+          "digest": "1d4cf1b979bfc357b9165d1f965d81a6d952a6b830c75049487b1ec7aca76554",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-heterogeneity.parquet",
+          "digest": "c68e308d02fb053760a8eaac121b0a802e4c13aab8997b5345ad62ffcf02841d",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-dose-heterogeneity.csv",
+          "digest": "cc194f70244973f6d1a2be5833c71b91521efad47bcf91ccc6b672b176100d75",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-strata.parquet",
+          "digest": "d281c86d53296787df4d9ac9538fccce92749441d1451b752e68f2bd5f8754ec",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-strata.csv",
+          "digest": "c93b9bd78b0995191443075edbf9284115fc41d008ff183b52338e7efa530fd0",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-clients.parquet",
+          "digest": "5a3b5c94f1e94378b9d2c41d88d6ed97f4b729283c525c726e3a00fe12a7d3c6",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-clients.csv",
+          "digest": "3d429bc27ff6c513d21c04ec647d72720984fd6c178df46f115ebabcb2a75ca8",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-reallocation.parquet",
+          "digest": "6f73f0e15537379be67ed8e55b24ef530590a5fead9198eeaaaa4d4bc467e654",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-reallocation.csv",
+          "digest": "42126b781a0ae445354873f41f0ea6bd63cc95bb5831491554a5c72746f8295d",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-reallocation-slope.parquet",
+          "digest": "731ec3d4241cba659e5608d0339b671ca21f96cb264dd54c2ebd83a757aad84d",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-reallocation-slope.csv",
+          "digest": "94110fc68ac87da16908014799450871ac0829f8e22435f99228fc11fd8bee0c",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-associations.parquet",
+          "digest": "897597f9d945eb654de6fb2748ed0530a6560fbc576a5dde647918594fbe2c2e",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-associations.csv",
+          "digest": "26f39fa7a20d7535aa17254ef6c93edfcdd74a5c38b3182edeb2fd52aa5b563a",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-placebo-pairs.parquet",
+          "digest": "03200f48ff56b3783d653aa22509f90a4dc7214f44709fa9ed98837100cd46e6",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-placebo-pairs.csv",
+          "digest": "286ff1c7268ebb73535e7fccb07b99947827876586d5ea4bc4d5bc44f29e36e0",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-families.parquet",
+          "digest": "5616fcbddc7409867d85ce60ed50232d3e32c01580103575e36d3bee2ef831ec",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-families.csv",
+          "digest": "dd9b5996ea5a6c0ac0c8df669a5a549520ca5576ffe42db3477edd79c3adafe9",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-support-levels.parquet",
+          "digest": "4ee87ffed876912189b744b8a9299e31b7c051b7869d78489cd8a08d5fb589da",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-support-levels.csv",
+          "digest": "d2244d4ff32643ab9420c023ed17951d3a7a9ad730c445967acdbc347071f8f0",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-support.parquet",
+          "digest": "d0ac4de5e84a5acc75702d46d15000467cea5728b59d617c2b1f070f17c76a51",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-controls-support.csv",
+          "digest": "8af560ec38cec50dc71381793b083a566727e23f62c3d0eb00ae0067c6ef2fd4",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-cells.parquet",
+          "digest": "abd90b9d203f34c2e09799724abbeabaf3357dff03ead2d4948b4fb4185f5c41",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-cells.csv",
+          "digest": "73184010200d4432cd2b91295ef7b81d609b31a02e77c0822d898a2d3d30557b",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-family-taxonomy.parquet",
+          "digest": "c9267ae412d3337648fc0518396be1af1d87e315e55a7fe7bfc7ba8cbcda970e",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-family-taxonomy.csv",
+          "digest": "ec363dd747ba7d91e819044fe552ad556478df5aa33b14ae524efdc37033024a",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-family-ctk.parquet",
+          "digest": "14df2ca2ddd8ec832fcf2d20a1a48a4152124828ae02a49338a0c4361e0a3f68",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-family-ctk.csv",
+          "digest": "75b14f1c41d5c3517e222249b045fa8072ba8431fa01d8687a0c0bc3dae63b55",
+          "evidence_class": "C-post-confirmatory-evidence-preserving"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-ctk.parquet",
+          "digest": "2e4adf6a87823912a6ca86d296e398c2ca52c6de728f9cfaf2154154db87f5d1",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-ctk.csv",
+          "digest": "e74336e07be8acf41dd11302048a088631e73e0eb314f6b98eea37087a966e55",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-taxonomy.parquet",
+          "digest": "f08b85d0e84a6f2da047500ece8b113c76a4822206fd054eaad9f63d36a472c2",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-taxonomy.csv",
+          "digest": "c1a82674ab34617f0d1c841cc18639c1397c37e1504ab774417548b9d8f2c248",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-rank-concordance.parquet",
+          "digest": "51b4130ea2dfb0ce910c79928e6d0fde6e7060a3962331f390b627f23e2ee7b1",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-rank-concordance.csv",
+          "digest": "9209980c97b98bc0af3519b04e687e8ef38e4dceb56ca304250134806b8ade38",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-associations.parquet",
+          "digest": "7dedcf231f488285490dcbcc09e15fa8e4233f88cdcf56309441224b10084e3d",
+          "evidence_class": "D-post-hoc-diagnostic"
+        },
+        {
+          "name": "extension-b/diagnostic-synthesis-large-family-associations.csv",
+          "digest": "1e897b211fa6c2508f57e3d2202bdb00d16f8aaf9563bc6db32f6edd26be220b",
+          "evidence_class": "D-post-hoc-diagnostic"
+        }
+      ],
+      "superseded": []
+    }
+  ]
+}

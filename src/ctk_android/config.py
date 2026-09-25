@@ -5,10 +5,13 @@ import yaml
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from ctk_android.enums import (
+    ConfigField,
     ConfigFile,
     Device,
+    EligibilityProfile,
     ErrorMessage,
     ExecutionMode,
+    ExperimentDesign,
     ExperimentName,
     LamdaRelease,
     LibraryOption,
@@ -32,6 +35,7 @@ from ctk_android.types import (
     ExceedanceCount,
     ExperimentSpec,
     ExperimentSpecs,
+    FamilyName,
     Fingerprint,
     Fraction,
     IncludeAllDose,
@@ -43,6 +47,7 @@ from ctk_android.types import (
     RowCount,
     RunsInMode,
     Seed,
+    SerializedConfig,
     SupportCount,
     TreeDepth,
     TreeIterations,
@@ -63,10 +68,23 @@ class SeedConfig(Frozen):
     development: tuple[Seed, ...]
     confirmatory: tuple[Seed, ...]
     extension: tuple[Seed, ...]
+    extension_b: tuple[Seed, ...]
+    extension_dose: tuple[Seed, ...]
+    extension_controls: tuple[Seed, ...]
+    extension_representation: tuple[Seed, ...]
 
     @model_validator(mode=LibraryOption.VALIDATE_AFTER)
     def _disjoint_roles(self) -> Self:
-        every_seed = (*self.smoke, *self.development, *self.confirmatory, *self.extension)
+        every_seed = (
+            *self.smoke,
+            *self.development,
+            *self.confirmatory,
+            *self.extension,
+            *self.extension_b,
+            *self.extension_dose,
+            *self.extension_controls,
+            *self.extension_representation,
+        )
         if len(every_seed) != len(set(every_seed)):
             raise ValueError(ErrorMessage.SEED_ROLES)
         return self
@@ -78,7 +96,18 @@ class SeedConfig(Frozen):
             return self.development
         if mode is ExecutionMode.EXTENSION:
             return self.extension
+        if mode is ExecutionMode.EXTENSION_B:
+            return self.extension_b
         return self.confirmatory
+
+    def for_design(self, mode: ExecutionMode, design: ExperimentDesign) -> tuple[Seed, ...]:
+        if mode is ExecutionMode.EXTENSION_B and design is ExperimentDesign.EXACT_DOSE:
+            return self.extension_dose
+        if mode is ExecutionMode.EXTENSION_B and design is ExperimentDesign.PLACEBO_ROBUST:
+            return self.extension_controls
+        if mode is ExecutionMode.EXTENSION_B and design is ExperimentDesign.REPRESENTATION:
+            return self.extension_representation
+        return self.for_mode(mode)
 
 
 class ProjectConfig(Frozen):
@@ -125,6 +154,12 @@ class DataConfig(Frozen):
     eligibility: EligibilityRules
     natural_scarcity: NaturalScarcityConfig
     smoke_family_set_size: SupportCount
+
+    def stable_json(self) -> SerializedConfig:
+        return self.model_dump_json(exclude={ConfigField.ELIGIBILITY: {EligibilityProfile.DOSE}})
+
+    def stable_fingerprint(self) -> Fingerprint:
+        return hashlib.sha256(self.stable_json().encode()).hexdigest()
 
 
 class TreeConfig(Frozen):
@@ -181,12 +216,35 @@ class ExperimentsConfig(Frozen):
     fairness_grids: FairnessGrids
     permutation_seed_offset: Seed
     extension_experiments: tuple[ExperimentName, ...]
+    extension_b_experiments: tuple[ExperimentName, ...]
+    exact_dose_levels: tuple[SupportCount, ...]
+    placebo_min_malware_rows: SupportCount
+    robust_trim_per_side: SupportCount
+    representation_min_prevalence: Fraction
+    representation_priority_families: tuple[FamilyName, ...]
+    representation_contrast_families: tuple[FamilyName, ...]
+    representation_separate_families: tuple[FamilyName, ...]
+    representation_focus_family: FamilyName
     experiments: ExperimentSpecs
 
     def runs_in(self, experiment: ExperimentName, mode: ExecutionMode) -> RunsInMode:
         if mode is ExecutionMode.EXTENSION:
             return experiment in self.extension_experiments
+        if mode is ExecutionMode.EXTENSION_B:
+            return (
+                experiment in self.extension_b_experiments
+                or mode in self.experiments[experiment].modes
+            )
         return mode in self.experiments[experiment].modes
+
+    def design_fingerprint_parts(self, design: ExperimentDesign) -> tuple[SerializedConfig, ...]:
+        if design is ExperimentDesign.EXACT_DOSE:
+            return (f"{design}{self.exact_dose_levels}",)
+        if design is ExperimentDesign.PLACEBO_ROBUST:
+            return (f"{design}{self.placebo_min_malware_rows}{self.robust_trim_per_side}",)
+        if design is ExperimentDesign.REPRESENTATION:
+            return (f"{design}{self.representation_min_prevalence}",)
+        return ()
 
 
 class GateConfig(Frozen):
@@ -228,20 +286,33 @@ class Config(Frozen):
             return self.experiments.smoke_training
         return self.experiments.training
 
+    def seeds_for(self, experiment: ExperimentName, mode: ExecutionMode) -> tuple[Seed, ...]:
+        design = self.experiments.experiments[experiment].design
+        return self.project.seeds.for_design(mode, design)
+
     def run_fingerprint(self, spec: ExperimentSpec, mode: ExecutionMode) -> Fingerprint:
         experiments = self.experiments
         parts = (
-            self.data.model_dump_json(),
+            self.data.stable_json(),
             self.training_for(mode).model_dump_json(),
-            spec.model_dump_json(),
+            spec.model_dump_json(exclude_defaults=True),
             experiments.operating.model_dump_json(),
             experiments.novelty.model_dump_json(),
             experiments.fairness_grids.model_dump_json(),
             f"{experiments.budgets[spec.budget]}",
             f"{experiments.dose_levels}{experiments.dose_include_all_available}",
             f"{experiments.permutation_seed_offset}",
+            *self.design_parts(spec),
         )
         return hashlib.sha256(Separator.NEWLINE.join(parts).encode()).hexdigest()
+
+    def design_parts(self, spec: ExperimentSpec) -> tuple[SerializedConfig, ...]:
+        if spec.design is ExperimentDesign.STANDARD:
+            return ()
+        return (
+            self.data.eligibility[spec.eligibility].model_dump_json(),
+            *self.experiments.design_fingerprint_parts(spec.design),
+        )
 
     def fingerprint(self) -> Fingerprint:
         return hashlib.sha256(self.model_dump_json().encode()).hexdigest()

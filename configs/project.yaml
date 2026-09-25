@@ -3,5 +3,9 @@ seeds:
   development: [1, 2, 3, 4, 5]
   confirmatory: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]
   extension: [200, 201, 202, 203, 204, 205, 206, 207, 208, 209]
+  extension_b: [300, 301, 302, 303, 304, 305, 306, 307, 308, 309]
+  extension_dose: [310, 311, 312, 313, 314, 315, 316, 317, 318, 319]
+  extension_controls: [320, 321, 322, 323, 324, 325, 326, 327, 328, 329]
+  extension_representation: [330, 331, 332, 333, 334, 335, 336, 337, 338, 339]
 device: cuda
 logging_level: INFO

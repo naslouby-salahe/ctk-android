@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import polars as pl
+import scipy.sparse as sp
 from scipy import stats
 
 from ctk_android.config import NoveltyConfig, StatisticsConfig
@@ -21,15 +22,20 @@ from ctk_android.types import (
     DescriptorScoreTable,
     DescriptorTable,
     DescriptorValues,
+    FamilyCentroids,
+    FamilyFitRows,
     FamilyMasks,
+    FamilyName,
     Fraction,
     GainVector,
     Interval,
     NoveltyAssociation,
     NoveltyTable,
     NoveltyVector,
+    PlaceboChoice,
     Prevalence,
     Rate,
+    Relatedness,
     RowIndices,
     Score,
     StudyData,
@@ -38,7 +44,10 @@ from ctk_android.types import (
 
 
 def _prevalence(study: StudyData, rows: RowIndices) -> Prevalence:
-    return np.asarray(study.features[rows], dtype=np.float64).mean(axis=0)
+    block = study.features[rows]
+    if sp.issparse(block):
+        return np.asarray(block.mean(axis=0, dtype=np.float64)).ravel()
+    return np.asarray(block, dtype=np.float64).mean(axis=0)
 
 
 def _active(prevalence: Prevalence, threshold: Fraction) -> ActiveMask:
@@ -172,4 +181,43 @@ def novelty_association(
         p_value=result.pvalue.item(),
         interval=interval,
         families=gains.size,
+    )
+
+
+def _centroid(study: StudyData, rows: RowIndices) -> Prevalence:
+    block = study.features[np.sort(rows)]
+    if sp.issparse(block):
+        return np.asarray(block.mean(axis=0, dtype=np.float64)).ravel()
+    return np.asarray(block).mean(axis=0, dtype=np.float64)
+
+
+def _all_fit_rows(fit: FamilyFitRows, family: FamilyName) -> RowIndices:
+    return np.concatenate(list(fit[family].values()))
+
+
+def known_family_centroids(
+    study: StudyData, fit: FamilyFitRows, excluded: frozenset[FamilyName], config: NoveltyConfig
+) -> FamilyCentroids:
+    return {
+        family: _centroid(study, _all_fit_rows(fit, family))
+        for family in sorted(fit)
+        if family not in excluded
+        and sum(rows.size for rows in fit[family].values()) >= config.min_known_family_rows
+    }
+
+
+def family_relatedness(
+    study: StudyData,
+    fit: FamilyFitRows,
+    centroids: FamilyCentroids,
+    choice: PlaceboChoice,
+) -> Relatedness:
+    hidden = _centroid(study, _all_fit_rows(fit, choice.family))
+    distances = {name: _distance(hidden, centroid) for name, centroid in centroids.items()}
+    ranked = sorted(distances, key=lambda name: (distances[name], name))
+    return Relatedness(
+        centroid_distance=_distance(hidden, _centroid(study, _all_fit_rows(fit, choice.placebo))),
+        nearest_known_distance=distances[ranked[0]] if ranked else None,
+        placebo_rank=ranked.index(choice.placebo) + 1 if choice.placebo in distances else None,
+        known_families=len(ranked),
     )

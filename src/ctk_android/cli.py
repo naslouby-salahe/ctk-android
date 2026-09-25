@@ -18,10 +18,17 @@ from ctk_android.enums import (
 from ctk_android.logs import Stopwatch, bind, configure_logging
 from ctk_android.paths import Paths
 from ctk_android.types import CtkError, Overwrite, Promote, Seed, seed_adapter
+from ctk_android.workflows import controlsextension as controlsextension_workflow
+from ctk_android.workflows import diagnostics as diagnostics_workflow
 from ctk_android.workflows import doctor as doctor_workflow
+from ctk_android.workflows import doseextension as doseextension_workflow
+from ctk_android.workflows import largefamily as largefamily_workflow
 from ctk_android.workflows import plan as plan_workflow
+from ctk_android.workflows import posthoc as posthoc_workflow
 from ctk_android.workflows import preprocess as preprocess_workflow
 from ctk_android.workflows import report as report_workflow
+from ctk_android.workflows import representationextension as representationextension_workflow
+from ctk_android.workflows import representationprep as representationprep_workflow
 from ctk_android.workflows import run as run_workflow
 from ctk_android.workflows import smoke as smoke_workflow
 from ctk_android.workflows import status as status_workflow
@@ -85,10 +92,15 @@ def doctor() -> None:
 
 
 @app.command(name=CliCommand.PREPROCESS)
-def preprocess(overwrite: Annotated[Overwrite, typer.Option()] = False) -> None:
+def preprocess(
+    overwrite: Annotated[Overwrite, typer.Option()] = False,
+    mode: Annotated[list[ExecutionMode] | None, typer.Option()] = None,
+) -> None:
     context = _context(CliCommand.PREPROCESS)
     try:
-        reports = preprocess_workflow.run_preprocess(context.paths, context.config, overwrite)
+        reports = preprocess_workflow.run_preprocess(
+            context.paths, context.config, overwrite, tuple(mode or ExecutionMode)
+        )
     except CtkError as error:
         _failed(context, error)
         raise typer.Exit(code=1) from error
@@ -133,7 +145,7 @@ def run(
     overwrite: Annotated[Overwrite, typer.Option()] = False,
 ) -> None:
     context = _context(CliCommand.RUN)
-    seeds = context.config.project.seeds.for_mode(mode) if seed is None else (seed,)
+    seeds = context.config.seeds_for(experiment, mode) if seed is None else (seed,)
     try:
         reports = run_workflow.run_and_report(
             context.paths, context.config, experiment, mode, seeds, overwrite
@@ -166,6 +178,144 @@ def report(
     context = _context(CliCommand.REPORT)
     try:
         decision = report_workflow.run_report(context.paths, context.config, mode, promote)
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.POSTHOC)
+def posthoc(
+    mode: ExecutionMode = ExecutionMode.CONFIRMATORY,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.POSTHOC)
+    try:
+        decision = posthoc_workflow.run_posthoc(context.paths, context.config, mode, promote)
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.LARGE_FAMILY)
+def large_family(
+    mode: ExecutionMode = ExecutionMode.EXTENSION_B,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.LARGE_FAMILY)
+    try:
+        decision = largefamily_workflow.run_large_family(
+            context.paths, context.config, mode, promote
+        )
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.DOSE_EXTENSION)
+def dose_extension(
+    mode: ExecutionMode = ExecutionMode.EXTENSION_B,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.DOSE_EXTENSION)
+    try:
+        decision = doseextension_workflow.run_dose_extension(
+            context.paths, context.config, mode, promote
+        )
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.CONTROLS_EXTENSION)
+def controls_extension(
+    mode: ExecutionMode = ExecutionMode.EXTENSION_B,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.CONTROLS_EXTENSION)
+    try:
+        decision = controlsextension_workflow.run_controls_extension(
+            context.paths, context.config, mode, promote
+        )
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.REPRESENTATION_PREPROCESS)
+def representation_preprocess(
+    overwrite: Annotated[Overwrite, typer.Option()] = False,
+    mode: Annotated[list[ExecutionMode] | None, typer.Option()] = None,
+) -> None:
+    context = _context(CliCommand.REPRESENTATION_PREPROCESS)
+    try:
+        reports = representationprep_workflow.run_representation_preprocess(
+            context.paths,
+            context.config,
+            overwrite,
+            tuple(mode or (ExecutionMode.DEVELOPMENT, ExecutionMode.EXTENSION_B)),
+        )
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    for report in reports:
+        typer.echo(
+            CliMessage.STAGE_LINE.format(
+                stage=report.stage, reused=report.reused, directory=report.directory
+            )
+        )
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.REPRESENTATION_EXTENSION)
+def representation_extension(
+    mode: ExecutionMode = ExecutionMode.EXTENSION_B,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.REPRESENTATION_EXTENSION)
+    try:
+        decision = representationextension_workflow.run_representation_extension(
+            context.paths, context.config, mode, promote
+        )
+    except CtkError as error:
+        typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
+        _failed(context, error)
+        raise typer.Exit(code=1) from error
+    if decision is not None:
+        typer.echo(CliMessage.PROMOTION_LINE.format(state=decision.state, blocks=decision.blocks))
+    _finished(context, Verdict.PASS)
+
+
+@app.command(name=CliCommand.DIAGNOSTICS)
+def diagnostics(
+    mode: ExecutionMode = ExecutionMode.EXTENSION_B,
+    promote: Annotated[Promote, typer.Option()] = False,
+) -> None:
+    context = _context(CliCommand.DIAGNOSTICS)
+    try:
+        decision = diagnostics_workflow.run_diagnostics(
+            context.paths, context.config, mode, promote
+        )
     except CtkError as error:
         typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
         _failed(context, error)

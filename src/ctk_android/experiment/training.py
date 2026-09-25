@@ -21,12 +21,17 @@ from ctk_android.experiment.models import (
     average_states,
     build_network,
     fit_epochs,
+    fit_transform,
     fit_trees,
+    input_width,
+    robust_states,
 )
 from ctk_android.types import (
+    AggregationRule,
     CtkError,
     Epochs,
     FeatureMatrix,
+    InputTransform,
     LabelVector,
     ProximalAnchor,
     ProximalStrength,
@@ -34,6 +39,7 @@ from ctk_android.types import (
     Scorer,
     Seed,
     TrainingRows,
+    TransformRule,
 )
 
 
@@ -45,10 +51,15 @@ class TrainingContext:
     family: ModelFamily
     device: Device
     seed: Seed
+    transform_rule: TransformRule | None
 
 
 def derive_seed(base: Seed, *parts: Seed) -> Seed:
     return np.random.SeedSequence([base, *parts]).generate_state(1)[0].item()
+
+
+def learner_stream(learner: Learner) -> Seed:
+    return list(Learner).index(learner) + 1
 
 
 def _require_both_classes(context: TrainingContext, rows: RowIndices) -> None:
@@ -60,15 +71,24 @@ def _require_both_classes(context: TrainingContext, rows: RowIndices) -> None:
         )
 
 
-def _initial_network(context: TrainingContext, stream: Seed) -> torch.nn.Module:
+def _initial_network(
+    context: TrainingContext, stream: Seed, transform: InputTransform | None
+) -> torch.nn.Module:
     torch.default_generator.manual_seed(derive_seed(context.seed, stream))
-    return build_network(context.family, context.features.shape[1], context.config)
+    return build_network(context.family, input_width(context.features, transform), context.config)
+
+
+# Learned preprocessing sees exactly the rows the model is trained on (Amendment A3).
+def _transform(context: TrainingContext, rows: RowIndices) -> InputTransform | None:
+    rule = context.transform_rule
+    return None if rule is None else fit_transform(context.features, rows, rule)
 
 
 def train_scorer(
     context: TrainingContext, rows: RowIndices, epochs: Epochs, stream: Seed
 ) -> Scorer:
     _require_both_classes(context, rows)
+    transform = _transform(context, rows)
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
         trees = fit_trees(
             context.features,
@@ -76,9 +96,12 @@ def train_scorer(
             rows,
             context.config,
             derive_seed(context.seed, stream),
+            transform,
         )
-        return Scorer(family=context.family, network=None, trees=trees, device=Device.CPU)
-    network = _initial_network(context, stream)
+        return Scorer(
+            family=context.family, network=None, trees=trees, device=Device.CPU, transform=transform
+        )
+    network = _initial_network(context, stream, transform)
     fit_epochs(
         network,
         context.features,
@@ -89,8 +112,15 @@ def train_scorer(
         derive_seed(context.seed, stream, 1),
         context.device,
         None,
+        transform,
     )
-    return Scorer(family=context.family, network=network, trees=None, device=context.device)
+    return Scorer(
+        family=context.family,
+        network=network,
+        trees=None,
+        device=context.device,
+        transform=transform,
+    )
 
 
 def pooled_rows(training: TrainingRows) -> RowIndices:
@@ -103,12 +133,14 @@ def train_federated(
     learner: Learner,
     strength: ProximalStrength,
     stream: Seed,
+    aggregation: AggregationRule | None = None,
 ) -> Scorer:
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.PARAMETRIC_ONLY)
     for client in ClientId:
         _require_both_classes(context, training[client])
-    global_net = _initial_network(context, stream)
+    transform = _transform(context, pooled_rows(training))
+    global_net = _initial_network(context, stream, transform)
     weights = np.array([training[client].size for client in ClientId], dtype=np.float64)
     for round_index in range(context.config.federated_rounds):
         anchor = ProximalAnchor(
@@ -128,14 +160,25 @@ def train_federated(
                 derive_seed(context.seed, stream, round_index, client_index),
                 context.device,
                 anchor if learner is Learner.FEDPROX else None,
+                transform,
             )
             states.append({k: v.detach().cpu() for k, v in local.state_dict().items()})
-        global_net.load_state_dict(average_states(states, weights))
+        global_net.load_state_dict(
+            average_states(states, weights)
+            if aggregation is None
+            else robust_states(states, aggregation)
+        )
         logs.debug(
             LogEvent.FEDERATED_ROUND,
             {LogField.ROUND: round_index, LogField.LEARNER: learner, LogField.SEED: context.seed},
         )
-    return Scorer(family=context.family, network=global_net, trees=None, device=context.device)
+    return Scorer(
+        family=context.family,
+        network=global_net,
+        trees=None,
+        device=context.device,
+        transform=transform,
+    )
 
 
 def finetune(
@@ -154,5 +197,12 @@ def finetune(
         derive_seed(context.seed, stream),
         context.device,
         None,
+        scorer.transform,
     )
-    return Scorer(family=context.family, network=network, trees=None, device=context.device)
+    return Scorer(
+        family=context.family,
+        network=network,
+        trees=None,
+        device=context.device,
+        transform=scorer.transform,
+    )

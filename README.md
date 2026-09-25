@@ -47,7 +47,7 @@ ln -s /path/to/AndroZoo data/androzoo/raw
 
 ## Status
 
-The protocol is frozen (see `docs/decisions/protocol-amendments.md`) and the 140 confirmatory runs (seeds 100 to 109) are complete. Claim outcomes are in `results/gates/claims.csv` (9 promoted, 3 rejected after the post-confirmatory dose-gate correction recorded in `docs/decisions/protocol-amendments.md`). The interpreted evidence, literature audit and feasibility assessments are consolidated in `docs/Research Evidence.md`. Exploratory or local working material should not be read as a confirmed finding.
+The original protocol and 140 confirmatory runs (seeds 100 to 109) are complete; the original claim outcome remains 9 promoted, 0 narrowed, 3 rejected. Separately frozen EXT-1 and extension-b studies are also complete on disjoint seeds and remain separate evidence. The interpreted evidence, literature audit and feasibility assessments are consolidated in `docs/Research Evidence.md`; extension results do not change the original gate counts.
 
 ## Commands and durations
 
@@ -56,10 +56,17 @@ Setup, then one command per experiment. Every `run` regenerates the analysis, ta
 | Command | Purpose | Duration |
 |---|---|---|
 | `uv run ctk-android doctor` | check environment, config, sources | 0.1 s |
-| `uv run ctk-android preprocess` | audit sources, build identities, clients, families, partitions | 293 s first run, 23 s when reused |
+| `uv run ctk-android preprocess` | audit sources, build identities, clients, families, partitions (`--mode <mode>` limits modes, repeatable) | 293 s first run, 23 s when reused |
 | `uv run ctk-android plan <mode>` | write the run matrix | 0.1 s (6 s for the confirmatory plan) |
 | `uv run ctk-android smoke` | end-to-end smoke run | 13 s |
 | `uv run ctk-android status --mode <mode>` | summarise run status | under 0.1 s |
+| `uv run ctk-android posthoc --mode confirmatory [--promote]` | hidden-family heterogeneity, aggregate-metric masking, negative-transfer tables | not measured |
+| `uv run ctk-android large-family --mode extension-b [--promote]` | large-family CTK tables (after `run large-family-set-1..4 --mode extension-b`) | not measured |
+| `uv run ctk-android dose-extension --mode extension-b [--promote]` | exact-effective-dose effects, curves, verdicts (after `run exact-effective-dose-primary` and `-replication`) | not measured |
+| `uv run ctk-android controls-extension --mode extension-b [--promote]` | placebo and robust-aggregation effects, verdicts (after `run placebo-robust-primary` and `-replication`) | not measured |
+| `uv run ctk-android representation-preprocess [--mode <mode>]` | EXT-REP overlap, feature caches, per-seed partitions under `outputs/preprocessing/representation/` (before `plan extension-b`) | not measured |
+| `uv run ctk-android representation-extension --mode extension-b [--promote]` | representation recall and CTK effects, verdicts (after `run representation-r0..r3`) | not measured |
+| `uv run ctk-android diagnostics --mode extension-b [--promote]` | descriptive equal-FPR, eligibility/influence, dose-curve, placebo-strata and unified-synthesis analyses from stored results | not measured |
 | `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 20 tables, 11 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
 
 Experiments (`--seed N` runs a single seed; durations are wall-clock per run on one RTX 5060 Ti, measured from the run logs):
@@ -81,14 +88,14 @@ Experiments (`--seed N` runs a single seed; durations are wall-clock per run on 
 | `family-support-sensitivity-high` | `uv run ctk-android run family-support-sensitivity-high --mode confirmatory` | confirmatory: 10 runs, 62 s each, 10.4 min total |
 | `package-only-grouping` | `uv run ctk-android run package-only-grouping --mode confirmatory` | confirmatory: 10 runs, 87 s each, 14.5 min total |
 
-Development uses seeds 1 to 5, confirmatory uses seeds 100 to 109, and seeds 200 to 209 (`--mode extension`) are reserved for separately frozen prospective extensions that are never pooled with the original campaign. `partition-salt-sensitivity` runs 3 salts per seed. The first four confirmatory experiments ran one at a time; the remaining eight ran as five parallel workers, so their per-run times include contention for CPU and GPU and their totals are not sequential wall time. Whole confirmatory stage: about 140 runs in roughly 2.5 hours.
+Development uses seeds 1 to 5, confirmatory uses seeds 100 to 109, and seeds 200 to 209 (`--mode extension`) are reserved for separately frozen prospective extensions that are never pooled with the original campaign. `--mode extension-b` uses seeds 300 to 309 (large-family-set-1 to 4), 310 to 319 (exact-effective-dose-primary and -replication), 320 to 329 (placebo-robust-primary and -replication) and 330 to 339 (representation-r0 to r3: LAMDA static, McNdroid static, call graph, report JSON on the shared overlap); promotion only adds files under `results/extension-b/` plus the three post-hoc tables, leaving the original artefacts untouched. `partition-salt-sensitivity` runs 3 salts per seed. The first four confirmatory experiments ran one at a time; the remaining eight ran as five parallel workers, so their per-run times include contention for CPU and GPU and their totals are not sequential wall time. Whole confirmatory stage: about 140 runs in roughly 2.5 hours.
 
 ## Reproducibility
 
 - Random seeds are explicit.
 - Raw data stay external to the repository.
 - Exploratory proof-of-concept work lives in a local, Git-ignored workspace.
-- Final implementation and results will follow the frozen roadmap.
+- Current code, results and extension provenance are recorded in the repository; the full raw-data-to-final-evidence workflow remains the manuscript-freeze reproducibility step.
 
 ## Citation
 

@@ -3,267 +3,363 @@
   "files": [
     {
       "name": "evidence/run-index.parquet",
-      "digest": "50bb36ba947ebfab7c205dabefbaa0ed7e38009feea1ad217c5a709ed3ce65b9"
+      "digest": "50bb36ba947ebfab7c205dabefbaa0ed7e38009feea1ad217c5a709ed3ce65b9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/arm-metrics.parquet",
-      "digest": "9d899ed92025c43e1315a3083dc71ac7a678a43fa80070822de0c05ffdf81b1f"
+      "digest": "9d899ed92025c43e1315a3083dc71ac7a678a43fa80070822de0c05ffdf81b1f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/collaboration-decomposition.parquet",
-      "digest": "023df4eb3a4713d0c3b476f3345456e15e847bb09d5e24b910720d987492eef8"
+      "digest": "023df4eb3a4713d0c3b476f3345456e15e847bb09d5e24b910720d987492eef8",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/family-rescue.parquet",
-      "digest": "2177d5b7382b5648d160ad269b75612b4de6ef63dc1803394f92ed5317739436"
+      "digest": "2177d5b7382b5648d160ad269b75612b4de6ef63dc1803394f92ed5317739436",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/peer-dose-response.parquet",
-      "digest": "d6d2c572ae42c02dfaaf5b9dc61adce6f0a03a1dae14dcb3ed4e28c2f0650fc0"
+      "digest": "d6d2c572ae42c02dfaaf5b9dc61adce6f0a03a1dae14dcb3ed4e28c2f0650fc0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/feature-novelty.parquet",
-      "digest": "fb6c3d5f9435b074061833b7169d8113f157ce04ddc142d2846ef34143e70be3"
+      "digest": "fb6c3d5f9435b074061833b7169d8113f157ce04ddc142d2846ef34143e70be3",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/robustness.parquet",
-      "digest": "237ef20265b5c01fec6f836259e9d0148591abe1fe87d0527be366f2ce3af2f8"
+      "digest": "237ef20265b5c01fec6f836259e9d0148591abe1fe87d0527be366f2ce3af2f8",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/client-ctk-analysis.parquet",
-      "digest": "d041570e86bf0da0d2a422390d064c798ad87bb81d5155613c79e03f52235d74"
+      "digest": "d041570e86bf0da0d2a422390d064c798ad87bb81d5155613c79e03f52235d74",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/family-client-ctk.parquet",
-      "digest": "4f5b819f218dadce32794ff069eff3e56e30ccde48a4ce6e70169ac86f481696"
+      "digest": "4f5b819f218dadce32794ff069eff3e56e30ccde48a4ce6e70169ac86f481696",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/ctk-variance-components.parquet",
-      "digest": "c46278351b3e7a0ca2562d8bc6d25a387ee9151852ac13343de8b4f9fb0c7a26"
+      "digest": "c46278351b3e7a0ca2562d8bc6d25a387ee9151852ac13343de8b4f9fb0c7a26",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/family-associations.parquet",
-      "digest": "688151f5c4ab58001f9e5aaf170ff11f31098bd76b937a7bced03824e7ffa2b2"
+      "digest": "688151f5c4ab58001f9e5aaf170ff11f31098bd76b937a7bced03824e7ffa2b2",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/anchored-worst-client.parquet",
-      "digest": "a14b3b2ff729f0404d370ef3a5dfabf1ded3affc9dacc595e53d323603deb0d7"
+      "digest": "a14b3b2ff729f0404d370ef3a5dfabf1ded3affc9dacc595e53d323603deb0d7",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/anchored-client-selection.parquet",
-      "digest": "b466c3dcf5ad81a92a0c5ae8a108e95fa8a33144563e7c71ad3579165d71671f"
+      "digest": "b466c3dcf5ad81a92a0c5ae8a108e95fa8a33144563e7c71ad3579165d71671f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/federated-arm-tradeoff.parquet",
-      "digest": "26293aab6b0b6ac95eba6e12a6b273a084a1cbd557be4cf8e40d756572487f86"
+      "digest": "26293aab6b0b6ac95eba6e12a6b273a084a1cbd557be4cf8e40d756572487f86",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/ctk-robustness-synthesis.parquet",
-      "digest": "f03e78fe65e951e235d28c7fb20844c47cd798524e7e09594423dc63e98f119d"
+      "digest": "f03e78fe65e951e235d28c7fb20844c47cd798524e7e09594423dc63e98f119d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/family-mechanism-patterns.parquet",
-      "digest": "e23ff7cc65126697d516b8b4a25030c316ed143e7e0f534c7ed10d25de006497"
+      "digest": "e23ff7cc65126697d516b8b4a25030c316ed143e7e0f534c7ed10d25de006497",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/natural-scarcity-comparison.parquet",
-      "digest": "173a9330705a4e26aeb0c97c33b26c17e0fce2a948f4ec8c648b0724d446d564"
+      "digest": "173a9330705a4e26aeb0c97c33b26c17e0fce2a948f4ec8c648b0724d446d564",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/permutation-control-audit.parquet",
-      "digest": "cc4e3c0c8ba40b569fb1a246eae19d7e7ba4583ef909f486fbc12cebcb15e98f"
+      "digest": "cc4e3c0c8ba40b569fb1a246eae19d7e7ba4583ef909f486fbc12cebcb15e98f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/mechanism-headroom.parquet",
-      "digest": "74735fe0629fd473eb4c190aa14448f3eb626abcc6fa43c4e7132d62252a77c2"
+      "digest": "74735fe0629fd473eb4c190aa14448f3eb626abcc6fa43c4e7132d62252a77c2",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "evidence/operating-point-fidelity.parquet",
-      "digest": "c1102470234202869898f09cde63e07e6384c5500eeab96fbf3782352ed535c6"
+      "digest": "c1102470234202869898f09cde63e07e6384c5500eeab96fbf3782352ed535c6",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "statistics/paired-effects.parquet",
-      "digest": "96b871d9d57af4cc509ed8a58090a3d76c99419ae479f171f5585e3b8af940a0"
+      "digest": "96b871d9d57af4cc509ed8a58090a3d76c99419ae479f171f5585e3b8af940a0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "statistics/cluster-bootstrap.parquet",
-      "digest": "72994e9e6bfa4dad59f9c949a36f816a29cce2a41280291feb470c2fde92a77a"
+      "digest": "72994e9e6bfa4dad59f9c949a36f816a29cce2a41280291feb470c2fde92a77a",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "gates/claims.csv",
-      "digest": "140c4da069a425f1e9a42d7801589a9a782834e9ebce12f7ed48b0b6ef88184b"
+      "digest": "140c4da069a425f1e9a42d7801589a9a782834e9ebce12f7ed48b0b6ef88184b",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "gates/seed-status.csv",
-      "digest": "0f5fd19a466ec4007c68d3455fbcc5e267e628aae75ca06cecff699dd12cc814"
+      "digest": "0f5fd19a466ec4007c68d3455fbcc5e267e628aae75ca06cecff699dd12cc814",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/family-client-ctk.csv",
-      "digest": "d02b9e50f3dc86c3a63103765415aba20346f69cfc4380b7885a1d13f70dd108"
+      "digest": "d02b9e50f3dc86c3a63103765415aba20346f69cfc4380b7885a1d13f70dd108",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/ctk-variance-components.csv",
-      "digest": "2bb9768b384a8189e162a382dc1345e6781dc2842b565530defb98e26122e093"
+      "digest": "2bb9768b384a8189e162a382dc1345e6781dc2842b565530defb98e26122e093",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/family-associations.csv",
-      "digest": "b0a23090958e3f790d78b72f5b6c40cb11ba1bcf63a719eec9f6b867aaa6dc1d"
+      "digest": "b0a23090958e3f790d78b72f5b6c40cb11ba1bcf63a719eec9f6b867aaa6dc1d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/client-ctk-analysis.csv",
-      "digest": "b7cc62d0d0fd1cd142c62e0b79fdd6e9a5564a5191f721f36cd863f14ccaca94"
+      "digest": "b7cc62d0d0fd1cd142c62e0b79fdd6e9a5564a5191f721f36cd863f14ccaca94",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/anchored-worst-client.csv",
-      "digest": "2167aecbe3b43eb4066bd190127f0d49ccb2ff36cc5aaa8f2e78770bf7fb9307"
+      "digest": "2167aecbe3b43eb4066bd190127f0d49ccb2ff36cc5aaa8f2e78770bf7fb9307",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/anchored-client-selection.csv",
-      "digest": "27a083ea90e3e677ba40d519a60dbedb1a897d9dc977cbffeb4d96f73a23c385"
+      "digest": "27a083ea90e3e677ba40d519a60dbedb1a897d9dc977cbffeb4d96f73a23c385",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/federated-arm-tradeoff.csv",
-      "digest": "3f52d85d97ccf5935cd8ac6bb24036f05ada0c57d732e5bfba40a97411aa5cdd"
+      "digest": "3f52d85d97ccf5935cd8ac6bb24036f05ada0c57d732e5bfba40a97411aa5cdd",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/ctk-robustness-synthesis.csv",
-      "digest": "929a23944159023adc90717abf4251cfbcc3383f742d6b5c3d5b23c857adf8ca"
+      "digest": "929a23944159023adc90717abf4251cfbcc3383f742d6b5c3d5b23c857adf8ca",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/family-mechanism-patterns.csv",
-      "digest": "c6ba0a63f551d08cb768e14efd7abad3360c538c4fae092b533eb009ffde7bdb"
+      "digest": "c6ba0a63f551d08cb768e14efd7abad3360c538c4fae092b533eb009ffde7bdb",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/natural-scarcity-comparison.csv",
-      "digest": "189b6f724aa1148dc04580f1986e06e235e3e79944a439abf89a303fb2acbd7d"
+      "digest": "189b6f724aa1148dc04580f1986e06e235e3e79944a439abf89a303fb2acbd7d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/permutation-control-audit.csv",
-      "digest": "9b86367d78e4dc013ac29180447a2c3f394434dd13346251166401efd69f2b31"
+      "digest": "9b86367d78e4dc013ac29180447a2c3f394434dd13346251166401efd69f2b31",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/mechanism-headroom.csv",
-      "digest": "04234d4b3078ec1902fd1517e9ce4e8ad7efbd32a31ba461c7ae6ba38b6b6ab6"
+      "digest": "04234d4b3078ec1902fd1517e9ce4e8ad7efbd32a31ba461c7ae6ba38b6b6ab6",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/operating-point-fidelity.csv",
-      "digest": "dcecc80711198d2c66aa8207ed2e0eb9df20e9040a68c6252879fec1e803c239"
+      "digest": "dcecc80711198d2c66aa8207ed2e0eb9df20e9040a68c6252879fec1e803c239",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/dataset-client-audit.csv",
-      "digest": "0aaf14a51f612805a4ed66a48261261d8c07f5f6b5090a6426d03383828d65e0"
+      "digest": "0aaf14a51f612805a4ed66a48261261d8c07f5f6b5090a6426d03383828d65e0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/primary-arm-comparison.csv",
-      "digest": "1de2e166c7a3e1235929f60b5a7727dc158ee75b8efc1f616510b1c83c2f3142"
+      "digest": "1de2e166c7a3e1235929f60b5a7727dc158ee75b8efc1f616510b1c83c2f3142",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/collaboration-decomposition.csv",
-      "digest": "abca9a7eb5ab1923bed906979edcb9d8a159b2b025c7f145de3b3c2a676ebef9"
+      "digest": "abca9a7eb5ab1923bed906979edcb9d8a159b2b025c7f145de3b3c2a676ebef9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/peer-dose-response.csv",
-      "digest": "72311538f2a537837fcd6ce9591cfb1e42e84bd8865ed62882b8e4007a3ad1d9"
+      "digest": "72311538f2a537837fcd6ce9591cfb1e42e84bd8865ed62882b8e4007a3ad1d9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/family-level.csv",
-      "digest": "73cb254e472735d4a742bdd3a4e1c2ece4de60ea626fcb37f6303ff581d56cbd"
+      "digest": "73cb254e472735d4a742bdd3a4e1c2ece4de60ea626fcb37f6303ff581d56cbd",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/claim-gates.csv",
-      "digest": "140c4da069a425f1e9a42d7801589a9a782834e9ebce12f7ed48b0b6ef88184b"
+      "digest": "140c4da069a425f1e9a42d7801589a9a782834e9ebce12f7ed48b0b6ef88184b",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "tables/robustness.csv",
-      "digest": "d08ee570d51559e581b65ae2e4b2dc6cebb2b5558ff9ac059dcee276bc38fd00"
+      "digest": "d08ee570d51559e581b65ae2e4b2dc6cebb2b5558ff9ac059dcee276bc38fd00",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/collaboration-decomposition.pdf",
-      "digest": "ba884c4364ff20d95f7bce544ddc672b9f8a543ec05725e41f6f20844bc10f04"
+      "digest": "ba884c4364ff20d95f7bce544ddc672b9f8a543ec05725e41f6f20844bc10f04",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/collaboration-decomposition.png",
-      "digest": "fd763ca204332a959b89bc38f8ed67258a8278859e169b7ce683161c9570a78a"
+      "digest": "fd763ca204332a959b89bc38f8ed67258a8278859e169b7ce683161c9570a78a",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/mean-versus-worst-client.pdf",
-      "digest": "a0cbef7f652340074e35910ed17400adb09c09cef4f82380b391966aafa9fd0c"
+      "digest": "a0cbef7f652340074e35910ed17400adb09c09cef4f82380b391966aafa9fd0c",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/mean-versus-worst-client.png",
-      "digest": "838aa01905efb3c95f5de0a78859024db976734f54c10eb7a5407abdac601f22"
+      "digest": "838aa01905efb3c95f5de0a78859024db976734f54c10eb7a5407abdac601f22",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/own-domain-versus-federation-wide.pdf",
-      "digest": "183397339152cba82ef44ef109eb19ea77467269e8675aa84773b88a134422e4"
+      "digest": "183397339152cba82ef44ef109eb19ea77467269e8675aa84773b88a134422e4",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/own-domain-versus-federation-wide.png",
-      "digest": "d8c96aeb9a3b1b5ef77b41cb38f73d07ea42f39e5d56c71e64241c3e54614fa9"
+      "digest": "d8c96aeb9a3b1b5ef77b41cb38f73d07ea42f39e5d56c71e64241c3e54614fa9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/peer-dose-response.pdf",
-      "digest": "454f3e9157320af376ad4971c3da23309dcb4e85baa078fd92a3b48410173530"
+      "digest": "454f3e9157320af376ad4971c3da23309dcb4e85baa078fd92a3b48410173530",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/peer-dose-response.png",
-      "digest": "531c17778d2661f4af1aa359749ef09ebfe6846b1fb761a2260eda067cce457f"
+      "digest": "531c17778d2661f4af1aa359749ef09ebfe6846b1fb761a2260eda067cce457f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/family-rescue-map.pdf",
-      "digest": "19c51ff798cee08a7bf40efb0de9d4b6ce54b9c2e4e06e5f0b29326a3260d0a9"
+      "digest": "19c51ff798cee08a7bf40efb0de9d4b6ce54b9c2e4e06e5f0b29326a3260d0a9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/family-rescue-map.png",
-      "digest": "b14dc7a63199bd8bcb3ccefadf67d6ee3960d4f80a47975b658d66efcf7e39d1"
+      "digest": "b14dc7a63199bd8bcb3ccefadf67d6ee3960d4f80a47975b658d66efcf7e39d1",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.pdf",
-      "digest": "9c26f091a1c9b161845a291030feca00261c8929575df2c69e676237b44d3695"
+      "digest": "9c26f091a1c9b161845a291030feca00261c8929575df2c69e676237b44d3695",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.png",
-      "digest": "03e49173c8ed13b69681438d86125d059483f382f7d1167bfb5b741072e3db94"
+      "digest": "03e49173c8ed13b69681438d86125d059483f382f7d1167bfb5b741072e3db94",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.pdf",
-      "digest": "603652797573356b7122989e116164cacfc1c169b79d0804b273ca1f1d09c5e7"
+      "digest": "603652797573356b7122989e116164cacfc1c169b79d0804b273ca1f1d09c5e7",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.png",
-      "digest": "e553a9fbba13498c0e1b18db3fcef520e449712bf4fb5679350499029c1b1d1c"
+      "digest": "e553a9fbba13498c0e1b18db3fcef520e449712bf4fb5679350499029c1b1d1c",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/client-ctk-analysis.pdf",
-      "digest": "d853c8bc1ddbb0a931915a8540933067a09b63eeb3c1e9ca9ec5af00581df3ed"
+      "digest": "d853c8bc1ddbb0a931915a8540933067a09b63eeb3c1e9ca9ec5af00581df3ed",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/client-ctk-analysis.png",
-      "digest": "9a20386604f6a271734f462171e6276698f1bf7ed17cce6eb0cacb334bde2065"
+      "digest": "9a20386604f6a271734f462171e6276698f1bf7ed17cce6eb0cacb334bde2065",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/ctk-robustness-forest.pdf",
-      "digest": "f05095e59bc36637e0d60cc4ba0220054dd376c2be989fdb7c24658df55b6e4f"
+      "digest": "f05095e59bc36637e0d60cc4ba0220054dd376c2be989fdb7c24658df55b6e4f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/ctk-robustness-forest.png",
-      "digest": "853fec250201454f1412faec04814abde3f96830822ed2a981a052864f11ed90"
+      "digest": "853fec250201454f1412faec04814abde3f96830822ed2a981a052864f11ed90",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/federated-arm-tradeoff.pdf",
-      "digest": "dba658ff8be17738fd4d276e4397ca57341cd6fcfed8d74f0f2367ba5487be91"
+      "digest": "dba658ff8be17738fd4d276e4397ca57341cd6fcfed8d74f0f2367ba5487be91",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/federated-arm-tradeoff.png",
-      "digest": "5b1cd474fafbd3da8a67d4a95e769551314130d3a1c85b50e2d06ae5f12707e9"
+      "digest": "5b1cd474fafbd3da8a67d4a95e769551314130d3a1c85b50e2d06ae5f12707e9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/natural-versus-controlled.pdf",
-      "digest": "379fe1c15ef5711d002235bce4814231dc58692b7612ba136ea148de6e5dd850"
+      "digest": "379fe1c15ef5711d002235bce4814231dc58692b7612ba136ea148de6e5dd850",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
     },
     {
       "name": "figures/natural-versus-controlled.png",
-      "digest": "f148e92099ce0ff6578f7258f943651400de208e73cac3820d5cc9f820770195"
+      "digest": "f148e92099ce0ff6578f7258f943651400de208e73cac3820d5cc9f820770195",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/ctk-heterogeneity-components.parquet",
+      "digest": "d8cbe66d290a8268a5a3b6e2c04f938e860ca440eb56d906d8bdf81a127f6062",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/ctk-heterogeneity-components.csv",
+      "digest": "31e1eeeb51110e17274e5f04c60d0b34c06465d925a18006fceaa5be9aa271de",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "evidence/aggregate-metric-masking.parquet",
+      "digest": "a31c5d0d9209c85a50830bcbd1be4b1a8b030f51819902a4d2a514076d0c8069",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/aggregate-metric-masking.csv",
+      "digest": "868d36be121d5b64a0a400bc70fd6a91da97c51771dbfb82db0ac2ef61a1f94e",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "evidence/negative-transfer-decomposition.parquet",
+      "digest": "441d7aabdebf5a8003000471d6fdf05ada57b66dae52a109a2dc41fa1123cfa7",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/negative-transfer-decomposition.csv",
+      "digest": "d53914cb295ff15318adea4b2b62c42458b6cb1c2879d33dee7919fb44bbc468",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
     }
   ]
 }

@@ -5,12 +5,14 @@ from typing import Annotated, Any, Protocol
 
 import numpy as np
 import polars as pl
+import scipy.sparse as sp
 import torch
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, TypeAdapter
 from sklearn.ensemble import HistGradientBoostingClassifier
 
 from ctk_android.enums import (
+    Aggregation,
     AllowedWording,
     Artifact,
     BudgetLevel,
@@ -18,6 +20,7 @@ from ctk_android.enums import (
     ClaimStatus,
     ClientId,
     Column,
+    ConsistencyMeasure,
     ContrastFamily,
     CtkAggregation,
     DatasetName,
@@ -28,19 +31,28 @@ from ctk_android.enums import (
     EvaluationPopulation,
     EvidenceClass,
     ExecutionMode,
+    ExperimentDesign,
     ExperimentName,
     ExposureCondition,
     ExposureMode,
+    ExtensionContrast,
+    ExtensionHypothesis,
+    ExtensionScope,
+    ExtensionStudy,
     FailureReason,
     FamilyLabelSource,
     FamilyOutcomeMeasure,
     FamilyPredictor,
     FamilySetName,
     Grouping,
+    HiddadStatus,
     IntervalStatus,
+    IntervalVerdict,
     LamdaRelease,
+    LargeFamilyMeasure,
     Learner,
     LibraryOption,
+    MaskingContrast,
     Metric,
     ModelFamily,
     NameFragment,
@@ -50,16 +62,25 @@ from ctk_android.enums import (
     PermutationOutcome,
     PromotionBlock,
     PromotionState,
+    ReallocationStratum,
     ReportTable,
+    Representation,
+    RepresentationGroup,
+    RepresentationMeasure,
+    RepresentationOutcome,
+    ResultsFile,
     RobustnessScope,
     RunStatus,
     Sensitivity,
+    SignTail,
     SplitRole,
     Stage,
     TradeoffComparison,
     TradeoffMeasure,
+    TransferScope,
     TunedParameter,
     ValidationCheck,
+    VarianceComponent,
     VarianceSource,
 )
 
@@ -112,6 +133,7 @@ PValue = UnitInterval
 FamilyName = Annotated[str, StringConstraints(strip_whitespace=True)]
 YearMonth = Annotated[str, StringConstraints(pattern=Pattern.YEAR_MONTH)]
 Fingerprint = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
+SerializedConfig = str
 Message = Annotated[str, StringConstraints(min_length=1)]
 FeatureColumn = Annotated[str, StringConstraints(pattern=Pattern.FEATURE_COLUMN)]
 
@@ -120,6 +142,7 @@ Float32Array = NDArray[np.float32]
 IntArray = NDArray[np.int64]
 BoolArray = NDArray[np.bool_]
 ByteMatrix = NDArray[np.uint8]
+CsrMatrix = sp.csr_matrix
 ObjectArray = NDArray[np.object_]
 
 Table = pl.DataFrame
@@ -176,6 +199,7 @@ FamilyLevelTable = pl.DataFrame
 ClusterTable = pl.DataFrame
 StatusCountsTable = pl.DataFrame
 StudyTable = pl.DataFrame
+RoleFrame = pl.DataFrame
 ValueSeries = pl.Series
 RoleSeries = pl.Series
 PackageSeries = pl.Series
@@ -191,7 +215,12 @@ HitVector = IntArray
 TrialVector = IntArray
 GroupIds = IntArray
 IdentityIds = IntArray
-FeatureMatrix = ByteMatrix
+BinaryMatrix = ByteMatrix
+FeatureMatrix = BinaryMatrix | Float32Array | CsrMatrix
+ModelInputs = Float32Array
+ColumnIds = IntArray
+PositionArray = IntArray
+HalfPrecision = bool
 LabelVector = IntArray
 AttributeColumn = ObjectArray
 RowMask = BoolArray
@@ -215,6 +244,16 @@ VarianceTable = pl.DataFrame
 SeedMatrix = FloatArray
 AssociationTable = pl.DataFrame
 FamilyClientTable = pl.DataFrame
+LargeSelectionTable = pl.DataFrame
+LargeFamilyTable = pl.DataFrame
+LargeSummaryTable = pl.DataFrame
+CellTable = pl.DataFrame
+HeterogeneityTable = pl.DataFrame
+MaskingTable = pl.DataFrame
+TransferTable = pl.DataFrame
+GroupCodes = IntArray
+VarianceVector = FloatArray
+DevianceAndGradient = tuple[float, FloatArray]
 RunsInMode = bool
 ArmSeries = pl.DataFrame
 PositiveOrZeroFloat = NonNegativeFloat
@@ -275,6 +314,46 @@ class ValidationRecord(FrozenRecord):
     detail: Message
 
 
+class McNdroidShard(FrozenRecord):
+    matrix: File
+    meta: File
+
+
+class ShaBlock(FrozenRecord):
+    shas: ShaSeries
+    matrix: CsrMatrix
+
+
+class CsrFiles(FrozenRecord):
+    data: File
+    indices: File
+    indptr: File
+
+
+# Learned input preprocessing of a representation (EXT-REP R2/R3): fitted by each trained model
+# from its own training rows only (Roadmap 31.4, Amendment A3). `min_prevalence` None means
+# standardise every column; otherwise keep columns whose share of positive values reaches it.
+class TransformRule(FrozenRecord):
+    min_prevalence: Fraction | None
+
+
+class InputTransform(FrozenRecord):
+    columns: ColumnIds | None
+    mean: ModelInputs
+    spread: ModelInputs
+
+
+class OverlapManifest(FrozenRecord):
+    lamda_rows: RowCount
+    rows: RowCount
+    malware_rows: RowCount
+    benign_rows: RowCount
+    lamda_features: FeatureCount
+    static_features: FeatureCount
+    graph_features: FeatureCount
+    json_columns_total: FeatureCount
+
+
 class Provenance(FrozenRecord):
     stage: Stage
     inputs: Fingerprint
@@ -288,7 +367,7 @@ class CtkError(Exception):
 
 class LamdaTable(FrozenRecord):
     metadata: LamdaMetadataTable
-    features: FeatureMatrix
+    features: BinaryMatrix
     non_binary_cells: RowCount
     negative_cells: RowCount
 
@@ -375,6 +454,7 @@ class Scorer(FrozenRecord):
     network: torch.nn.Module | None
     trees: HistGradientBoostingClassifier | None
     device: Device
+    transform: InputTransform | None
 
 
 ArmScores = dict[ClientId, FloatArray]
@@ -673,6 +753,94 @@ class VarianceRow(FrozenRecord):
     share: Fraction
 
 
+class RandomEffectsDesign(FrozenRecord):
+    response: FloatArray
+    factors: tuple[GroupCodes, ...]
+
+
+class VarianceEstimate(FrozenRecord):
+    variances: VarianceVector
+    converged: bool
+
+
+class HeterogeneityRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    experiment: ExperimentName
+    population: EvaluationPopulation
+    component: VarianceComponent
+    variance: NonNegativeFloat
+    share: Fraction
+    share_ci_low: Fraction | None
+    share_ci_high: Fraction | None
+    observations: RowCount
+    cells: RowCount
+    replicated_cells: RowCount
+    seeds: RowCount
+    families: RowCount
+    clients: RowCount
+    sampling_noise_reference: NonNegativeFloat
+    converged: bool
+    bootstrap_resamples: RowCount
+
+
+class MaskingRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    experiment: ExperimentName
+    learner: Learner
+    contrast: MaskingContrast
+    aggregate_metric: Metric
+    recall_metric: Metric
+    seed_count: RowCount
+    aggregate_mean: Effect
+    aggregate_ci_low: Effect | None
+    aggregate_ci_high: Effect | None
+    aggregate_verdict: IntervalVerdict
+    recall_mean: Effect
+    recall_ci_low: Effect | None
+    recall_ci_high: Effect | None
+    recall_verdict: IntervalVerdict
+    material_gain_threshold: Effect
+    verdicts_opposed: bool
+    masked_gain: bool
+    masked_loss: bool
+    sign_disagreement_seeds: RowCount
+    gain_missed_seeds: RowCount
+    false_reassurance_seeds: RowCount
+    opposite_conclusion_seeds: RowCount
+    seed_correlation: Correlation | None
+
+
+class TransferRow(FrozenRecord):
+    evidence_class: EvidenceClass
+    experiment: ExperimentName
+    population: EvaluationPopulation
+    scope: TransferScope
+    client: ClientId | None
+    family: FamilyName | None
+    seed_count: RowCount
+    observations: RowCount
+    cells: RowCount
+    pooling_mean: Effect
+    pooling_ci_low: Effect | None
+    pooling_ci_high: Effect | None
+    hurt_seeds: RowCount
+    hurts: bool
+    hurts_interval_below_zero: bool
+    ctk_mean: Effect
+    ctk_ci_low: Effect | None
+    ctk_ci_high: Effect | None
+    repair_mean: Effect
+    repair_ci_low: Effect | None
+    repair_ci_high: Effect | None
+    new_capability_mean: Effect
+    new_capability_ci_low: Effect | None
+    new_capability_ci_high: Effect | None
+    harm_mean: Effect
+    harm_ci_low: Effect | None
+    harm_ci_high: Effect | None
+    repair_share: Effect | None
+
+
 class FamilyAssociationRow(FrozenRecord):
     evidence_class: EvidenceClass
     experiment: ExperimentName
@@ -693,9 +861,50 @@ class FamilyClientRow(EvidenceRow):
     hidden_trials_per_seed: NonNegativeFloat
 
 
+class LargeFamilyRow(FrozenRecord):
+    experiment: ExperimentName
+    family: FamilyName
+    seed_count: SupportCount
+    ctk_gain: Effect
+    ctk_sd: NonNegativeFloat | None
+    local_recall: Fraction
+    absent_recall: Fraction
+    peer_recall: Fraction
+    trials: NonNegativeFloat
+    min_trials: RowCount
+    novelty: Score | None
+    meets_threshold: bool
+
+
+class LargeSummaryRow(FrozenRecord):
+    measure: LargeFamilyMeasure
+    assumed_rho: Correlation | None
+    value: Score
+
+
 class ArmSpec(FrozenRecord):
     learner: Learner
     condition: ExposureCondition
+
+
+class ArmPair(FrozenRecord):
+    minuend: ArmSpec
+    subtrahend: ArmSpec
+
+
+class ContrastSpec(FrozenRecord):
+    contrast: MaskingContrast
+    arms: ArmPair
+
+
+class MetricPair(FrozenRecord):
+    aggregate: Metric
+    recall: Metric
+
+
+class TransferScopeSpec(FrozenRecord):
+    scope: TransferScope
+    keys: tuple[Column, ...]
 
 
 class ClientCtkRow(FrozenRecord):
@@ -843,6 +1052,7 @@ class PlotBand(FrozenRecord):
 class ManifestEntry(FrozenRecord):
     name: FileName
     digest: Fingerprint
+    evidence_class: EvidenceClass
 
 
 class ResultsManifest(FrozenRecord):
@@ -893,6 +1103,8 @@ class ExperimentSpec(FrozenRecord):
     conditions: tuple[ExposureCondition, ...]
     dose_sweep: DoseSweep
     fairness_grid: FairnessGrid
+    design: ExperimentDesign = ExperimentDesign.STANDARD
+    representation: Representation | None = None
 
 
 class ArmResult(FrozenRecord):
@@ -923,6 +1135,11 @@ class ExposureSetting(FrozenRecord):
 Overwrite = bool
 Reused = bool
 Promote = bool
+SpreadVector = FloatArray
+SeedCountVector = FloatArray
+ExperimentScope = tuple[ExperimentName, ...] | None
+ModeSelection = tuple[ExecutionMode, ...]
+IncludeDesigns = bool
 Reusable = bool
 Stale = bool
 Passed = bool
@@ -938,6 +1155,13 @@ ClientScorers = dict[ClientId, Scorer]
 PopulationMasks = dict[EvaluationPopulation, BoolArray]
 DescriptorValues = dict[NoveltyDescriptor, Score]
 FamilySets = dict[FamilySetName, tuple[FamilyName, ...]]
+
+
+class LargeFamilySelection(FrozenRecord):
+    table: LargeSelectionTable
+    sets: FamilySets
+
+
 DoseCaps = dict[FamilyName, SupportCount]
 DoseTargets = dict[FamilyName, ClientId]
 ExcludedFamilies = dict[ClientId, tuple[FamilyName, ...]]
@@ -961,3 +1185,389 @@ class FrozenHyperparameters(FrozenRecord):
     local_epochs: TuningValue
     finetune_epochs: TuningValue
     fedprox_mu: TuningValue
+
+
+ExtensionTable = pl.DataFrame
+SeedRecallTable = pl.DataFrame
+PlaceboTable = pl.DataFrame
+ClientRowCounts = dict[ClientId, RowCount]
+FamilyFitRows = dict[FamilyName, dict[ClientId, IntArray]]
+FamilyRows = dict[FamilyName, IntArray]
+LevelRows = dict[SupportCount, TrainingRows]
+ClientPieces = dict[ClientId, list[IntArray]]
+MalwareRowsTable = pl.DataFrame
+FamilyRowTotals = dict[FamilyName, RowCount]
+FamilyCentroids = dict[FamilyName, Prevalence]
+
+
+class AggregationRule(FrozenRecord):
+    rule: Aggregation
+    trim_per_side: SupportCount
+
+
+class DoseDraw(FrozenRecord):
+    pooled: FamilyRows
+    owners: FamilyRows
+    replacement_order: TrainingRows
+
+
+class PlaceboChoice(FrozenRecord):
+    client: ClientId
+    family: FamilyName
+    placebo: FamilyName
+    counts: ClientRowCounts
+    allocated: ClientRowCounts
+    reallocated: RowCount
+    hidden_peer_fit: RowCount
+    placebo_peer_fit: RowCount
+
+
+class PlaceboOption(FrozenRecord):
+    distance: SupportCount
+    family: FamilyName
+    peer_fit: RowCount
+
+
+class PlaceboPairRow(FrozenRecord):
+    client: ClientId
+    family: FamilyName
+    placebo_family: FamilyName
+    need: RowCount
+    reallocated: RowCount
+    hidden_peer_fit: RowCount
+    placebo_peer_fit: RowCount
+    centroid_distance: Score
+    nearest_known_distance: Score | None
+    placebo_rank: Rank | None
+    known_families: RowCount
+
+
+class Relatedness(FrozenRecord):
+    centroid_distance: Score
+    nearest_known_distance: Score | None
+    placebo_rank: Rank | None
+    known_families: RowCount
+
+
+class DesignSetting(FrozenRecord):
+    condition: ExposureCondition
+    dose: DoseRequest
+    aggregation: Aggregation | None
+    rows: TrainingRows
+
+
+class ArmSelector(FrozenRecord):
+    condition: ExposureCondition
+    dose: DoseRequest
+    aggregation: Aggregation | None
+
+
+class SelectorPair(FrozenRecord):
+    minuend: ArmSelector
+    subtrahend: ArmSelector
+
+
+class EffectCell(FrozenRecord):
+    scope: ExtensionScope
+    population: EvaluationPopulation
+    alpha: Alpha
+
+
+class ExtensionEffectRow(FrozenRecord):
+    hypothesis: ExtensionHypothesis
+    scope: ExtensionScope
+    learner: Learner
+    population: EvaluationPopulation
+    alpha: Alpha
+    contrast: ExtensionContrast
+    level: DoseRequest
+    seed_count: RowCount
+    mean: Effect
+    median: Effect
+    positive_seeds: RowCount
+    ci_low: Effect | None
+    ci_high: Effect | None
+    alternative: SignTail
+    null_reference: Effect
+    p_value: PValue
+    p_holm: PValue | None
+    margin: Effect
+    above_margin: bool
+    within_band: bool
+    above_noninferiority: bool
+
+
+HolmKey = tuple[
+    ExtensionHypothesis, ExtensionScope, Learner, EvaluationPopulation, Alpha, ExtensionContrast
+]
+HolmIndex = dict[HolmKey, list[RowCount]]
+ScopeExperiments = dict[ExtensionScope, tuple[ExperimentName, ...]]
+
+
+class ContrastHeader(FrozenRecord):
+    hypothesis: ExtensionHypothesis
+    learner: Learner
+    contrast: ExtensionContrast
+    level: DoseRequest
+    tail: SignTail
+    reference: Effect
+
+
+class ContrastEffects(FrozenRecord):
+    seeds: ExtensionTable
+    rows: tuple[ExtensionEffectRow, ...]
+
+
+class ConsistencyRow(FrozenRecord):
+    experiment: ExperimentName
+    measure: ConsistencyMeasure
+    level: DoseRequest
+    checked: RowCount
+    mismatched: RowCount
+    rows: RowCount
+
+
+class ExtensionVerdictRow(FrozenRecord):
+    hypothesis: ExtensionHypothesis
+    scope: ExtensionScope
+    learner: Learner
+    population: EvaluationPopulation
+    alpha: Alpha
+    met: bool | None
+    onset_level: DoseRequest
+
+
+MetVerdict = bool | None
+
+
+class RecallArm(FrozenRecord):
+    learner: Learner
+    condition: ExposureCondition
+
+
+RepresentationOf = dict[ExperimentName, Representation]
+RepresentationTable = pl.DataFrame
+PlannedTargetsBySeed = dict[Seed, tuple[TargetPair, ...]]
+
+
+class RepresentationEffectRow(FrozenRecord):
+    measure: RepresentationMeasure
+    representation: Representation
+    group: RepresentationGroup
+    family: FamilyName | None
+    population: EvaluationPopulation
+    alpha: Alpha
+    seed_count: RowCount
+    mean_level: Effect
+    mean_baseline: Effect
+    mean: Effect
+    median: Effect
+    positive_seeds: RowCount
+    ci_low: Effect | None
+    ci_high: Effect | None
+    p_value: PValue
+    p_margin: PValue
+    p_holm: PValue | None
+    margin: Effect
+    above_margin: bool
+    below_margin: bool
+    within_band: bool
+
+
+class RepresentationLevelRow(FrozenRecord):
+    measure: RepresentationMeasure
+    representation: Representation
+    group: RepresentationGroup
+    family: FamilyName | None
+    population: EvaluationPopulation
+    alpha: Alpha
+    seed_count: RowCount
+    mean: Effect
+    ci_low: Effect | None
+    ci_high: Effect | None
+
+
+class RepresentationVerdictRow(FrozenRecord):
+    hypothesis: ExtensionHypothesis
+    representation: Representation | None
+    met: bool | None
+    outcome: RepresentationOutcome | HiddadStatus | None
+
+
+class RepresentationTables(FrozenRecord):
+    seeds: RepresentationTable
+    effects: tuple[RepresentationEffectRow, ...]
+    levels: tuple[RepresentationLevelRow, ...]
+
+
+StabilitySeedTable = pl.DataFrame
+EligibilityStabilityTable = pl.DataFrame
+SeedPairsTables = dict[Seed, PairsTable]
+
+
+class LargeStabilityRow(FrozenRecord):
+    family: FamilyName
+    family_set: FamilySetName
+    rank: Rank
+    seed_count: SupportCount
+    eligible_seeds: SupportCount
+    eligible_seed_fraction: Fraction
+    eligible_in_every_seed: bool
+    measured_seeds: SupportCount
+    min_eligible_pairs: SupportCount
+    mean_eligible_pairs: NonNegativeFloat
+    max_eligible_pairs: SupportCount
+    min_eligible_target_test_rows: RowCount
+    mean_eligible_target_test_rows: NonNegativeFloat
+
+
+# Measures of one Spearman association: rho, p value, interval low, high and width.
+AssociationMeasures = tuple[
+    LargeFamilyMeasure,
+    LargeFamilyMeasure,
+    LargeFamilyMeasure,
+    LargeFamilyMeasure,
+    LargeFamilyMeasure,
+]
+
+
+DiagnosticTable = pl.DataFrame
+DiagnosticRow = dict[str, Any]
+DiagnosticRows = list[DiagnosticRow]
+DiagnosticVector = FloatArray
+DiagnosticMatrix = FloatArray
+ArmName = str
+DoseName = str
+ScoreFiles = dict[str, pl.DataFrame]
+FitParameters = tuple[float, ...]
+StudyCache = dict[PartitionKey, StudyTable]
+StratumTables = dict[ReallocationStratum, pl.DataFrame]
+
+
+class ScopedExperiments(FrozenRecord):
+    scope: ExtensionScope
+    experiments: tuple[ExperimentName, ...]
+
+
+class ControlStratum(FrozenRecord):
+    scoped: ScopedExperiments
+    population: EvaluationPopulation
+    alpha: Alpha
+
+
+class DoseFit(FrozenRecord):
+    parameters: FitParameters
+    predicted: DiagnosticVector
+
+
+# Stored per-row scores and operating tables of one representation run, read-only.
+class ScoredRun(FrozenRecord):
+    representation: Representation
+    seed: Seed
+    targets: tuple[TargetPair, ...]
+    study: StudyTable
+    thresholds: OperatingTable
+    families: FamilyCountsTable
+    operating: OperatingTable
+    scores: ScoreFiles
+
+
+class RepresentationDiagnostics(FrozenRecord):
+    targets: DiagnosticTable
+    health: DiagnosticTable
+    effects: DiagnosticTable
+
+
+class InfluenceTables(FrozenRecord):
+    families: DiagnosticTable
+    summary: DiagnosticTable
+
+
+class DoseDiagnostics(FrozenRecord):
+    curve: DiagnosticTable
+    increments: DiagnosticTable
+    family_curves: DiagnosticTable
+    family_summary: DiagnosticTable
+    associations: DiagnosticTable
+    client_curves: DiagnosticTable
+    model_fits: DiagnosticTable
+    heterogeneity: DiagnosticTable
+
+
+class ControlDiagnostics(FrozenRecord):
+    strata: DiagnosticTable
+    clients: DiagnosticTable
+    reallocation: DiagnosticTable
+    slopes: DiagnosticTable
+    associations: DiagnosticTable
+    placebo_pairs: DiagnosticTable
+    families: DiagnosticTable
+    support_levels: DiagnosticTable
+    support: DiagnosticTable
+
+
+class SynthesisDiagnostics(FrozenRecord):
+    cells: DiagnosticTable
+    taxonomy: DiagnosticTable
+    family_ctk: DiagnosticTable
+    large_family_ctk: DiagnosticTable
+    large_taxonomy: DiagnosticTable
+    rank_concordance: DiagnosticTable
+    large_associations: DiagnosticTable
+
+
+class FileDigest(FrozenRecord):
+    name: FileName
+    sha256: Fingerprint
+
+
+class RunConfigFingerprint(FrozenRecord):
+    experiment: ExperimentName
+    fingerprint: Fingerprint
+
+
+class DataFingerprints(FrozenRecord):
+    lamda: Fingerprint
+    androzoo: Fingerprint
+    mcndroid_inventory: Fingerprint | None
+
+
+class StudyProvenance(FrozenRecord):
+    name: ExtensionStudy
+    mode: ExecutionMode
+    seeds: tuple[Seed, ...]
+    evidence_class: EvidenceClass
+    protocol: FileDigest | None
+    config_fingerprint: Fingerprint
+    run_fingerprints: tuple[RunConfigFingerprint, ...]
+    data: DataFingerprints
+    code: CodeProvenance
+    artifacts: tuple[ManifestEntry, ...]
+    superseded: tuple[FileDigest, ...]
+
+
+class ExtensionProvenance(FrozenRecord):
+    studies: tuple[StudyProvenance, ...]
+
+
+class StudyRequest(FrozenRecord):
+    study: ExtensionStudy
+    mode: ExecutionMode
+    experiments: tuple[ExperimentName, ...]
+    evidence_class: EvidenceClass
+    code: CodeProvenance
+    artifacts: tuple[ManifestEntry, ...]
+
+
+class PromotedOutput(FrozenRecord):
+    artifact: Artifact
+    evidence_class: EvidenceClass
+
+
+class DesignPromotion(FrozenRecord):
+    study: ExtensionStudy
+    experiments: tuple[ExperimentName, ...]
+    index_artifact: Artifact
+    artifacts: tuple[Artifact, ...] = ()
+    outputs: tuple[PromotedOutput, ...] = ()
+    code_file: ResultsFile

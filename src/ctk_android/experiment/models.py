@@ -1,23 +1,35 @@
 import numpy as np
+import scipy.sparse as sp
 import torch
 from sklearn.ensemble import HistGradientBoostingClassifier
 from torch import nn
 
 from ctk_android.config import TrainingConfig
-from ctk_android.enums import Device, ErrorMessage, ModelFamily, RowBlock
+from ctk_android.enums import (
+    Aggregation,
+    Device,
+    ErrorMessage,
+    ModelFamily,
+    RowBlock,
+    Tolerance,
+)
 from ctk_android.types import (
+    AggregationRule,
     Epochs,
     FeatureCount,
     FeatureMatrix,
+    InputTransform,
     LabelVector,
     LogitChunk,
     LogitVector,
+    ModelInputs,
     ProximalAnchor,
     RowIndices,
     Scorer,
     Seed,
     StateDict,
     Stepper,
+    TransformRule,
     WeightVector,
 )
 
@@ -40,8 +52,40 @@ def build_network(family: ModelFamily, features: FeatureCount, config: TrainingC
     return nn.Sequential(*layers)
 
 
-def _tensor(features: FeatureMatrix, rows: RowIndices, device: Device) -> torch.Tensor:
-    return torch.as_tensor(np.asarray(features[rows], dtype=np.float32)).to(device)
+def fit_transform(features: FeatureMatrix, rows: RowIndices, rule: TransformRule) -> InputTransform:
+    block = sp.csr_matrix(features[rows], dtype=np.float64)
+    columns = None
+    if rule.min_prevalence is not None:
+        prevalence = np.asarray((block > 0).sum(axis=0)).ravel() / rows.size
+        columns = np.flatnonzero(prevalence >= rule.min_prevalence)
+        block = sp.csr_matrix(block[:, columns])
+    mean = np.asarray(block.mean(axis=0)).ravel()
+    second = np.asarray(block.multiply(block).mean(axis=0)).ravel()
+    spread = np.sqrt(np.maximum(second - mean**2, 0.0)) + Tolerance.STANDARD_DEVIATION_FLOOR
+    return InputTransform(
+        columns=columns, mean=mean.astype(np.float32), spread=spread.astype(np.float32)
+    )
+
+
+def input_width(features: FeatureMatrix, transform: InputTransform | None) -> FeatureCount:
+    return features.shape[1] if transform is None else transform.mean.size
+
+
+def model_inputs(
+    features: FeatureMatrix, rows: RowIndices, transform: InputTransform | None
+) -> ModelInputs:
+    block = features[rows]
+    if transform is not None and transform.columns is not None:
+        block = block[:, transform.columns]
+    dense = block.toarray() if sp.issparse(block) else np.asarray(block)
+    values = dense.astype(np.float32)
+    return values if transform is None else (values - transform.mean) / transform.spread
+
+
+def _tensor(
+    features: FeatureMatrix, rows: RowIndices, device: Device, transform: InputTransform | None
+) -> torch.Tensor:
+    return torch.as_tensor(model_inputs(features, rows, transform)).to(device)
 
 
 def _optimizer(network: nn.Module, config: TrainingConfig) -> Stepper:
@@ -60,9 +104,10 @@ def fit_epochs(
     seed: Seed,
     device: Device,
     proximal: ProximalAnchor | None,
+    transform: InputTransform | None,
 ) -> None:
     generator = torch.Generator().manual_seed(seed)
-    inputs = _tensor(features, rows, device)
+    inputs = _tensor(features, rows, device, transform)
     targets = torch.as_tensor(labels[rows].astype(np.float32)).to(device)
     network.to(device).train()
     optimizer = _optimizer(network, config)
@@ -94,12 +139,29 @@ def average_states(states: list[StateDict], weights: WeightVector) -> StateDict:
     }
 
 
+def _robust(stack: torch.Tensor, rule: AggregationRule) -> torch.Tensor:
+    if rule.rule is Aggregation.COORDINATE_MEDIAN:
+        return stack.median(dim=0).values
+    ordered = stack.sort(dim=0).values
+    return ordered[rule.trim_per_side : stack.shape[0] - rule.trim_per_side].mean(dim=0)
+
+
+def robust_states(states: list[StateDict], rule: AggregationRule) -> StateDict:
+    return {
+        name: _robust(
+            torch.stack([state[name].to(Device.CPU).float() for state in states]), rule
+        ).to(states[0][name].dtype)
+        for name in states[0]
+    }
+
+
 def fit_trees(
     features: FeatureMatrix,
     labels: LabelVector,
     rows: RowIndices,
     config: TrainingConfig,
     seed: Seed,
+    transform: InputTransform | None,
 ) -> HistGradientBoostingClassifier:
     model = HistGradientBoostingClassifier(
         max_iter=config.trees.max_iter,
@@ -107,19 +169,23 @@ def fit_trees(
         learning_rate=config.trees.learning_rate,
         random_state=seed,
     )
-    model.fit(np.asarray(features[rows]), labels[rows])
+    model.fit(model_inputs(features, rows, transform), labels[rows])
     return model
 
 
 def scorer_logits(scorer: Scorer, features: FeatureMatrix, rows: RowIndices) -> LogitVector:
     if scorer.trees is not None:
-        return scorer.trees.decision_function(np.asarray(features[rows])).astype(np.float64)
+        return scorer.trees.decision_function(
+            model_inputs(features, rows, scorer.transform)
+        ).astype(np.float64)
     if scorer.network is None:
         raise ValueError(ErrorMessage.EMPTY_SCORER)
     scorer.network.to(scorer.device).eval()
     outputs: list[LogitChunk] = []
     with torch.no_grad():
         for start in range(0, rows.size, RowBlock.SCORING):
-            chunk = _tensor(features, rows[start : start + RowBlock.SCORING], scorer.device)
+            chunk = _tensor(
+                features, rows[start : start + RowBlock.SCORING], scorer.device, scorer.transform
+            )
             outputs.append(scorer.network(chunk).squeeze(-1).cpu().numpy())
     return np.concatenate(outputs).astype(np.float64) if outputs else np.empty(0)

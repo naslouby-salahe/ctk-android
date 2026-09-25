@@ -14,8 +14,10 @@ from ctk_android.enums import (
     Grouping,
     LamdaRelease,
     NameFragment,
+    ProtocolDocument,
     ReportFigure,
     ReportTable,
+    Representation,
     ResultsDirectory,
     ResultsFile,
     SourceFile,
@@ -123,6 +125,26 @@ class Paths:
     def partition_file(self, key: PartitionKey, artifact: Artifact) -> File:
         return self.partition_dir(key) / artifact
 
+    @property
+    def representation_dir(self) -> Directory:
+        return self.stage_dir(Stage.REPRESENTATION)
+
+    def representation_file(self, artifact: Artifact) -> File:
+        return self.representation_dir / artifact
+
+    def representation_partition_dir(self, key: PartitionKey) -> Directory:
+        return self.representation_dir / Stage.PARTITIONS / _run_name(key.seed, key.salt)
+
+    def representation_partition_file(self, key: PartitionKey, artifact: Artifact) -> File:
+        return self.representation_partition_dir(key) / artifact
+
+    def partition_dir_for(
+        self, key: PartitionKey, representation: Representation | None
+    ) -> Directory:
+        if representation is None:
+            return self.partition_dir(key)
+        return self.representation_partition_dir(key)
+
     def plan_dir(self, mode: ExecutionMode) -> Directory:
         return self.outputs / WorkspaceDirectory.PLANS / mode
 
@@ -134,6 +156,9 @@ class Paths:
 
     def results_root_file(self, name: ResultsFile) -> File:
         return self.root / WorkspaceDirectory.RESULTS / name
+
+    def protocol_file(self, document: ProtocolDocument) -> File:
+        return self.root / document
 
     def log_file(self, command: CliCommand) -> File:
         return self.outputs / WorkspaceDirectory.LOGS / f"{command}{FileSuffix.JSONL}"

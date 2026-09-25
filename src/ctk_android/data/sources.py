@@ -29,11 +29,11 @@ from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
 from ctk_android.types import (
     AndroZooTable,
+    BinaryMatrix,
     CtkError,
     Directory,
     FeatureColumn,
     FeatureCount,
-    FeatureMatrix,
     File,
     Fingerprint,
     InventoryEntry,
@@ -119,7 +119,7 @@ def load_lamda(paths: Paths, config: DataConfig) -> LamdaTable:
     watch = Stopwatch()
     feature_names = _feature_columns(config.expected_features)
     frames: list[LamdaMetadataTable] = []
-    blocks: list[FeatureMatrix] = []
+    blocks: list[BinaryMatrix] = []
     non_binary = 0
     negative = 0
     for path in files:

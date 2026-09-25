@@ -1,0 +1,4 @@
+hypothesis,representation,met,outcome
+H-REP-1,mcndroid-static,true,
+H-REP-2,,false,
+interpretation,,,rep1-met-rep2-not-met

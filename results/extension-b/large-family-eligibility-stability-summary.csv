@@ -1,0 +1,11 @@
+measure,assumed_rho,value
+sensitivity-frozen-families-checked,,32.0
+sensitivity-fresh-seeds-checked,,10.0
+sensitivity-families-eligible-in-every-seed,,27.0
+sensitivity-mean-eligible-seed-fraction,,0.940625
+sensitivity-min-eligible-seed-fraction,,0.2
+sensitivity-stable-families-spearman-rho,,0.27350427350427353
+sensitivity-stable-families-spearman-p-value,,0.16746058674774383
+sensitivity-stable-families-spearman-rho-ci-low,,-0.0986687957821804
+sensitivity-stable-families-spearman-rho-ci-high,,0.581476731166533
+sensitivity-stable-families-spearman-rho-ci-width,,0.6801455269487133

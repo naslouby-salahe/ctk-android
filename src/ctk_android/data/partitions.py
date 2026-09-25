@@ -25,6 +25,7 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.types import (
+    AssignmentsTable,
     ClientFitRowsTable,
     CtkError,
     FamilyName,
@@ -35,10 +36,12 @@ from ctk_android.types import (
     PartitionKey,
     PartitionResult,
     Rank,
+    RoleFrame,
     RoleSeries,
     RowCount,
     Seed,
     StudyData,
+    StudyTable,
     ValidationRecord,
 )
 
@@ -166,6 +169,27 @@ def build_partition(
     )
 
 
+def study_table(
+    assignments: AssignmentsTable,
+    identities: IdentitiesTable,
+    roles: RoleFrame,
+    key: PartitionKey,
+    config: DataConfig,
+    labels: FamilyLabelSource,
+    permutation_offset: Seed,
+) -> StudyTable:
+    labelled = classify_labels(assignments, config)
+    if labels is FamilyLabelSource.PERMUTED:
+        labelled = permute_family_labels(labelled, key.seed, permutation_offset)
+    group = Column.COMPONENT if key.grouping is Grouping.COMPONENT else Column.PACKAGE_ID
+    return (
+        labelled.join(roles, on=Column.ROW)
+        .join(identities.select(Column.ROW, group, Column.FEATURE_ID), on=Column.ROW)
+        .rename({group: Column.COMPONENT})
+        .sort(Column.ROW)
+    )
+
+
 def load_study(
     paths: Paths,
     key: PartitionKey,
@@ -173,17 +197,13 @@ def load_study(
     labels: FamilyLabelSource,
     permutation_offset: Seed,
 ) -> StudyData:
-    assignments = pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS))
-    identities = pl.read_parquet(paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS))
-    roles = pl.read_parquet(paths.partition_file(key, Artifact.ASSIGNMENTS))
-    labelled = classify_labels(assignments, config)
-    if labels is FamilyLabelSource.PERMUTED:
-        labelled = permute_family_labels(labelled, key.seed, permutation_offset)
-    group = Column.COMPONENT if key.grouping is Grouping.COMPONENT else Column.PACKAGE_ID
-    table = (
-        labelled.join(roles, on=Column.ROW)
-        .join(identities.select(Column.ROW, group, Column.FEATURE_ID), on=Column.ROW)
-        .rename({group: Column.COMPONENT})
-        .sort(Column.ROW)
+    table = study_table(
+        pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)),
+        pl.read_parquet(paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS)),
+        pl.read_parquet(paths.partition_file(key, Artifact.ASSIGNMENTS)),
+        key,
+        config,
+        labels,
+        permutation_offset,
     )
     return StudyData(table=table, features=load_features(paths.cache_file(Artifact.FEATURES)))

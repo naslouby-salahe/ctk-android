@@ -6,8 +6,8 @@ from scipy.sparse.csgraph import connected_components
 from ctk_android.enums import Column, Grouping, LibraryOption
 from ctk_android.types import (
     AssignmentsTable,
+    BinaryMatrix,
     ComponentSummaryTable,
-    FeatureMatrix,
     GroupIds,
     IdentitiesTable,
     IdentityIds,
@@ -22,7 +22,7 @@ def _first_occurrence_ids(labels: IdentityIds) -> IdentityIds:
     return rank[inverse.reshape(-1)]
 
 
-def feature_identities(features: FeatureMatrix) -> IdentityIds:
+def feature_identities(features: BinaryMatrix) -> IdentityIds:
     packed = np.ascontiguousarray(np.packbits(features, axis=1))
     voids = packed.view(np.dtype((np.void, packed.shape[1]))).reshape(-1)
     _, inverse = np.unique(voids, return_inverse=True)
@@ -50,7 +50,7 @@ def connected_component_ids(package_ids: IdentityIds, feature_ids: IdentityIds) 
     return _first_occurrence_ids(labels[:rows].astype(np.int64))
 
 
-def build_identities(assignments: AssignmentsTable, features: FeatureMatrix) -> IdentitiesTable:
+def build_identities(assignments: AssignmentsTable, features: BinaryMatrix) -> IdentitiesTable:
     package_ids = package_identities(assignments[Column.PACKAGE])
     feature_ids = feature_identities(features)
     return pl.DataFrame(

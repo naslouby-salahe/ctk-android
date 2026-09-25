@@ -55,6 +55,20 @@ def set_members(
 def _pair_tables(
     paths: Paths, config: Config, spec: ExperimentSpec, key: PartitionKey
 ) -> PairTables:
+    if spec.representation is not None:
+        return PairTables(
+            controlled=pl.read_parquet(
+                paths.representation_partition_file(key, Artifact.CONTROLLED_PAIRS)
+            ),
+            natural=pl.read_parquet(
+                paths.representation_partition_file(key, Artifact.NATURAL_PAIRS)
+            ),
+        )
+    if spec.family_set in families.large_family_sets():
+        return PairTables(
+            controlled=pl.read_parquet(paths.partition_file(key, Artifact.LARGE_CONTROLLED_PAIRS)),
+            natural=pl.read_parquet(paths.partition_file(key, Artifact.LARGE_NATURAL_PAIRS)),
+        )
     if spec.family_labels is FamilyLabelSource.OBSERVED:
         return PairTables(
             controlled=pl.read_parquet(paths.partition_file(key, Artifact.CONTROLLED_PAIRS)),
@@ -110,7 +124,7 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
     planned = [
         plan_run(paths, config, name, mode, seed, salt)
         for name in experiments_for(config, mode)
-        for seed in config.project.seeds.for_mode(mode)
+        for seed in config.seeds_for(name, mode)
         for salt in config.experiments.experiments[name].salts
     ]
     for run in planned:
@@ -170,7 +184,7 @@ def run_plan(paths: Paths, config: Config, mode: ExecutionMode) -> list[PlannedR
             config_fingerprint=config.fingerprint(),
             runs=len(planned),
             infeasible=sum(run.status is RunStatus.INFEASIBLE for run in planned),
-            seeds=config.project.seeds.for_mode(mode),
+            seeds=tuple(sorted({run.key.seed for run in planned})),
         ),
     )
     logs.info(

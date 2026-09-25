@@ -22,6 +22,13 @@ COMMAND_WORKFLOW = {
     CliCommand.RUN: "run_workflow",
     CliCommand.STATUS: "status_workflow",
     CliCommand.REPORT: "report_workflow",
+    CliCommand.POSTHOC: "posthoc_workflow",
+    CliCommand.LARGE_FAMILY: "largefamily_workflow",
+    CliCommand.DOSE_EXTENSION: "doseextension_workflow",
+    CliCommand.CONTROLS_EXTENSION: "controlsextension_workflow",
+    CliCommand.REPRESENTATION_PREPROCESS: "representationprep_workflow",
+    CliCommand.REPRESENTATION_EXTENSION: "representationextension_workflow",
+    CliCommand.DIAGNOSTICS: "diagnostics_workflow",
 }
 
 

@@ -35,6 +35,15 @@ fairness_grids:
   fedprox_mu: [0.001, 0.01, 0.1]
 permutation_seed_offset: 7919
 extension_experiments: [family-permutation-control]
+extension_b_experiments: [large-family-set-1, large-family-set-2, large-family-set-3, large-family-set-4]
+exact_dose_levels: [0, 10, 25, 50, 100, 200]
+placebo_min_malware_rows: 400
+robust_trim_per_side: 1
+representation_min_prevalence: 0.01
+representation_priority_families: [hiddad, gappusin, revmob]
+representation_contrast_families: [leadbolt, airpush, dowgin]
+representation_separate_families: [adwo]
+representation_focus_family: hiddad
 smoke_training:
   batch_size: 128
   learning_rate: 0.001
@@ -247,3 +256,183 @@ experiments:
     conditions: [peer-present, family-absent-everywhere, full-exposure]
     dose_sweep: false
     fairness_grid: false
+  large-family-set-1:
+    modes: [development]
+    model_family: mlp
+    family_set: large-1
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+  large-family-set-2:
+    modes: [development]
+    model_family: mlp
+    family_set: large-2
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+  large-family-set-3:
+    modes: [development]
+    model_family: mlp
+    family_set: large-3
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+  large-family-set-4:
+    modes: [development]
+    model_family: mlp
+    family_set: large-4
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+  exact-effective-dose-primary:
+    modes: [extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: dose
+    salts: [0]
+    learners: [central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, exact-dose]
+    dose_sweep: false
+    fairness_grid: false
+    design: exact-dose
+  exact-effective-dose-replication:
+    modes: [extension-b]
+    model_family: mlp
+    family_set: replication
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: dose
+    salts: [0]
+    learners: [central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, exact-dose]
+    dose_sweep: false
+    fairness_grid: false
+    design: exact-dose
+  placebo-robust-primary:
+    modes: [extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [fedavg]
+    conditions: [peer-present, family-absent-everywhere, placebo]
+    dose_sweep: false
+    fairness_grid: false
+    design: placebo-robust
+  placebo-robust-replication:
+    modes: [extension-b]
+    model_family: mlp
+    family_set: replication
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [fedavg]
+    conditions: [peer-present, family-absent-everywhere, placebo]
+    dose_sweep: false
+    fairness_grid: false
+    design: placebo-robust
+  representation-r0:
+    modes: [development, extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+    design: representation
+    representation: lamda-static
+  representation-r1:
+    modes: [development, extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+    design: representation
+    representation: mcndroid-static
+  representation-r2:
+    modes: [development, extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+    design: representation
+    representation: call-graph
+  representation-r3:
+    modes: [development, extension-b]
+    model_family: mlp
+    family_set: primary
+    exposure_mode: hide-from-target
+    family_labels: observed
+    grouping: component
+    budget: primary
+    eligibility: primary
+    salts: [0]
+    learners: [local, central, fedavg]
+    conditions: [peer-present, family-absent-everywhere, full-exposure]
+    dose_sweep: false
+    fairness_grid: false
+    design: representation
+    representation: report-json

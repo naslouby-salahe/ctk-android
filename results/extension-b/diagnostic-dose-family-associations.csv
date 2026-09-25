@@ -1,0 +1,13 @@
+outcome,predictor,families,spearman_rho,p_value,evidence_class
+ctk200,local_recall,15,-0.6928571428571427,0.004190232960298139,D-post-hoc-diagnostic
+ctk200,full_recall,15,-0.14285714285714282,0.6115222287644656,D-post-hoc-diagnostic
+ctk200,confirmatory_ctk,15,0.9392857142857142,2.0945801936685522e-7,D-post-hoc-diagnostic
+ctk200,natural_ctk,15,0.8285714285714284,0.00013524478013276985,D-post-hoc-diagnostic
+ctk200,novelty_fl,15,0.6499999999999999,0.008711583621912315,D-post-hoc-diagnostic
+ctk200,novelty_dose_runs,15,0.5857142857142856,0.021776517619042784,D-post-hoc-diagnostic
+onset_mean,local_recall,11,0.17937304161172324,0.5976842239154763,D-post-hoc-diagnostic
+onset_mean,full_recall,11,-0.2596188760169678,0.44073864613947056,D-post-hoc-diagnostic
+onset_mean,confirmatory_ctk,11,-0.7977380008521376,0.0032604670531032037,D-post-hoc-diagnostic
+onset_mean,natural_ctk,11,-0.7458142256487439,0.00840587718490382,D-post-hoc-diagnostic
+onset_mean,novelty_fl,11,-0.401229172026223,0.2213169580943,D-post-hoc-diagnostic
+onset_mean,novelty_dose_runs,11,-0.49563603603239315,0.12105675666681281,D-post-hoc-diagnostic

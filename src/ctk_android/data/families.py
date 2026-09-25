@@ -22,6 +22,7 @@ from ctk_android.types import (
     FamilySupportTable,
     Fraction,
     LabelledTable,
+    LargeFamilySelection,
     PairsTable,
     Rank,
     RoleCountsTable,
@@ -88,6 +89,57 @@ def select_family_sets(
         FamilySetName.PRIMARY: tuple(ranked[0::2][:set_size]),
         FamilySetName.REPLICATION: tuple(ranked[1::2][:set_size]),
     }
+
+
+def large_family_sets() -> tuple[FamilySetName, ...]:
+    return (
+        FamilySetName.LARGE_1,
+        FamilySetName.LARGE_2,
+        FamilySetName.LARGE_3,
+        FamilySetName.LARGE_4,
+    )
+
+
+def select_large_family_sets(
+    labelled: LabelledTable,
+    roles: RoleSeries,
+    client_fit_rows: ClientFitRowsTable,
+    rule: EligibilityRule,
+) -> LargeFamilySelection:
+    support = corpus_support(labelled)
+    totals = support.group_by(Column.FAMILY).agg(pl.col(Column.ROWS).sum())
+    universe = tuple(totals[Column.FAMILY].to_list())
+    pairs = controlled_pairs(role_counts(labelled, roles, universe), client_fit_rows, rule)
+    eligible = (
+        pairs.filter(pl.col(Column.ELIGIBLE))
+        .group_by(Column.FAMILY)
+        .agg(
+            pl.len().alias(Column.ELIGIBLE_PAIRS),
+            (pl.col(Column.TARGET_TEST_ROWS) >= rule.own_domain_min_test)
+            .sum()
+            .alias(Column.OWN_DOMAIN_PAIRS),
+        )
+    )
+    batches = large_family_sets()
+    ranked = (
+        totals.join(eligible, on=Column.FAMILY)
+        .sort([Column.ROWS, Column.FAMILY], descending=[True, False])
+        .with_row_index(Column.RANK)
+    )
+    ranked = ranked.with_columns(
+        pl.Series(
+            Column.FAMILY_SET,
+            [batches[rank % len(batches)] for rank in range(ranked.height)],
+            dtype=pl.String,
+        )
+    )
+    return LargeFamilySelection(
+        table=ranked,
+        sets={
+            batch: tuple(ranked.filter(pl.col(Column.FAMILY_SET) == batch)[Column.FAMILY].to_list())
+            for batch in batches
+        },
+    )
 
 
 def role_counts(
