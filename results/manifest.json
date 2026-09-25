@@ -34,6 +34,18 @@
       "digest": "d041570e86bf0da0d2a422390d064c798ad87bb81d5155613c79e03f52235d74"
     },
     {
+      "name": "evidence/family-client-ctk.parquet",
+      "digest": "4f5b819f218dadce32794ff069eff3e56e30ccde48a4ce6e70169ac86f481696"
+    },
+    {
+      "name": "evidence/ctk-variance-components.parquet",
+      "digest": "c46278351b3e7a0ca2562d8bc6d25a387ee9151852ac13343de8b4f9fb0c7a26"
+    },
+    {
+      "name": "evidence/family-associations.parquet",
+      "digest": "688151f5c4ab58001f9e5aaf170ff11f31098bd76b937a7bced03824e7ffa2b2"
+    },
+    {
       "name": "evidence/anchored-worst-client.parquet",
       "digest": "a14b3b2ff729f0404d370ef3a5dfabf1ded3affc9dacc595e53d323603deb0d7"
     },
@@ -84,6 +96,18 @@
     {
       "name": "gates/seed-status.csv",
       "digest": "0f5fd19a466ec4007c68d3455fbcc5e267e628aae75ca06cecff699dd12cc814"
+    },
+    {
+      "name": "tables/family-client-ctk.csv",
+      "digest": "d02b9e50f3dc86c3a63103765415aba20346f69cfc4380b7885a1d13f70dd108"
+    },
+    {
+      "name": "tables/ctk-variance-components.csv",
+      "digest": "2bb9768b384a8189e162a382dc1345e6781dc2842b565530defb98e26122e093"
+    },
+    {
+      "name": "tables/family-associations.csv",
+      "digest": "b0a23090958e3f790d78b72f5b6c40cb11ba1bcf63a719eec9f6b867aaa6dc1d"
     },
     {
       "name": "tables/client-ctk-analysis.csv",
@@ -155,7 +179,7 @@
     },
     {
       "name": "figures/collaboration-decomposition.pdf",
-      "digest": "c03a7a8f87dbf408ceb00f125ac191f2e80cd72f033c957f2ab794b57c95feed"
+      "digest": "ba884c4364ff20d95f7bce544ddc672b9f8a543ec05725e41f6f20844bc10f04"
     },
     {
       "name": "figures/collaboration-decomposition.png",
@@ -163,7 +187,7 @@
     },
     {
       "name": "figures/mean-versus-worst-client.pdf",
-      "digest": "4bded4c004939ce663e5111835d72a0234d093e0d6f06fdd3a43db6fecee612a"
+      "digest": "a0cbef7f652340074e35910ed17400adb09c09cef4f82380b391966aafa9fd0c"
     },
     {
       "name": "figures/mean-versus-worst-client.png",
@@ -171,7 +195,7 @@
     },
     {
       "name": "figures/own-domain-versus-federation-wide.pdf",
-      "digest": "3e2b0cfec842c671cc1eccd9ee8bf8d35d6026d021f091f1cb2ca04bc705aafb"
+      "digest": "183397339152cba82ef44ef109eb19ea77467269e8675aa84773b88a134422e4"
     },
     {
       "name": "figures/own-domain-versus-federation-wide.png",
@@ -179,15 +203,15 @@
     },
     {
       "name": "figures/peer-dose-response.pdf",
-      "digest": "e554a1a5ed29bcb5da0b98cbb20934d5dc37d68e9930e5a24a8f80bf8139c132"
+      "digest": "454f3e9157320af376ad4971c3da23309dcb4e85baa078fd92a3b48410173530"
     },
     {
       "name": "figures/peer-dose-response.png",
-      "digest": "4ffc5bcbf6ec7b09eb8adfdefe90bab0d8f4cc4ff1656748d9684a3ca8cf4182"
+      "digest": "531c17778d2661f4af1aa359749ef09ebfe6846b1fb761a2260eda067cce457f"
     },
     {
       "name": "figures/family-rescue-map.pdf",
-      "digest": "4c469e3e75be34da360678f344985b54ba077060af6185e020901f50cd2b9c14"
+      "digest": "19c51ff798cee08a7bf40efb0de9d4b6ce54b9c2e4e06e5f0b29326a3260d0a9"
     },
     {
       "name": "figures/family-rescue-map.png",
@@ -195,7 +219,7 @@
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.pdf",
-      "digest": "aad16b94fddd1caeb58f1fffabd8d45b3e8df0fc85f66a266b2806560644ea51"
+      "digest": "9c26f091a1c9b161845a291030feca00261c8929575df2c69e676237b44d3695"
     },
     {
       "name": "figures/feature-novelty-versus-ctk-gain.png",
@@ -203,7 +227,7 @@
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.pdf",
-      "digest": "e6c32d45e420ef14e72842a7cffd90b46ad8352bf400a4d56838fd51431086d8"
+      "digest": "603652797573356b7122989e116164cacfc1c169b79d0804b273ca1f1d09c5e7"
     },
     {
       "name": "figures/known-versus-unseen-tradeoff.png",
@@ -211,7 +235,7 @@
     },
     {
       "name": "figures/client-ctk-analysis.pdf",
-      "digest": "be0ccffdfc8db0a99381da6bc3afa783c076b9657de206ee51448980f1a66f55"
+      "digest": "d853c8bc1ddbb0a931915a8540933067a09b63eeb3c1e9ca9ec5af00581df3ed"
     },
     {
       "name": "figures/client-ctk-analysis.png",
@@ -219,7 +243,7 @@
     },
     {
       "name": "figures/ctk-robustness-forest.pdf",
-      "digest": "fc8ba462c30b2f99eb6450ffa8eebc9300c389bde91d7200fb03a28347f70acb"
+      "digest": "f05095e59bc36637e0d60cc4ba0220054dd376c2be989fdb7c24658df55b6e4f"
     },
     {
       "name": "figures/ctk-robustness-forest.png",
@@ -227,7 +251,7 @@
     },
     {
       "name": "figures/federated-arm-tradeoff.pdf",
-      "digest": "e36bde5e68802abb471817618a0976db9087ec5d160a9510e84de47f8b673d57"
+      "digest": "dba658ff8be17738fd4d276e4397ca57341cd6fcfed8d74f0f2367ba5487be91"
     },
     {
       "name": "figures/federated-arm-tradeoff.png",
@@ -235,7 +259,7 @@
     },
     {
       "name": "figures/natural-versus-controlled.pdf",
-      "digest": "50cc6ebb8bbfa54fa4bb66a4c3cdacff6c2ee5eb8e62b1abe7574e7d3dc55357"
+      "digest": "379fe1c15ef5711d002235bce4814231dc58692b7612ba136ea148de6e5dd850"
     },
     {
       "name": "figures/natural-versus-controlled.png",

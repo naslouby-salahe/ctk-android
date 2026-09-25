@@ -1,0 +1,7 @@
+evidence_class,experiment,learner,source,sum_squares,degrees_of_freedom,share
+C-post-confirmatory-evidence-preserving,controlled-exposure,fedavg,family,1.058391580596111,6,0.6946830054684268
+C-post-confirmatory-evidence-preserving,controlled-exposure,fedavg,seed,0.11371921106166973,9,0.07464043060067153
+C-post-confirmatory-evidence-preserving,controlled-exposure,fedavg,family-by-seed-residual,0.3514496989035719,54,0.23067656393090175
+C-post-confirmatory-evidence-preserving,replication-family-set,fedavg,family,0.18908717262437807,5,0.27301015582821364
+C-post-confirmatory-evidence-preserving,replication-family-set,fedavg,seed,0.05894890407105081,9,0.08511232815517347
+C-post-confirmatory-evidence-preserving,replication-family-set,fedavg,family-by-seed-residual,0.44456516390954526,45,0.6418775160166129
