@@ -47,7 +47,7 @@ ln -s /path/to/AndroZoo data/androzoo/raw
 
 ## Status
 
-The protocol is frozen (see `docs/decisions/protocol-amendments.md`) and the 140 confirmatory runs (seeds 100 to 109) are complete. Claim outcomes are in `results/gates/claims.csv` (9 promoted, 3 rejected after the post-confirmatory dose-gate correction recorded in `docs/decisions/protocol-amendments.md`). The interpreted evidence is in `docs/Results.md`. Exploratory or local working material should not be read as a confirmed finding.
+The protocol is frozen (see `docs/decisions/protocol-amendments.md`) and the 140 confirmatory runs (seeds 100 to 109) are complete. Claim outcomes are in `results/gates/claims.csv` (9 promoted, 3 rejected after the post-confirmatory dose-gate correction recorded in `docs/decisions/protocol-amendments.md`). The interpreted evidence, literature audit and feasibility assessments are consolidated in `docs/Research Evidence.md`. Exploratory or local working material should not be read as a confirmed finding.
 
 ## Commands and durations
 
@@ -60,7 +60,7 @@ Setup, then one command per experiment. Every `run` regenerates the analysis, ta
 | `uv run ctk-android plan <mode>` | write the run matrix | 0.1 s (6 s for the confirmatory plan) |
 | `uv run ctk-android smoke` | end-to-end smoke run | 13 s |
 | `uv run ctk-android status --mode <mode>` | summarise run status | under 0.1 s |
-| `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 17 tables, 11 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
+| `uv run ctk-android report --mode <mode>` | analysis, claim gates, post-confirmatory analyses, 20 tables, 11 figures | 9 s development, 18 s confirmatory (21 s with `--promote`) |
 
 Experiments (`--seed N` runs a single seed; durations are wall-clock per run on one RTX 5060 Ti, measured from the run logs):
 
@@ -71,7 +71,7 @@ Experiments (`--seed N` runs a single seed; durations are wall-clock per run on 
 | `controlled-exposure` | `uv run ctk-android run controlled-exposure --mode development`<br>`uv run ctk-android run controlled-exposure --mode confirmatory` | development: 5 runs, 91 s each, 7.6 min total<br>confirmatory: 10 runs, 86 s each, 14.4 min total |
 | `peer-dose-response` | `uv run ctk-android run peer-dose-response --mode development`<br>`uv run ctk-android run peer-dose-response --mode confirmatory` | development: 5 runs, 101 s each, 8.4 min total<br>confirmatory: 10 runs, 93 s each, 15.5 min total |
 | `natural-scarcity` | `uv run ctk-android run natural-scarcity --mode development`<br>`uv run ctk-android run natural-scarcity --mode confirmatory` | development: 5 runs, 46 s each, 3.9 min total<br>confirmatory: 10 runs, 43 s each, 7.2 min total |
-| `family-permutation-control` | `uv run ctk-android run family-permutation-control --mode development`<br>`uv run ctk-android run family-permutation-control --mode confirmatory` | development: 5 runs, 46 s each, 3.8 min total<br>confirmatory: 10 runs, 45 s each, 7.5 min total |
+| `family-permutation-control` | `uv run ctk-android run family-permutation-control --mode development`<br>`uv run ctk-android run family-permutation-control --mode confirmatory`<br>`uv run ctk-android run family-permutation-control --mode extension` | development: 5 runs, 46 s each, 3.8 min total<br>confirmatory: 10 runs, 45 s each, 7.5 min total<br>extension (EXT-1, seeds 200 to 209): 10 runs, 58 s each while sharing the GPU, about 10 min total |
 | `replication-family-set` | `uv run ctk-android run replication-family-set --mode confirmatory` | confirmatory: 10 runs, 118 s each, 19.7 min total |
 | `model-family-replication-linear` | `uv run ctk-android run model-family-replication-linear --mode confirmatory` | confirmatory: 10 runs, 63 s each, 10.6 min total |
 | `model-family-replication-trees` | `uv run ctk-android run model-family-replication-trees --mode confirmatory` | confirmatory: 10 runs, 103 s each, 17.2 min total |
@@ -81,7 +81,7 @@ Experiments (`--seed N` runs a single seed; durations are wall-clock per run on 
 | `family-support-sensitivity-high` | `uv run ctk-android run family-support-sensitivity-high --mode confirmatory` | confirmatory: 10 runs, 62 s each, 10.4 min total |
 | `package-only-grouping` | `uv run ctk-android run package-only-grouping --mode confirmatory` | confirmatory: 10 runs, 87 s each, 14.5 min total |
 
-Development uses seeds 1 to 5, confirmatory uses seeds 100 to 109. `partition-salt-sensitivity` runs 3 salts per seed. The first four confirmatory experiments ran one at a time; the remaining eight ran as five parallel workers, so their per-run times include contention for CPU and GPU and their totals are not sequential wall time. Whole confirmatory stage: about 140 runs in roughly 2.5 hours.
+Development uses seeds 1 to 5, confirmatory uses seeds 100 to 109, and seeds 200 to 209 (`--mode extension`) are reserved for separately frozen prospective extensions that are never pooled with the original campaign. `partition-salt-sensitivity` runs 3 salts per seed. The first four confirmatory experiments ran one at a time; the remaining eight ran as five parallel workers, so their per-run times include contention for CPU and GPU and their totals are not sequential wall time. Whole confirmatory stage: about 140 runs in roughly 2.5 hours.
 
 ## Reproducibility
 

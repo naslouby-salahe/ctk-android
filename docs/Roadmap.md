@@ -1098,9 +1098,41 @@ Every reported result is labelled as exactly one of: **A** original confirmatory
 
 **M. Dose interpretation.** The promoted dose gate supports that recall improves as effective peer exposure increases. It does not establish saturation or diminishing returns: recall is still rising at the largest effective exposure. Both statements must be kept apart wherever H5 is cited.
 
-**N. Novelty positioning.** After the deeper literature audit in `docs/Novelty Audit.md`, the residual contribution is stated as a measurement design and empirical decomposition on one corpus, with "no closely matching study found in the audited literature" wording restricted to the combination; the dose analysis and natural-scarcity check are partially anticipated. The audit is limited and does not license priority language.
+**N. Novelty positioning.** After the deeper literature audit in `docs/Research Evidence.md` (section 29), the residual contribution is stated as a measurement design and empirical decomposition on one corpus, with "no closely matching study found in the audited literature" wording restricted to the combination; the dose analysis and natural-scarcity check are partially anticipated. The audit is limited and does not license priority language.
 
 **K. Aggregation naming.** The seed-paired macro complementary gain and the micro-pooled hits/trials complementary gain are different estimands and carry different names in every artifact; partition salts are reported separately, never as extra seeds.
+
+### 31.4 Prospective Extension Protocols (class D)
+
+Extension experiments are separate from the frozen original study. They use fresh seeds (`seeds.extension`, 200 to 209, mode `extension`), are listed in `experiments.extension_experiments` and not in any experiment `modes`, are labelled class D, are never pooled with seeds 100 to 109 and never enter the original 9 promoted, 0 narrowed, 3 rejected gate outcome. The original `run_fingerprint` is unchanged, so confirmatory runs stay current. Extension outputs are promoted to `results/extension/`. Additional class C analyses added in the same pass (all from stored runs): CTK variance components (family, seed, residual), family-level associations of CTK with local recall and pooling gain, and per-client-by-family own-domain CTK; see `docs/Research Evidence.md` sections 12 and 14.
+
+**EXT-1 protocol (frozen 2026-09-25 before any extension run).**
+
+Frozen 2026-09-25 BEFORE any extension run exists and before any result is inspected.
+
+**Research question.** The original confirmatory family-label permutation control (seeds 100-109) is equivalent to zero (inside +/-0.03) for federation-wide FedAvg CTK at alpha 0.05, but for own-domain FedAvg CTK its 95% BCa interval (-0.004, 0.036) extends past +0.03 (unresolved) and is unresolved again at alpha 0.10. Is that a small-n artefact or a real null-violation for the own-domain population?
+
+**Hypothesis (H-EXT-1).** With fresh seeds, the own-domain FedAvg permutation-control CTK at alpha 0.05 has a 95% BCa paired interval entirely inside [-0.03, +0.03] (equivalence), i.e. the own-domain CTK effect is not produced by a label-independent artefact.
+
+**Design.** Identical to the original `family-permutation-control` experiment (same code, hyperparameters, family set, eligibility, arms local/central/fedavg, conditions peer-present and family-absent-everywhere, alpha grid 0.01/0.05/0.10, permutation seed offset 7919). Only the seed range is new.
+
+**Seeds.** Fresh untouched range 200-209 (mode `extension`). Seeds 100-109 are not reused, and extension results are **never pooled** with the original 10 seeds.
+
+**Estimands.** Seed-paired CTK gain (peer-present minus family-absent-everywhere) for FedAvg and central, for federation-wide, own-domain, worst-client and family-macro metrics at alpha 0.01, 0.05, 0.10.
+
+**Primary endpoint.** FedAvg own-domain CTK gain at alpha 0.05: equivalence to zero via the same rule as the original gate: 95% BCa interval within +/-0.03 (ctk_min_gain). Secondary: worst-client and federation-wide at alpha 0.05; all alphas.
+
+**Statistics.** Same machinery as the original analysis (paired seed effects, BCa 9,999 resamples, exact Wilcoxon). No multiplicity adjustment beyond stating the primary endpoint in advance.
+
+**Interpretation rules (fixed now).**
+- Interval inside the band: the own-domain null control is resolved as clean; the original caveat is reported as "unresolved in v1, resolved in extension v2" and the own-domain causal wording is strengthened accordingly.
+- Interval entirely outside the band: the own-domain CTK estimate has a label-independent component; own-domain causal wording is narrowed, and this is reported as a negative extension finding.
+- Interval straddling a band edge: unresolved again; caveat retained.
+No outcome changes any original gate, the 9/0/3 count, or the original permutation result.
+
+**Cost.** 10 runs, about 45 s each.
+
+**EXT-1 result.** The primary endpoint was met: own-domain FedAvg permutation CTK at 5% FPR is +0.006 (-0.004, 0.014), inside the band. The original own-domain caveat is reported as unresolved in v1 and resolved in the extension; original results and gates are unchanged (`docs/Research Evidence.md` section 20.1). Literature-justified extensions not run (missing-class baselines, real placebo family, KronoDroid, McNdroid, exact-dose, larger-family novelty, new mechanism) and the reasons are in section 33 of that document.
 
 ---
 
@@ -1164,7 +1196,7 @@ The defensible residual contribution is the combination of:
 - family-level rescue/failure characterization;
 - feature-space explanation of family-dependent collaboration value.
 
-The strongest neighboring bodies of work include federated rare-class transfer, class-incremental intrusion detection, prototype exchange for disjoint/rare classes, and Android malware FL under non-IID or drift. A second, deeper collision audit (`docs/Novelty Audit.md`; seven papers read in full, about 25 by abstract, partial forward-citation chaining, a name-based security-venue sweep) found no direct collision and four partial ones (vacant-class evaluation in label-skewed FL; label-set-size manipulation at fixed sample counts; a theory of missing class support; Android malware FL with families held by only some clients). Locally missing classes, family-skewed Android malware FL, exposure sweeps and natural-versus-synthetic partitions each have precedent, so the dose analysis and the natural-scarcity check are not claimed as independent contributions; the combined measurement design (controlled hidden-family exposure, matched family-absent-everywhere control, full-exposure reference, pooling-versus-complementary decomposition with own-domain and worst-client evaluation) was not found in the audited literature. The audit is limited (proceedings of the main security venues are not reliably indexed; many primary sources unread) and does not replace the pre-submission citation-chaining audit.
+The strongest neighboring bodies of work include federated rare-class transfer, class-incremental intrusion detection, prototype exchange for disjoint/rare classes, and Android malware FL under non-IID or drift. A second, deeper collision audit (`docs/Research Evidence.md` (section 29); seven papers read in full, about 25 by abstract, partial forward-citation chaining, a name-based security-venue sweep) found no direct collision and four partial ones (vacant-class evaluation in label-skewed FL; label-set-size manipulation at fixed sample counts; a theory of missing class support; Android malware FL with families held by only some clients). Locally missing classes, family-skewed Android malware FL, exposure sweeps and natural-versus-synthetic partitions each have precedent, so the dose analysis and the natural-scarcity check are not claimed as independent contributions; the combined measurement design (controlled hidden-family exposure, matched family-absent-everywhere control, full-exposure reference, pooling-versus-complementary decomposition with own-domain and worst-client evaluation) was not found in the audited literature. The audit is limited (proceedings of the main security venues are not reliably indexed; many primary sources unread) and does not replace the pre-submission citation-chaining audit.
 
 Before submission, perform a final citation-chaining audit of the closest works published through the submission date.
 
@@ -1686,7 +1718,7 @@ Four simulated clients are sufficient for the controlled question but do not rep
 
 ### Limited external replication
 
-The confirmatory design relies primarily on one Android benchmark. A desk feasibility assessment (`docs/Second Dataset Feasibility.md`) found no publicly verified independent corpus that meets all requirements of the design (family labels with enough support, benign samples, a defensible client construction, stable identity, precomputed or reproducible static features); the most promising candidate (KronoDroid) has unverified per-family support, and the large AndroZoo-derived corpora are not independent of LAMDA. An independent replication is therefore optional and gated on a support pre-check. Internal replication across family sets, model classes, natural scarcity (a within-dataset validation on the same corpus), and split choices does not replace independent external validation.
+The confirmatory design relies primarily on one Android benchmark. A desk feasibility assessment (`docs/Research Evidence.md` (sections 30 to 32)) found no publicly verified independent corpus that meets all requirements of the design (family labels with enough support, benign samples, a defensible client construction, stable identity, precomputed or reproducible static features); the most promising candidate (KronoDroid) was downloaded and audited directly and is MARGINAL (no market or source axis; era-window clients confound family with time), and McNdroid is not independent of LAMDA (81% SHA-256 overlap). Independent replication is therefore not run and is reopened only if a corpus meeting the stated criteria appears. Internal replication across family sets, model classes, natural scarcity (a within-dataset validation on the same corpus), and split choices does not replace independent external validation.
 
 ### Family support
 
