@@ -1,9 +1,11 @@
+import ast
 from pathlib import Path
 
 from tests.architecture.callgraph import (
     Definition,
     orphan_diagnostics,
     reachable,
+    resolve_attribute,
     shortest_paths,
 )
 
@@ -91,3 +93,36 @@ def test_valid_cli_path_and_shortest_distance_are_preserved() -> None:
     assert reachable(by_name, edges, [root]) == {root, service, leaf}
     assert paths[leaf] == (root, service, leaf)
     assert not orphan_diagnostics(by_name, edges, [root])
+
+
+def test_external_method_does_not_resolve_to_same_named_project_function() -> None:
+    external = ast.parse("subprocess.run", mode="eval").body
+    assert isinstance(external, ast.Attribute)
+    project_run = _definition("run")
+    by_name = {"run": [project_run], "cli.run": [project_run]}
+
+    target = resolve_attribute(
+        external,
+        {"subprocess": "subprocess"},
+        by_name,
+        {},
+        {},
+    )
+
+    assert target is None
+
+
+def test_typed_receiver_resolves_its_declared_project_method() -> None:
+    receiver = ast.parse("paths.run_models_file", mode="eval").body
+    assert isinstance(receiver, ast.Attribute)
+    method = _definition("run_models_file")
+
+    target = resolve_attribute(
+        receiver,
+        {},
+        {"paths.Paths.run_models_file": [method]},
+        {"paths": "paths.Paths"},
+        {},
+    )
+
+    assert target == "paths.Paths.run_models_file"

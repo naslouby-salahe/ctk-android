@@ -26,14 +26,28 @@ ENUM_BASES = {"Enum", "StrEnum", "IntEnum", "Flag"}
 PRIMITIVE_ALIAS_NAMES = {"int", "float", "str", "bool", "Any", "object", "dict"}
 
 
-def _is_alias_target(node: ast.Assign) -> bool:
-    return (
-        len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id[:1].isupper()
-        and not node.targets[0].id.isupper()
-        and isinstance(node.value, ast.Subscript | ast.BinOp | ast.Name)
-    )
+def _semantic_alias_name(target: ast.expr) -> bool:
+    return isinstance(target, ast.Name) and target.id[:1].isupper() and not target.id.isupper()
+
+
+def _is_alias_target(node: ast.stmt) -> bool:
+    if isinstance(node, ast.Assign):
+        return (
+            len(node.targets) == 1
+            and _semantic_alias_name(node.targets[0])
+            and isinstance(
+                node.value,
+                ast.Subscript | ast.BinOp | ast.Name | ast.Attribute | ast.Call,
+            )
+        )
+    if isinstance(node, ast.AnnAssign):
+        return _semantic_alias_name(node.target) and (
+            (isinstance(node.annotation, ast.Name) and node.annotation.id == "TypeAlias")
+            or (isinstance(node.annotation, ast.Attribute) and node.annotation.attr == "TypeAlias")
+        )
+    if isinstance(node, ast.TypeAlias):
+        return _semantic_alias_name(node.name)
+    return False
 
 
 def _enum_classes(path: Path) -> list[ast.ClassDef]:
@@ -57,15 +71,23 @@ def _members(enum: ast.ClassDef) -> dict[str, str]:
 
 
 def _primitive_aliases(tree: ast.Module) -> list[str]:
-    definitions = {
-        node.targets[0].id: node.value
-        for node in tree.body
-        if isinstance(node, ast.Assign)
-        and len(node.targets) == 1
-        and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id[:1].isupper()
-        and not node.targets[0].id.isupper()
-    }
+    definitions: dict[str, ast.expr] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign):
+            target, value = node.target, node.value
+        elif isinstance(node, ast.TypeAlias):
+            target, value = node.name, node.value
+        else:
+            continue
+        if (
+            value is not None
+            and isinstance(target, ast.Name)
+            and target.id[:1].isupper()
+            and not target.id.isupper()
+        ):
+            definitions[target.id] = value
 
     def primitive_names(expression: ast.expr, visited: frozenset[str] = frozenset()) -> set[str]:
         names = {
@@ -84,7 +106,7 @@ def _primitive_aliases(tree: ast.Module) -> list[str]:
         name
         for name, expression in definitions.items()
         if primitive_names(expression, frozenset({name})) & PRIMITIVE_ALIAS_NAMES
-        and isinstance(expression, ast.Subscript | ast.BinOp | ast.Name | ast.Call)
+        and isinstance(expression, ast.Subscript | ast.BinOp | ast.Name | ast.Attribute | ast.Call)
     ]
 
 
@@ -93,7 +115,7 @@ def test_type_aliases_are_defined_only_in_types_py() -> None:
         location(path, node.lineno)
         for path in source_files(TYPES_MODULE)
         for node in parse(path).body
-        if isinstance(node, ast.Assign) and _is_alias_target(node)
+        if _is_alias_target(node)
     ]
     assert not offenders, offenders
 
@@ -102,14 +124,28 @@ def test_primitive_alias_laundering_mutations_are_detected() -> None:
     snippets = (
         "PolicyLike = str\n",
         "ClientLike = int\n",
+        "import builtins\nClientLike = builtins.int\n",
         "Payload = dict[str, Any]\n",
         "Payload = typing.Mapping[str, object]\n",
         'PolicyLike = NewType("PolicyLike", str)\n',
         "CountLike = typing.Annotated[int, Field(gt=0)]\n",
+        "from typing import TypeAlias\nClientLike: TypeAlias = int\n",
+        "type ClientLike = int\n",
         "Primitive = int\nClientLike = Primitive\n",
     )
     for snippet in snippets:
         assert _primitive_aliases(ast.parse(snippet))
+
+
+def test_type_alias_laundering_scanner_detects_qualified_and_modern_aliases() -> None:
+    snippets = (
+        "import builtins\nClientLike = builtins.int\n",
+        "from typing import TypeAlias\nClientLike: TypeAlias = int\n",
+        "type ClientLike = int\n",
+    )
+    for snippet in snippets:
+        tree = ast.parse(snippet)
+        assert any(_is_alias_target(node) for node in tree.body)
 
 
 def test_semantic_alias_to_a_named_domain_type_is_valid() -> None:
@@ -159,13 +195,43 @@ def test_constrained_scalars_and_newtypes_only_in_types_py() -> None:
 
 
 def test_generic_constrained_aliases_are_not_referenced_outside_types_py() -> None:
-    offenders = [
-        f"{location(path, node.lineno)} references {node.id}"
-        for path in source_files(TYPES_MODULE)
-        for node in ast.walk(parse(path))
-        if isinstance(node, ast.Name) and node.id in GENERIC_CONSTRAINED_ALIASES
-    ]
+    offenders: list[str] = []
+    for path in source_files(TYPES_MODULE):
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.Name):
+                names = (node.id,)
+            elif isinstance(node, ast.Attribute):
+                names = (node.attr,)
+            elif isinstance(node, ast.ImportFrom):
+                names = tuple(alias.name for alias in node.names)
+            else:
+                continue
+            for name in names:
+                if name in GENERIC_CONSTRAINED_ALIASES:
+                    offenders.append(f"{location(path, node.lineno)} references {name}")
     assert not offenders, offenders
+
+
+def test_qualified_and_renamed_constrained_alias_mutations_are_detected() -> None:
+    snippets = (
+        "import ctk_android.types\nvalue: ctk_android.types.NonNegativeInt\n",
+        "from ctk_android.types import NonNegativeInt as Count\nvalue: Count\n",
+        "from ctk_android.types import PositiveFloat as Magnitude\nvalue: Magnitude\n",
+    )
+    for snippet in snippets:
+        tree = ast.parse(snippet)
+        names = {
+            node.id if isinstance(node, ast.Name) else node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name | ast.Attribute)
+        }
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        assert names & GENERIC_CONSTRAINED_ALIASES or imported & GENERIC_CONSTRAINED_ALIASES
 
 
 def test_aliases_in_types_py_are_unique() -> None:
