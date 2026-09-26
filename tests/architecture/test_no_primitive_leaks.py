@@ -16,7 +16,33 @@ FORBIDDEN_ARRAYS = {"ndarray", "NDArray"}
 FORBIDDEN_INLINE_CONTAINERS = {"dict", "Mapping", "Sequence", "Callable"}
 UNPARAMETERISED_CONTAINERS = {"dict", "list", "tuple", "set", "frozenset"}
 HIDING_CALLS = {"float", "int", "str", "cast"}
-ANY_BOUNDARY_CLASSES = {"PlotAxes", "PlotFigure"}
+PLOT_ANY_METHODS = {
+    "PlotAxes": {
+        "bar",
+        "plot",
+        "scatter",
+        "errorbar",
+        "imshow",
+        "annotate",
+        "axhline",
+        "axvline",
+        "set_ylim",
+        "tick_params",
+        "grid",
+        "set_xticks",
+        "set_yticks",
+        "set_xlabel",
+        "set_ylabel",
+        "set_title",
+        "set_xscale",
+        "legend",
+    },
+    "PlotFigure": {"add_subplot", "suptitle", "subplots_adjust", "colorbar", "savefig"},
+}
+PLOT_OBJECT_RETURN_METHODS = {
+    "PlotAxes": PLOT_ANY_METHODS["PlotAxes"],
+    "PlotFigure": PLOT_ANY_METHODS["PlotFigure"] - {"add_subplot"},
+}
 
 
 def _outside_types() -> list[Path]:
@@ -85,24 +111,65 @@ def test_no_any_or_object_imports_outside_types_py() -> None:
     assert not offenders, offenders
 
 
-def _any_outside_boundary_classes(tree: ast.Module) -> list[int]:
-    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+def _unapproved_any_sites(tree: ast.Module) -> list[int]:
+    allowed: set[int] = set()
+    for owner in ast.walk(tree):
+        if not isinstance(owner, ast.ClassDef) or owner.name not in PLOT_ANY_METHODS:
+            continue
+        for method in owner.body:
+            if (
+                not isinstance(method, ast.FunctionDef | ast.AsyncFunctionDef)
+                or method.name not in PLOT_ANY_METHODS[owner.name]
+            ):
+                continue
+            for argument in (method.args.vararg, method.args.kwarg):
+                if (
+                    argument
+                    and isinstance(argument.annotation, ast.Name)
+                    and argument.annotation.id == "Any"
+                ):
+                    allowed.add(id(argument.annotation))
     return [
         node.lineno
         for node in ast.walk(tree)
-        if isinstance(node, ast.Name)
-        and node.id == "Any"
-        and not any(
-            owner.name in ANY_BOUNDARY_CLASSES
-            and owner.lineno <= node.lineno <= (owner.end_lineno or owner.lineno)
-            for owner in classes
-        )
+        if isinstance(node, ast.Name) and node.id == "Any" and id(node) not in allowed
     ]
 
 
-def test_matplotlib_any_is_confined_to_its_exact_protocol_boundary() -> None:
-    assert not _any_outside_boundary_classes(parse(TYPES_MODULE))
-    assert _any_outside_boundary_classes(ast.parse("class Payload:\n    data: Any\n"))
+def test_any_is_confined_to_variadic_plotting_parameters() -> None:
+    assert not _unapproved_any_sites(parse(TYPES_MODULE))
+    mutation = ast.parse("class PlotAxes:\n    def plot(self, *args: Any) -> Any: ...\n")
+    assert _unapproved_any_sites(mutation)
+    non_variadic = ast.parse("class PlotAxes:\n    def plot(self, args: Any) -> object: ...\n")
+    assert _unapproved_any_sites(non_variadic)
+    unknown_method = ast.parse("class PlotAxes:\n    def draw(self, *args: Any) -> object: ...\n")
+    assert _unapproved_any_sites(unknown_method)
+
+
+def _unapproved_object_sites(tree: ast.Module) -> list[int]:
+    allowed: set[int] = set()
+    for owner in ast.walk(tree):
+        if not isinstance(owner, ast.ClassDef) or owner.name not in PLOT_OBJECT_RETURN_METHODS:
+            continue
+        for method in owner.body:
+            if (
+                isinstance(method, ast.FunctionDef | ast.AsyncFunctionDef)
+                and method.name in PLOT_OBJECT_RETURN_METHODS[owner.name]
+                and isinstance(method.returns, ast.Name)
+                and method.returns.id == "object"
+            ):
+                allowed.add(id(method.returns))
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name) and node.id == "object" and id(node) not in allowed
+    ]
+
+
+def test_opaque_object_returns_stay_at_plotting_boundary() -> None:
+    assert not _unapproved_object_sites(parse(TYPES_MODULE))
+    mutation = ast.parse("class Payload:\n    data: object\n")
+    assert _unapproved_object_sites(mutation)
 
 
 def test_no_type_hiding_calls() -> None:
