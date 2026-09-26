@@ -16,7 +16,7 @@ from ctk_android.enums import (
     Representation,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import OverlapManifest, PartitionKey
+from ctk_android.types import OverlapManifest, PartitionKey, RandomSeed
 from tests.architecture.source_index import REPO_ROOT
 from tests.unit.data.mcndroid_fixture import (
     GRAPH_WIDTH,
@@ -31,7 +31,9 @@ LAMDA_ROWS = 80
 OVERLAP = list(range(10, 60))
 SPLITS = {"train": OVERLAP[:35], "test": OVERLAP[35:], "extra": [200, 201]}
 UNIVERSE = ("f0", "f1")
-KEY = PartitionKey(seed=1, salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY)
+KEY = PartitionKey(
+    seed=RandomSeed(1), salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY
+)
 
 
 def _workspace(root: Path) -> tuple[Paths, np.ndarray]:

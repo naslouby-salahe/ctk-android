@@ -4,6 +4,7 @@ import numpy as np
 import polars as pl
 from pydantic import BaseModel, ValidationError
 
+from ctk_android import logs
 from ctk_android.config import Config
 from ctk_android.enums import (
     ByteBlock,
@@ -11,6 +12,8 @@ from ctk_android.enums import (
     ErrorMessage,
     FailureReason,
     LibraryOption,
+    LogEvent,
+    LogField,
     Separator,
     Stage,
     TextEncoding,
@@ -61,6 +64,10 @@ def is_reusable(file: File, expected: Provenance) -> Reusable:
     try:
         stored = Provenance.model_validate_json(file.read_text(encoding=TextEncoding.UTF8))
     except ValidationError:
+        logs.warning(
+            LogEvent.CACHE_INVALIDATED,
+            {LogField.PATH: file.as_posix()},
+        )
         return False
     return stored == expected
 

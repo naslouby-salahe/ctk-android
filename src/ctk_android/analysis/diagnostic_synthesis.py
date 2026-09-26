@@ -32,8 +32,9 @@ from ctk_android.enums import (
     TaxonomyLabel,
 )
 from ctk_android.types import (
-    ArmName,
+    ArmLabel,
     Correlation,
+    DiagnosticColumnName,
     DiagnosticMatrix,
     DiagnosticRow,
     DiagnosticRows,
@@ -45,8 +46,8 @@ from ctk_android.types import (
     Interval,
     LargeFamilyTable,
     NoveltyTable,
+    RandomSeed,
     ResampleCount,
-    Seed,
     SupportCount,
     SynthesisDiagnostics,
     TargetsTable,
@@ -98,7 +99,7 @@ def _statistic(
     value: Correlation,
     count: SupportCount | None = None,
     interval: Interval | None = None,
-    seed: Seed | None = None,
+    seed: RandomSeed | None = None,
 ) -> DiagnosticRow:
     return {
         DiagnosticColumn.STATISTIC: statistic,
@@ -241,7 +242,7 @@ def _seed_statistics(
     seeds: LargeFamilyTable, table: LargeFamilyTable, rng: np.random.Generator
 ) -> DiagnosticRows:
     wide = _seed_matrix(seeds)
-    seed_values: list[Seed] = seeds[Column.SEED].unique(maintain_order=True).to_list()
+    seed_values: list[RandomSeed] = seeds[Column.SEED].unique(maintain_order=True).to_list()
     seed_names = [f"{seed}" for seed in seed_values]
     matrix = wide.select(seed_names).to_numpy().astype(np.float64)
     lookup = dict(zip(table[Column.FAMILY].to_list(), table[Column.NOVELTY].to_list(), strict=True))
@@ -335,8 +336,8 @@ def synthesis_experiments() -> tuple[ExperimentName, ...]:
     )
 
 
-def _arm(learner: Learner, condition: ExposureCondition) -> ArmName:
-    return f"{learner}{Separator.PIPE}{condition}"
+def _arm(learner: Learner, condition: ExposureCondition) -> ArmLabel:
+    return ArmLabel(f"{learner}{Separator.PIPE}{condition}")
 
 
 def _support(exposure: ExposureTable, targets: TargetsTable) -> DiagnosticTable:
@@ -515,10 +516,16 @@ def seed_interval(
             {
                 **{key: head[key] for key in keys},
                 column: means.mean().item(),
-                f"{column}{DiagnosticColumn.LOW_SUFFIX}": interval_low(interval),
-                f"{column}{DiagnosticColumn.HIGH_SUFFIX}": interval_high(interval),
-                f"{column}{DiagnosticColumn.SEEDS_SUFFIX}": means.size,
-                f"{column}{DiagnosticColumn.POSITIVE_SUFFIX}": (means > 0).sum().item(),
+                DiagnosticColumnName(f"{column}{DiagnosticColumn.LOW_SUFFIX}"): interval_low(
+                    interval
+                ),
+                DiagnosticColumnName(f"{column}{DiagnosticColumn.HIGH_SUFFIX}"): interval_high(
+                    interval
+                ),
+                DiagnosticColumnName(f"{column}{DiagnosticColumn.SEEDS_SUFFIX}"): means.size,
+                DiagnosticColumnName(f"{column}{DiagnosticColumn.POSITIVE_SUFFIX}"): (means > 0)
+                .sum()
+                .item(),
             }
         )
     return pl.DataFrame(rows)

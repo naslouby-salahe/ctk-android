@@ -4,6 +4,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_ROOT = REPO_ROOT / "src" / "ctk_android"
+PRODUCTION_ROOT = REPO_ROOT / "src"
 TESTS_ROOT = REPO_ROOT / "tests"
 TYPES_MODULE = SRC_ROOT / "types.py"
 ENUMS_MODULE = SRC_ROOT / "enums.py"
@@ -12,8 +13,38 @@ PATHS_MODULE = SRC_ROOT / "paths.py"
 CLI_MODULE = SRC_ROOT / "cli.py"
 
 
+def discover_source_files(root: Path = PRODUCTION_ROOT) -> list[Path]:
+    """Discover every Python source below the repository's production source root."""
+    if not root.is_dir():
+        raise FileNotFoundError(f"production source root does not exist: {root}")
+    return sorted(path for path in root.rglob("*.py") if path.is_file())
+
+
+def assert_complete_scan(expected: set[Path], scanned: set[Path]) -> None:
+    """Fail closed when source discovery and the architecture scanner diverge."""
+    missing = sorted(path.as_posix() for path in expected - scanned)
+    unexpected = sorted(path.as_posix() for path in scanned - expected)
+    if missing or unexpected:
+        raise AssertionError(
+            f"architecture source scan mismatch; missing={missing}, unexpected={unexpected}"
+        )
+
+
+def scan_source_tree(root: Path) -> dict[Path, ast.Module]:
+    """Parse an entire source tree; syntax or read failures are fatal."""
+    expected = set(discover_source_files(root))
+    scanned = {path: parse(path) for path in sorted(expected)}
+    assert_complete_scan(expected, set(scanned))
+    return scanned
+
+
+def scan_production_sources() -> dict[Path, ast.Module]:
+    """Parse the complete production tree; syntax or read failures are fatal."""
+    return scan_source_tree(PRODUCTION_ROOT)
+
+
 def source_files(*excluded: Path) -> list[Path]:
-    return sorted(path for path in SRC_ROOT.rglob("*.py") if path not in excluded)
+    return [path for path in discover_source_files() if path not in excluded]
 
 
 @cache
@@ -28,7 +59,13 @@ def location(path: Path, line: int) -> str:
 def annotation_names(annotation: ast.expr | None) -> list[str]:
     if annotation is None:
         return []
-    return [node.id for node in ast.walk(annotation) if isinstance(node, ast.Name)]
+    names: list[str] = []
+    for node in ast.walk(annotation):
+        if isinstance(node, ast.Name):
+            names.append(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.append(node.attr)
+    return names
 
 
 def function_annotations(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[ast.expr | None]:

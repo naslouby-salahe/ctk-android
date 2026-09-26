@@ -16,6 +16,7 @@ FORBIDDEN_ARRAYS = {"ndarray", "NDArray"}
 FORBIDDEN_INLINE_CONTAINERS = {"dict", "Mapping", "Sequence", "Callable"}
 UNPARAMETERISED_CONTAINERS = {"dict", "list", "tuple", "set", "frozenset"}
 HIDING_CALLS = {"float", "int", "str", "cast"}
+ANY_BOUNDARY_CLASSES = {"PlotAxes", "PlotFigure"}
 
 
 def _outside_types() -> list[Path]:
@@ -82,6 +83,26 @@ def test_no_any_or_object_imports_outside_types_py() -> None:
         and any(alias.name == "Any" for alias in node.names)
     ]
     assert not offenders, offenders
+
+
+def _any_outside_boundary_classes(tree: ast.Module) -> list[int]:
+    classes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
+    return [
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Name)
+        and node.id == "Any"
+        and not any(
+            owner.name in ANY_BOUNDARY_CLASSES
+            and owner.lineno <= node.lineno <= (owner.end_lineno or owner.lineno)
+            for owner in classes
+        )
+    ]
+
+
+def test_matplotlib_any_is_confined_to_its_exact_protocol_boundary() -> None:
+    assert not _any_outside_boundary_classes(parse(TYPES_MODULE))
+    assert _any_outside_boundary_classes(ast.parse("class Payload:\n    data: Any\n"))
 
 
 def test_no_type_hiding_calls() -> None:

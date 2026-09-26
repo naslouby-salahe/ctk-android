@@ -462,8 +462,13 @@ def controls_verdicts(effects: tuple[ExtensionEffectRow, ...], config: Config) -
         noninferior = _control_cell(here, ExtensionContrast.TRIMMED_MINUS_MEAN) + _control_cell(
             here, ExtensionContrast.MEDIAN_MINUS_MEAN
         )
-        specific = bool(placebo and beyond and placebo[0].within_band and beyond[0].above_margin)
-        robust = bool(
+        specific = (
+            len(placebo) > 0
+            and len(beyond) > 0
+            and placebo[0].within_band
+            and beyond[0].above_margin
+        )
+        robust = (
             len(ctk) == len(noninferior) > 0
             and all(row.above_margin and (row.p_holm or 1.0) < level for row in ctk)
             and all(row.above_noninferiority for row in noninferior)
@@ -762,10 +767,10 @@ def dose_verdicts(effects: tuple[ExtensionEffectRow, ...], config: Config) -> Ex
         exact = sorted(
             (row for row in ctk if row.level is not None), key=lambda row: row.level or 0
         )
-        rises = bool(exact) and all(
+        rises = len(exact) > 0 and all(
             later.mean >= earlier.mean for earlier, later in pairwise(exact)
         )
-        significant = bool(top and top[0].p_holm is not None and top[0].p_holm < alpha)
+        significant = len(top) > 0 and top[0].p_holm is not None and top[0].p_holm < alpha
         verdicts.append(
             ExtensionVerdictRow(
                 hypothesis=ExtensionHypothesis.DOSE_ONSET,

@@ -29,8 +29,8 @@ from ctk_android.types import (
     PairedEffect,
     PValue,
     PValueVector,
+    RandomSeed,
     ResampleCount,
-    Seed,
     SeedEffects,
     TrialVector,
 )
@@ -117,7 +117,7 @@ def cluster_bootstrap_difference(
     trials: TrialVector,
     groups: GroupIds,
     resamples: ResampleCount,
-    seed: Seed,
+    seed: RandomSeed,
     level: Fraction,
 ) -> Interval | None:
     group_count = groups.max(initial=-1).item() + 1

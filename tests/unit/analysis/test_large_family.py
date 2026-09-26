@@ -22,12 +22,13 @@ from ctk_android.enums import (
     NoveltyDescriptor,
 )
 from ctk_android.paths import Paths
+from ctk_android.types import RandomSeed
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT))
 ALPHA = CONFIG.experiments.operating.primary_alpha
 LARGE = CONFIG.experiments.extension_b_experiments[0]
-SEEDS = (1, 2, 3)
+SEEDS = (RandomSeed(1), RandomSeed(2), RandomSeed(3))
 FAMILIES = 6
 TRIALS = 100
 Z = 1.96
@@ -134,9 +135,9 @@ def _selection() -> pl.DataFrame:
     )
 
 
-def _pairs() -> dict[int, pl.DataFrame]:
+def _pairs() -> dict[RandomSeed, pl.DataFrame]:
     # Every family has one eligible and one ineligible pair, except UNSTABLE after the first seed.
-    tables: dict[int, pl.DataFrame] = {}
+    tables: dict[RandomSeed, pl.DataFrame] = {}
     for seed in SEEDS:
         rows: list[dict[Column, object]] = []
         for index in range(FAMILIES):

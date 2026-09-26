@@ -24,9 +24,9 @@ from ctk_android.types import (
     LogitVector,
     ModelInputs,
     ProximalAnchor,
+    RandomSeed,
     RowIndices,
     Scorer,
-    Seed,
     StateDict,
     Stepper,
     TransformRule,
@@ -101,7 +101,7 @@ def fit_epochs(
     rows: RowIndices,
     epochs: Epochs,
     config: TrainingConfig,
-    seed: Seed,
+    seed: RandomSeed,
     device: Device,
     proximal: ProximalAnchor | None,
     transform: InputTransform | None,
@@ -146,13 +146,15 @@ def _robust(stack: torch.Tensor, rule: AggregationRule) -> torch.Tensor:
     return ordered[rule.trim_per_side : stack.shape[0] - rule.trim_per_side].mean(dim=0)
 
 
+def _robust_state(values: list[torch.Tensor], rule: AggregationRule) -> torch.Tensor:
+    stack = torch.stack([value.to(Device.CPU) for value in values])
+    if stack.dtype is torch.float32:
+        return _robust(stack, rule)
+    return _robust(stack.float(), rule).to(stack.dtype)
+
+
 def robust_states(states: list[StateDict], rule: AggregationRule) -> StateDict:
-    return {
-        name: _robust(
-            torch.stack([state[name].to(Device.CPU).float() for state in states]), rule
-        ).to(states[0][name].dtype)
-        for name in states[0]
-    }
+    return {name: _robust_state([state[name] for state in states], rule) for name in states[0]}
 
 
 def fit_trees(
@@ -160,7 +162,7 @@ def fit_trees(
     labels: LabelVector,
     rows: RowIndices,
     config: TrainingConfig,
-    seed: Seed,
+    seed: RandomSeed,
     transform: InputTransform | None,
 ) -> HistGradientBoostingClassifier:
     model = HistGradientBoostingClassifier(

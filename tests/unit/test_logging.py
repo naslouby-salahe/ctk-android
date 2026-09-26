@@ -5,8 +5,10 @@ from pathlib import Path
 from structlog.testing import capture_logs
 
 from ctk_android import logs
-from ctk_android.enums import CliCommand, LogEvent, LogField, LogLevel
+from ctk_android.data.cache import is_reusable
+from ctk_android.enums import CliCommand, LogEvent, LogField, LogLevel, Stage
 from ctk_android.paths import Paths
+from ctk_android.types import Provenance
 
 
 def test_levels_events_and_fields_are_routed_as_structured_data() -> None:
@@ -71,3 +73,17 @@ def test_debug_events_are_emitted_when_the_level_is_debug(tmp_path: Path) -> Non
         root.handlers, root.level = saved[0], saved[1]
     text = paths.log_file(CliCommand.PLAN).read_text(encoding="utf-8")
     assert LogEvent.FEDERATED_ROUND in text
+
+
+def test_invalid_provenance_cache_emits_a_structured_recovery_event(tmp_path: Path) -> None:
+    file = tmp_path / "provenance.json"
+    file.write_text("not-json", encoding="utf-8")
+    expected = Provenance(stage=Stage.RUNS, inputs="0" * 64)
+
+    with capture_logs() as captured:
+        reusable = is_reusable(file, expected)
+
+    assert not reusable
+    assert len(captured) == 1
+    assert captured[0]["event"] == LogEvent.CACHE_INVALIDATED
+    assert captured[0][LogField.PATH] == file.as_posix()

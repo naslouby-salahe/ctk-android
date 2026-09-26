@@ -13,6 +13,7 @@ __pycache__/
 # tooling, environments and local state
 .pytest_cache/
 .ruff_cache/
+.complexipy_cache/
 .pyright/
 .hypothesis/
 .semgrep-out/

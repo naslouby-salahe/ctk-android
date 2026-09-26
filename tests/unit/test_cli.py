@@ -16,7 +16,7 @@ from ctk_android.enums import (
 )
 from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
-from ctk_android.types import CtkError
+from ctk_android.types import CtkError, RandomSeed
 from tests.architecture.source_index import REPO_ROOT
 
 
@@ -90,7 +90,7 @@ def test_every_command_handler_delegates_to_its_workflow(
     cli.preprocess()
     cli.plan(ExecutionMode.DEVELOPMENT)
     cli.smoke()
-    cli.run(ExperimentName.END_TO_END, ExecutionMode.DEVELOPMENT, 1)
+    cli.run(ExperimentName.END_TO_END, ExecutionMode.DEVELOPMENT, RandomSeed(1))
     cli.status(ExecutionMode.DEVELOPMENT)
     cli.report(ExecutionMode.CONFIRMATORY)
     cli.posthoc(ExecutionMode.CONFIRMATORY)
@@ -150,7 +150,7 @@ def test_workflow_errors_are_logged_and_converted_to_cli_exits(
         cli.preprocess,
         lambda: cli.plan(ExecutionMode.DEVELOPMENT),
         cli.smoke,
-        lambda: cli.run(ExperimentName.END_TO_END, ExecutionMode.DEVELOPMENT, 1),
+        lambda: cli.run(ExperimentName.END_TO_END, ExecutionMode.DEVELOPMENT, RandomSeed(1)),
         lambda: cli.report(ExecutionMode.CONFIRMATORY),
         lambda: cli.posthoc(ExecutionMode.CONFIRMATORY),
         lambda: cli.large_family(ExecutionMode.EXTENSION_B),

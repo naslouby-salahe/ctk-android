@@ -59,3 +59,4 @@ rules:
       - pattern: float(...)
       - pattern: int(...)
       - pattern: str(...)
+      - pattern: bool(...)

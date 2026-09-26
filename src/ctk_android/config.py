@@ -41,12 +41,13 @@ from ctk_android.types import (
     IncludeAllDose,
     LabelPrefix,
     LearningRate,
+    NonNegativeRandomSeed,
     ProximalStrength,
+    RandomSeed,
     ResampleCount,
     Rounds,
     RowCount,
     RunsInMode,
-    Seed,
     SerializedConfig,
     SupportCount,
     TreeDepth,
@@ -54,7 +55,6 @@ from ctk_android.types import (
     UnitCount,
     VtCount,
     WeightDecay,
-    YamlDocument,
     YearMonth,
 )
 
@@ -64,14 +64,14 @@ class Frozen(BaseModel):
 
 
 class SeedConfig(Frozen):
-    smoke: tuple[Seed, ...]
-    development: tuple[Seed, ...]
-    confirmatory: tuple[Seed, ...]
-    extension: tuple[Seed, ...]
-    extension_b: tuple[Seed, ...]
-    extension_dose: tuple[Seed, ...]
-    extension_controls: tuple[Seed, ...]
-    extension_representation: tuple[Seed, ...]
+    smoke: tuple[NonNegativeRandomSeed, ...]
+    development: tuple[NonNegativeRandomSeed, ...]
+    confirmatory: tuple[NonNegativeRandomSeed, ...]
+    extension: tuple[NonNegativeRandomSeed, ...]
+    extension_b: tuple[NonNegativeRandomSeed, ...]
+    extension_dose: tuple[NonNegativeRandomSeed, ...]
+    extension_controls: tuple[NonNegativeRandomSeed, ...]
+    extension_representation: tuple[NonNegativeRandomSeed, ...]
 
     @model_validator(mode=LibraryOption.VALIDATE_AFTER)
     def _disjoint_roles(self) -> Self:
@@ -89,7 +89,7 @@ class SeedConfig(Frozen):
             raise ValueError(ErrorMessage.SEED_ROLES)
         return self
 
-    def for_mode(self, mode: ExecutionMode) -> tuple[Seed, ...]:
+    def for_mode(self, mode: ExecutionMode) -> tuple[RandomSeed, ...]:
         if mode is ExecutionMode.SMOKE:
             return self.smoke
         if mode is ExecutionMode.DEVELOPMENT:
@@ -100,7 +100,7 @@ class SeedConfig(Frozen):
             return self.extension_b
         return self.confirmatory
 
-    def for_design(self, mode: ExecutionMode, design: ExperimentDesign) -> tuple[Seed, ...]:
+    def for_design(self, mode: ExecutionMode, design: ExperimentDesign) -> tuple[RandomSeed, ...]:
         if mode is ExecutionMode.EXTENSION_B and design is ExperimentDesign.EXACT_DOSE:
             return self.extension_dose
         if mode is ExecutionMode.EXTENSION_B and design is ExperimentDesign.PLACEBO_ROBUST:
@@ -214,7 +214,7 @@ class ExperimentsConfig(Frozen):
     dose_include_all_available: IncludeAllDose
     top_family_removal_count: SupportCount
     fairness_grids: FairnessGrids
-    permutation_seed_offset: Seed
+    permutation_seed_offset: NonNegativeRandomSeed
     extension_experiments: tuple[ExperimentName, ...]
     extension_b_experiments: tuple[ExperimentName, ...]
     exact_dose_levels: tuple[SupportCount, ...]
@@ -270,7 +270,7 @@ class StatisticsConfig(Frozen):
     bootstrap_resamples: ResampleCount
     cluster_bootstrap_resamples: ResampleCount
     confidence_level: Confidence
-    statistics_seed: Seed
+    statistics_seed: NonNegativeRandomSeed
     share_min_total_gain: Fraction
     gates: GateConfig
 
@@ -286,7 +286,7 @@ class Config(Frozen):
             return self.experiments.smoke_training
         return self.experiments.training
 
-    def seeds_for(self, experiment: ExperimentName, mode: ExecutionMode) -> tuple[Seed, ...]:
+    def seeds_for(self, experiment: ExperimentName, mode: ExecutionMode) -> tuple[RandomSeed, ...]:
         design = self.experiments.experiments[experiment].design
         return self.project.seeds.for_design(mode, design)
 
@@ -319,12 +319,13 @@ class Config(Frozen):
 
 
 def load_config(paths: Paths) -> Config:
-    def read(name: ConfigFile) -> YamlDocument:
-        return yaml.safe_load(paths.config_file(name).read_text(encoding=TextEncoding.UTF8))
+    def read[Section: BaseModel](name: ConfigFile, model: type[Section]) -> Section:
+        payload = yaml.safe_load(paths.config_file(name).read_text(encoding=TextEncoding.UTF8))
+        return model.model_validate(payload)
 
     return Config(
-        project=ProjectConfig.model_validate(read(ConfigFile.PROJECT)),
-        data=DataConfig.model_validate(read(ConfigFile.DATA)),
-        experiments=ExperimentsConfig.model_validate(read(ConfigFile.EXPERIMENTS)),
-        statistics=StatisticsConfig.model_validate(read(ConfigFile.STATISTICS)),
+        project=read(ConfigFile.PROJECT, ProjectConfig),
+        data=read(ConfigFile.DATA, DataConfig),
+        experiments=read(ConfigFile.EXPERIMENTS, ExperimentsConfig),
+        statistics=read(ConfigFile.STATISTICS, StatisticsConfig),
     )

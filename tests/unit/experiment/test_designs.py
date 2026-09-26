@@ -10,6 +10,7 @@ from ctk_android.enums import (
     ExperimentName,
     ExposureCondition,
     Learner,
+    LogField,
     ModelFamily,
     TunedParameter,
     ValidationCheck,
@@ -17,7 +18,7 @@ from ctk_android.enums import (
 from ctk_android.experiment import design, evaluation, training
 from ctk_android.experiment.design import DesignInputs, run_fields, train_design_arms
 from ctk_android.paths import Paths
-from ctk_android.types import RunKey
+from ctk_android.types import RandomSeed, RunKey, SeedComponent
 from tests.architecture.source_index import REPO_ROOT
 from tests.unit.experiment.test_substitution import BUDGET, STUDY, TARGETS
 
@@ -29,7 +30,7 @@ CONFIG = FULL.model_copy(update={"experiments": SMALL})
 MASKS = design.family_masks(STUDY, ("alpha", "beta"))
 ATTRIBUTES = evaluation.row_attributes(STUDY, MASKS)
 POOLS = evaluation.build_pools(ATTRIBUTES, TARGETS)
-SEED = 310
+SEED = RandomSeed(310)
 
 
 def _inputs(name: ExperimentName) -> DesignInputs:
@@ -44,7 +45,7 @@ def _inputs(name: ExperimentName) -> DesignInputs:
             config=CONFIG.experiments.smoke_training,
             family=ModelFamily.MLP,
             device=Device.CPU,
-            seed=training.derive_seed(SEED, 0),
+            seed=training.derive_seed(SEED, SeedComponent(0)),
             transform_rule=None,
         ),
         study=STUDY,
@@ -62,7 +63,7 @@ def _failed(checks: tuple[object, ...]) -> list[object]:
 
 def test_run_fields_identify_the_run() -> None:
     fields = run_fields(_inputs(ExperimentName.EXACT_EFFECTIVE_DOSE_PRIMARY).key)
-    assert fields[Column.SEED] == SEED
+    assert fields[LogField.SEED] == SEED
 
 
 def test_exact_dose_design_trains_every_level_for_both_learners_with_identical_volume() -> None:

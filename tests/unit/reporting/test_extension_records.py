@@ -17,7 +17,7 @@ from ctk_android.enums import (
 )
 from ctk_android.paths import Paths
 from ctk_android.reporting.artifacts import collect_placebo_pairs, promote_extension_design
-from ctk_android.types import CtkError, DesignPromotion, RunKey
+from ctk_android.types import CtkError, DesignPromotion, RandomSeed, RunKey
 from ctk_android.workflows.report import run_controls_extension, run_dose_extension
 from tests.architecture.source_index import REPO_ROOT
 
@@ -26,7 +26,7 @@ MODE = ExecutionMode.EXTENSION_B
 NAME = ExperimentName.PLACEBO_ROBUST_PRIMARY
 
 
-def _write_pairs(paths: Paths, seed: int) -> None:
+def _write_pairs(paths: Paths, seed: RandomSeed) -> None:
     file = paths.run_file(
         RunKey(mode=MODE, experiment=NAME, seed=seed, salt=0), Artifact.PLACEBO_PAIRS
     )
@@ -36,7 +36,7 @@ def _write_pairs(paths: Paths, seed: int) -> None:
 
 def test_placebo_pairs_are_collected_only_for_completed_runs(tmp_path: Path) -> None:
     paths = Paths(tmp_path)
-    for seed in (320, 321):
+    for seed in (RandomSeed(320), RandomSeed(321)):
         _write_pairs(paths, seed)
     index = pl.DataFrame(
         {

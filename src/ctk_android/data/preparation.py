@@ -48,11 +48,11 @@ from ctk_android.types import (
     LargeFamilySelection,
     PackageSeries,
     PairsTable,
+    RandomSeed,
     Rank,
     RoleCountsTable,
     RoleSeries,
     RoleSliceTable,
-    Seed,
     SupportCount,
     TargetPair,
     ValidationRecord,
@@ -276,7 +276,7 @@ def natural_pairs(
 
 
 def assign_targets(
-    pairs: PairsTable, seed: Seed, families: tuple[FamilyName, ...], rule: EligibilityRule
+    pairs: PairsTable, seed: RandomSeed, families: tuple[FamilyName, ...], rule: EligibilityRule
 ) -> list[TargetPair]:
     remaining = {
         row[Column.CLIENT]: row[Column.FIT_ROWS]
@@ -301,7 +301,9 @@ def assign_targets(
     return chosen
 
 
-def permute_family_labels(labelled: LabelledTable, seed: Seed, offset: Seed) -> LabelledTable:
+def permute_family_labels(
+    labelled: LabelledTable, seed: RandomSeed, offset: RandomSeed
+) -> LabelledTable:
     eligible = (labelled[Column.REASON] == EligibilityReason.ELIGIBLE).to_numpy()
     positions = np.flatnonzero(eligible)
     rng = np.random.default_rng(np.random.SeedSequence([seed, offset]))

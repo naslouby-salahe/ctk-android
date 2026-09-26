@@ -35,9 +35,10 @@ from ctk_android.types import (
     LabelVector,
     ProximalAnchor,
     ProximalStrength,
+    RandomSeed,
     RowIndices,
     Scorer,
-    Seed,
+    SeedComponent,
     TrainingRows,
     TransformRule,
 )
@@ -50,16 +51,16 @@ class TrainingContext:
     config: TrainingConfig
     family: ModelFamily
     device: Device
-    seed: Seed
+    seed: RandomSeed
     transform_rule: TransformRule | None
 
 
-def derive_seed(base: Seed, *parts: Seed) -> Seed:
-    return np.random.SeedSequence([base, *parts]).generate_state(1)[0].item()
+def derive_seed(base: RandomSeed, *parts: SeedComponent) -> RandomSeed:
+    return RandomSeed(np.random.SeedSequence([base, *parts]).generate_state(1)[0].item())
 
 
-def learner_stream(learner: Learner) -> Seed:
-    return list(Learner).index(learner) + 1
+def learner_stream(learner: Learner) -> RandomSeed:
+    return RandomSeed(list(Learner).index(learner) + 1)
 
 
 def _require_both_classes(context: TrainingContext, rows: RowIndices) -> None:
@@ -72,9 +73,9 @@ def _require_both_classes(context: TrainingContext, rows: RowIndices) -> None:
 
 
 def _initial_network(
-    context: TrainingContext, stream: Seed, transform: InputTransform | None
+    context: TrainingContext, stream: RandomSeed, transform: InputTransform | None
 ) -> torch.nn.Module:
-    torch.default_generator.manual_seed(derive_seed(context.seed, stream))
+    torch.default_generator.manual_seed(derive_seed(context.seed, SeedComponent(stream)))
     return build_network(context.family, input_width(context.features, transform), context.config)
 
 
@@ -85,7 +86,7 @@ def _transform(context: TrainingContext, rows: RowIndices) -> InputTransform | N
 
 
 def train_scorer(
-    context: TrainingContext, rows: RowIndices, epochs: Epochs, stream: Seed
+    context: TrainingContext, rows: RowIndices, epochs: Epochs, stream: RandomSeed
 ) -> Scorer:
     _require_both_classes(context, rows)
     transform = _transform(context, rows)
@@ -95,7 +96,7 @@ def train_scorer(
             context.labels,
             rows,
             context.config,
-            derive_seed(context.seed, stream),
+            derive_seed(context.seed, SeedComponent(stream)),
             transform,
         )
         return Scorer(
@@ -109,7 +110,7 @@ def train_scorer(
         rows,
         epochs,
         context.config,
-        derive_seed(context.seed, stream, 1),
+        derive_seed(context.seed, SeedComponent(stream), SeedComponent(1)),
         context.device,
         None,
         transform,
@@ -132,7 +133,7 @@ def train_federated(
     training: TrainingRows,
     learner: Learner,
     strength: ProximalStrength,
-    stream: Seed,
+    stream: RandomSeed,
     aggregation: AggregationRule | None = None,
 ) -> Scorer:
     if context.family is ModelFamily.GRADIENT_BOOSTED_TREES:
@@ -157,7 +158,12 @@ def train_federated(
                 training[client],
                 context.config.federated_local_epochs,
                 context.config,
-                derive_seed(context.seed, stream, round_index, client_index),
+                derive_seed(
+                    context.seed,
+                    SeedComponent(stream),
+                    SeedComponent(round_index),
+                    SeedComponent(client_index),
+                ),
                 context.device,
                 anchor if learner is Learner.FEDPROX else None,
                 transform,
@@ -182,7 +188,7 @@ def train_federated(
 
 
 def finetune(
-    context: TrainingContext, scorer: Scorer, rows: RowIndices, epochs: Epochs, stream: Seed
+    context: TrainingContext, scorer: Scorer, rows: RowIndices, epochs: Epochs, stream: RandomSeed
 ) -> Scorer:
     if scorer.network is None:
         raise CtkError(FailureReason.NOT_APPLICABLE_MODEL_FAMILY, ErrorMessage.FINETUNE_NETWORK)
@@ -194,7 +200,7 @@ def finetune(
         rows,
         epochs,
         context.config,
-        derive_seed(context.seed, stream),
+        derive_seed(context.seed, SeedComponent(stream)),
         context.device,
         None,
         scorer.transform,

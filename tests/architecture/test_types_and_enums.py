@@ -23,6 +23,7 @@ GENERIC_CONSTRAINED_ALIASES = {
     "OpenUnitInterval",
 }
 ENUM_BASES = {"Enum", "StrEnum", "IntEnum", "Flag"}
+PRIMITIVE_ALIAS_NAMES = {"int", "float", "str", "bool", "Any", "object", "dict"}
 
 
 def _is_alias_target(node: ast.Assign) -> bool:
@@ -55,6 +56,38 @@ def _members(enum: ast.ClassDef) -> dict[str, str]:
     }
 
 
+def _primitive_aliases(tree: ast.Module) -> list[str]:
+    definitions = {
+        node.targets[0].id: node.value
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id[:1].isupper()
+        and not node.targets[0].id.isupper()
+    }
+
+    def primitive_names(expression: ast.expr, visited: frozenset[str] = frozenset()) -> set[str]:
+        names = {
+            candidate.id if isinstance(candidate, ast.Name) else candidate.attr
+            for candidate in ast.walk(expression)
+            if isinstance(candidate, ast.Name | ast.Attribute)
+        }
+        nested = {
+            alias
+            for alias in names & (definitions.keys() - visited)
+            for alias in primitive_names(definitions[alias], visited | {alias})
+        }
+        return names | nested
+
+    return [
+        name
+        for name, expression in definitions.items()
+        if primitive_names(expression, frozenset({name})) & PRIMITIVE_ALIAS_NAMES
+        and isinstance(expression, ast.Subscript | ast.BinOp | ast.Name | ast.Call)
+    ]
+
+
 def test_type_aliases_are_defined_only_in_types_py() -> None:
     offenders = [
         location(path, node.lineno)
@@ -63,6 +96,53 @@ def test_type_aliases_are_defined_only_in_types_py() -> None:
         if isinstance(node, ast.Assign) and _is_alias_target(node)
     ]
     assert not offenders, offenders
+
+
+def test_primitive_alias_laundering_mutations_are_detected() -> None:
+    snippets = (
+        "PolicyLike = str\n",
+        "ClientLike = int\n",
+        "Payload = dict[str, Any]\n",
+        "Payload = typing.Mapping[str, object]\n",
+        'PolicyLike = NewType("PolicyLike", str)\n',
+        "CountLike = typing.Annotated[int, Field(gt=0)]\n",
+        "Primitive = int\nClientLike = Primitive\n",
+    )
+    for snippet in snippets:
+        assert _primitive_aliases(ast.parse(snippet))
+
+
+def test_semantic_alias_to_a_named_domain_type_is_valid() -> None:
+    assert not _primitive_aliases(ast.parse("ClientSelection = ClientCount\n"))
+
+
+def _is_torch_state_dict_alias(tree: ast.Module) -> bool:
+    return any(
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "StateDict"
+        and ast.unparse(node.value) == "dict[str, torch.Tensor]"
+        for node in tree.body
+    )
+
+
+def test_torch_state_dict_external_mapping_exception_is_exact_and_tested() -> None:
+    assert _is_torch_state_dict_alias(parse(TYPES_MODULE))
+    assert not _is_torch_state_dict_alias(ast.parse("StateDict = dict[str, object]\n"))
+
+    modules = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in source_files()
+        if any(
+            isinstance(node, ast.Name) and node.id == "StateDict" for node in ast.walk(parse(path))
+        )
+    }
+    assert modules == {
+        "src/ctk_android/types.py",
+        "src/ctk_android/experiment/models.py",
+        "src/ctk_android/experiment/training.py",
+    }
 
 
 def test_constrained_scalars_and_newtypes_only_in_types_py() -> None:

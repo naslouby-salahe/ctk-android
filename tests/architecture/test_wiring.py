@@ -127,14 +127,38 @@ def test_every_function_is_reachable_from_the_cli() -> None:
     cli_roots = [
         root for root in roots if root.module == "cli" and root.name in _registered_names()
     ]
-    reached = callgraph.reachable(by_name, edges, cli_roots)
-    framework = {definition for definition in edges if definition in set(roots)}
-    unreachable = sorted(
-        f"{definition.module}.{definition.name}:{definition.line}"
-        for definition in edges
-        if definition not in reached and definition not in framework
-    )
-    assert not unreachable, unreachable
+    assert {root.name for root in cli_roots} == _registered_names()
+    assert not callgraph.orphan_diagnostics(by_name, edges, cli_roots)
+
+
+def test_each_cli_command_reaches_leaves_across_the_workflow_graph() -> None:
+    by_name, edges, roots = callgraph.build()
+    cli_roots = [
+        root for root in roots if root.module == "cli" and root.name in _registered_names()
+    ]
+    failures: list[str] = []
+    for root in cli_roots:
+        paths = callgraph.shortest_paths(by_name, edges, [root])
+        reached = set(paths)
+        leaves = [
+            definition
+            for definition in reached
+            if not any(
+                candidate in reached
+                for name in edges[definition]
+                for candidate in by_name.get(name, [])
+            )
+        ]
+        modules = {definition.module for definition in reached}
+        direct = sum(bool(by_name.get(name)) for name in edges[root])
+        summary = (
+            f"{root.name}: direct={direct}, transitive={len(reached)}, "
+            f"depth={max(map(len, paths.values()))}, leaves={len(leaves)}, "
+            f"modules={len(modules)}"
+        )
+        if direct == 0 or len(reached) < 3 or not leaves or len(modules) < 2:
+            failures.append(summary)
+    assert not failures, failures
 
 
 def _registered_names() -> set[str]:

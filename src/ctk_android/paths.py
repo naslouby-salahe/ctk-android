@@ -31,13 +31,13 @@ from ctk_android.types import (
     File,
     LamdaReleaseFiles,
     PartitionKey,
+    RandomSeed,
     RunKey,
     Salt,
-    Seed,
 )
 
 
-def _run_name(seed: Seed, salt: Salt) -> EntryName:
+def _run_name(seed: RandomSeed, salt: Salt) -> EntryName:
     name = f"{NameFragment.SEED}{format(seed, FormatSpec.THREE_DIGITS)}"
     return f"{name}{NameFragment.SALT}{salt}" if salt else name
 

@@ -74,16 +74,15 @@ from ctk_android.types import (
     Priorities,
     Provenance,
     ProximalStrength,
+    RandomSeed,
     ResultsByArm,
     RowCount,
     RunKey,
     RunManifest,
     RunReport,
     RunStatusDocument,
-    Seed,
     StudyData,
     SummaryTable,
-    SupportCount,
     Table,
     TargetPair,
     TrainingByArm,
@@ -160,7 +159,7 @@ def _finetune_arm(
             federated.scorers[client],
             rows[client],
             epochs,
-            training.derive_seed(stream, index),
+            training.derive_seed(stream, training.SeedComponent(index)),
         )
         for index, client in enumerate(ClientId)
     }
@@ -215,7 +214,7 @@ def _train_local(
             context,
             rows[client],
             epochs,
-            training.derive_seed(learner_stream(Learner.LOCAL), index),
+            training.derive_seed(learner_stream(Learner.LOCAL), training.SeedComponent(index)),
         )
         for index, client in enumerate(ClientId)
     }
@@ -361,17 +360,26 @@ class RunTables:
     discrimination: DiscriminationTable
 
 
+@dataclass(frozen=True)
+class RunTableWrite:
+    paths: Paths
+    key: RunKey
+    config: Config
+    study: StudyData
+    targets: tuple[TargetPair, ...]
+    masks: FamilyMasks
+    pools: ClientPools
+    results: ResultsByArm
+    tables: RunTables
+    exposure_table: ExposureTable
+
+
 def _run_local(
-    spec: ExperimentSpec,
-    key: RunKey,
-    context: training.TrainingContext,
-    study: StudyData,
-    masks: FamilyMasks,
-    pools: ClientPools,
-    orders: TrainingRows,
-    targets: tuple[TargetPair, ...],
-    budget: SupportCount,
+    inputs: DesignInputs,
 ) -> LocalArm:
+    spec, key, context = inputs.spec, inputs.key, inputs.context
+    study, masks, pools = inputs.study, inputs.masks, inputs.pools
+    orders, targets, budget = inputs.orders, inputs.targets, inputs.budget
     local_rows = design.select_training(
         orders,
         masks,
@@ -394,15 +402,13 @@ def _run_local(
 
 
 def _train_setting(
-    spec: ExperimentSpec,
-    key: RunKey,
-    context: training.TrainingContext,
-    study: StudyData,
-    pools: ClientPools,
+    inputs: DesignInputs,
     setting: ExposureSetting,
     rows: TrainingRows,
     local: ArmResult | None,
 ) -> ResultsByArm:
+    spec, key, context = inputs.spec, inputs.key, inputs.context
+    study, pools = inputs.study, inputs.pools
     condition, dose = setting.condition, setting.dose
     reported = tuple(learner for learner in global_learners() if learner in spec.learners)
     results: ResultsByArm = {}
@@ -433,33 +439,14 @@ def _train_setting(
 
 
 def _train_arms(
-    spec: ExperimentSpec,
-    config: Config,
-    key: RunKey,
-    context: training.TrainingContext,
-    study: StudyData,
-    masks: FamilyMasks,
-    pools: ClientPools,
-    orders: TrainingRows,
+    inputs: DesignInputs,
     priorities: Priorities,
-    targets: tuple[TargetPair, ...],
-    budget: SupportCount,
 ) -> TrainedArms:
+    spec, config, key = inputs.spec, inputs.config, inputs.key
+    context, study, masks = inputs.context, inputs.study, inputs.masks
+    pools, orders, targets, budget = inputs.pools, inputs.orders, inputs.targets, inputs.budget
     if spec.design not in (ExperimentDesign.STANDARD, ExperimentDesign.REPRESENTATION):
-        designed = train_design_arms(
-            DesignInputs(
-                spec=spec,
-                config=config,
-                key=key,
-                context=context,
-                study=study,
-                masks=masks,
-                pools=pools,
-                orders=orders,
-                targets=targets,
-                budget=budget,
-            )
-        )
+        designed = train_design_arms(inputs)
         return TrainedArms(
             arms=designed.arms,
             trainings=designed.trainings,
@@ -482,7 +469,7 @@ def _train_arms(
         trainings.update(dict.fromkeys(results, grid_rows))
     local: ArmResult | None = None
     if not spec.fairness_grid and {Learner.LOCAL, Learner.BLEND} & set(spec.learners):
-        trained_local = _run_local(spec, key, context, study, masks, pools, orders, targets, budget)
+        trained_local = _run_local(inputs)
         local, local_rows = trained_local.result, trained_local.rows
         if Learner.LOCAL in spec.learners:
             results[local_arm()] = local
@@ -501,24 +488,17 @@ def _train_arms(
                 LogField.TRAIN_ROWS: sum(chosen.size for chosen in rows.values()),
             },
         )
-        trained = _train_setting(spec, key, context, study, pools, setting, rows, local)
+        trained = _train_setting(inputs, setting, rows, local)
         results.update(trained)
         trainings.update(dict.fromkeys(trained, rows))
     return TrainedArms(arms=results, trainings=trainings)
 
 
-def _write_tables(
-    paths: Paths,
-    key: RunKey,
-    config: Config,
-    study: StudyData,
-    targets: tuple[TargetPair, ...],
-    masks: FamilyMasks,
-    pools: ClientPools,
-    results: ResultsByArm,
-    tables: RunTables,
-    exposure_table: ExposureTable,
-) -> None:
+def _write_tables(request: RunTableWrite) -> None:
+    paths, key, config = request.paths, request.key, request.config
+    study, targets, masks = request.study, request.targets, request.masks
+    pools, results = request.pools, request.results
+    tables, exposure_table = request.tables, request.exposure_table
     operating, summary = tables.operating, tables.summary
     clients, family_table, discrimination = tables.clients, tables.families, tables.discrimination
     write_table(
@@ -666,7 +646,7 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         config=train_config,
         family=spec.model_family,
         device=device,
-        seed=training.derive_seed(key.seed, key.salt),
+        seed=training.derive_seed(key.seed, training.SeedComponent(key.salt)),
         transform_rule=representations.transform_rule(spec.representation, config),
     )
     orders = design.training_orders(study, key.seed, key.salt)
@@ -685,7 +665,19 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     )
 
     trained = _train_arms(
-        spec, config, key, context, study, masks, pools, orders, priorities, targets, budget
+        DesignInputs(
+            spec=spec,
+            config=config,
+            key=key,
+            context=context,
+            study=study,
+            masks=masks,
+            pools=pools,
+            orders=orders,
+            targets=targets,
+            budget=budget,
+        ),
+        priorities,
     )
     results, trainings = trained.arms, trained.trainings
     fit_pool = orders
@@ -721,16 +713,18 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     )
 
     _write_tables(
-        paths,
-        key,
-        config,
-        study,
-        targets,
-        masks,
-        pools,
-        results,
-        evaluated.tables,
-        exposure_table,
+        RunTableWrite(
+            paths=paths,
+            key=key,
+            config=config,
+            study=study,
+            targets=targets,
+            masks=masks,
+            pools=pools,
+            results=results,
+            tables=evaluated.tables,
+            exposure_table=exposure_table,
+        )
     )
     if trained.placebo is not None:
         write_table(trained.placebo, paths.run_file(key, Artifact.PLACEBO_PAIRS))
@@ -773,7 +767,7 @@ def run_experiment(
     config: Config,
     experiment: ExperimentName,
     mode: ExecutionMode,
-    seeds: tuple[Seed, ...],
+    seeds: tuple[RandomSeed, ...],
     overwrite: Overwrite,
 ) -> list[RunReport]:
     spec = config.experiments.experiments[experiment]
@@ -817,7 +811,7 @@ def run_and_report(
     config: Config,
     experiment: ExperimentName,
     mode: ExecutionMode,
-    seeds: tuple[Seed, ...],
+    seeds: tuple[RandomSeed, ...],
     overwrite: Overwrite,
 ) -> list[RunReport]:
     reports = run_experiment(paths, config, experiment, mode, seeds, overwrite)

@@ -62,7 +62,7 @@ from ctk_android.enums import (
     TaxonomyLabel,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import ScoredRun, TargetPair
+from ctk_android.types import RandomSeed, ScoredRun, TargetPair
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT))
@@ -259,7 +259,7 @@ def _scored_run() -> ScoredRun:
     )
     return ScoredRun(
         representation=Representation.LAMDA_STATIC,
-        seed=1,
+        seed=RandomSeed(1),
         targets=(TargetPair(client=ClientId.ANZHI, family="fam"),),
         study=study,
         thresholds=operating,
@@ -278,7 +278,9 @@ def test_scored_targets_reproduce_the_calibrated_operating_point() -> None:
     assert row[DiagnosticColumn.CALIBRATED_RECALL] == pytest.approx(2 / 3)
     assert row[DiagnosticColumn.CALIBRATED_FPR] == pytest.approx(0.25)
     assert row[DiagnosticColumn.STORED_RECALL] == pytest.approx(2 / 3)
-    assert 0.0 <= row[DiagnosticColumn.EQUAL_FPR_RECALL] <= 1.0
+    equal_fpr_recall = row[DiagnosticColumn.EQUAL_FPR_RECALL]
+    assert isinstance(equal_fpr_recall, int | float)
+    assert 0.0 <= equal_fpr_recall <= 1.0
 
 
 def test_score_health_counts_non_finite_and_extreme_scores() -> None:

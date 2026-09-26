@@ -62,12 +62,12 @@ from ctk_android.types import (
     PlaceboOption,
     PlaceboPairRow,
     Priorities,
+    RandomSeed,
     ResultsByArm,
     RowCount,
     RowIndices,
     RunKey,
     Salt,
-    Seed,
     StudyData,
     SupportCount,
     Table,
@@ -93,7 +93,7 @@ def client_rows(study: StudyData, client: ClientId, role: SplitRole) -> RowIndic
     return np.flatnonzero(mask.to_numpy())
 
 
-def training_orders(study: StudyData, seed: Seed, salt: Salt) -> TrainingRows:
+def training_orders(study: StudyData, seed: RandomSeed, salt: Salt) -> TrainingRows:
     orders: TrainingRows = {}
     for index, client in enumerate(ClientId):
         rows = client_rows(study, client, SplitRole.FIT)
@@ -102,7 +102,7 @@ def training_orders(study: StudyData, seed: Seed, salt: Salt) -> TrainingRows:
     return orders
 
 
-def row_priorities(study: StudyData, seed: Seed, salt: Salt) -> Priorities:
+def row_priorities(study: StudyData, seed: RandomSeed, salt: Salt) -> Priorities:
     rng = np.random.default_rng(np.random.SeedSequence([seed, salt, len(ClientId)]))
     return rng.random(study.table.height)
 

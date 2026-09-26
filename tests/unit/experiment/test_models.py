@@ -15,7 +15,7 @@ from ctk_android.experiment.models import (
     scorer_logits,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import AggregationRule, ProximalAnchor, Scorer, TransformRule
+from ctk_android.types import AggregationRule, ProximalAnchor, RandomSeed, Scorer, TransformRule
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT)).experiments.smoke_training
@@ -24,7 +24,7 @@ FEATURES = 12
 ROWS = 200
 STRENGTH = 50.0
 EPOCHS = 3
-SEED = 4
+SEED = RandomSeed(4)
 
 
 def _data() -> tuple[np.ndarray, np.ndarray, np.ndarray]:

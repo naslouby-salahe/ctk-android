@@ -35,11 +35,11 @@ from ctk_android.types import (
     PairTables,
     PartitionKey,
     PartitionResult,
+    RandomSeed,
     Rank,
     RoleFrame,
     RoleSeries,
     RowCount,
-    Seed,
     StudyData,
     StudyTable,
     ValidationRecord,
@@ -176,7 +176,7 @@ def study_table(
     key: PartitionKey,
     config: DataConfig,
     labels: FamilyLabelSource,
-    permutation_offset: Seed,
+    permutation_offset: RandomSeed,
 ) -> StudyTable:
     labelled = classify_labels(assignments, config)
     if labels is FamilyLabelSource.PERMUTED:
@@ -195,7 +195,7 @@ def load_study(
     key: PartitionKey,
     config: DataConfig,
     labels: FamilyLabelSource,
-    permutation_offset: Seed,
+    permutation_offset: RandomSeed,
 ) -> StudyData:
     table = study_table(
         pl.read_parquet(paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS)),

@@ -24,8 +24,9 @@ from ctk_android.types import (
     PartitionKey,
     PlannedRun,
     PlannedTargets,
+    RandomSeed,
     RunKey,
-    Seed,
+    Salt,
     TargetPair,
 )
 
@@ -84,8 +85,8 @@ def plan_run(
     config: Config,
     name: ExperimentName,
     mode: ExecutionMode,
-    seed: Seed,
-    salt: Seed,
+    seed: RandomSeed,
+    salt: Salt,
 ) -> PlannedRun:
     spec = config.experiments.experiments[name]
     key = PartitionKey(seed=seed, salt=salt, grouping=spec.grouping, profile=spec.eligibility)

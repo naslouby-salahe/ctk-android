@@ -633,6 +633,7 @@ class LogEvent(StrEnum):
     COMMAND_STARTED = "command-started"
     COMMAND_FINISHED = "command-finished"
     COMMAND_FAILED = "command-failed"
+    CACHE_INVALIDATED = "cache-invalidated"
     DOCTOR_CHECKED = "doctor-checked"
     SOURCE_FINGERPRINTED = "source-fingerprinted"
     LAMDA_LOADED = "lamda-loaded"
@@ -898,6 +899,7 @@ class GitArgument(StrEnum):
 
 
 class ErrorMessage(StrEnum):
+    INVALID_DIAGNOSTIC_VALUE = "diagnostic table contains a non-numeric effect value"
     NO_PROJECT_ROOT = "no {marker} above {start}"
     NO_LAMDA_FILES = "no LAMDA parquet files found"
     NO_MCNDROID_FILES = "no McNdroid {kind} files found under {path}"

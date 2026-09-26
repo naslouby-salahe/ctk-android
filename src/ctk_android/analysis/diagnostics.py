@@ -26,6 +26,7 @@ from ctk_android.enums import (
     DoseRole,
     EmaxBound,
     EmaxStart,
+    ErrorMessage,
     EvaluationPopulation,
     EvidenceClass,
     ExperimentName,
@@ -50,18 +51,21 @@ from ctk_android.enums import (
 from ctk_android.types import (
     Alpha,
     ArmKey,
-    ArmName,
+    ArmLabel,
     ControlDiagnostics,
     ControlStratum,
     Correlation,
+    DiagnosticColumnName,
+    DiagnosticInterval,
     DiagnosticMatrix,
     DiagnosticRow,
     DiagnosticRows,
+    DiagnosticSummary,
     DiagnosticTable,
     DiagnosticVector,
     DoseDiagnostics,
     DoseFit,
-    DoseName,
+    DoseLabel,
     Effect,
     ExposureTable,
     FamilyCountsTable,
@@ -339,15 +343,26 @@ def control_cells(
     )
 
 
-def _summary(values: DiagnosticVector, config: Config) -> DiagnosticRow:
+def _summary(values: DiagnosticVector, config: Config) -> DiagnosticSummary:
     interval = seeded_bca(values, config, DiagnosticSeed.CONTROLS, DiagnosticLimit.CLIENT_SEEDS)
+    return DiagnosticSummary(
+        count=values.size,
+        mean=values.mean().item() if values.size else None,
+        median=np.median(values).item() if values.size else None,
+        positive_count=(values > 0).sum().item(),
+        low=interval_low(interval),
+        high=interval_high(interval),
+    )
+
+
+def _summary_row(summary: DiagnosticSummary) -> DiagnosticRow:
     return {
-        DiagnosticColumn.N: values.size,
-        DiagnosticColumn.MEAN: values.mean().item() if values.size else None,
-        DiagnosticColumn.MEDIAN: np.median(values).item() if values.size else None,
-        DiagnosticColumn.POSITIVE: (values > 0).sum().item(),
-        Column.CI_LOW: interval_low(interval),
-        Column.CI_HIGH: interval_high(interval),
+        DiagnosticColumn.N: summary.count,
+        DiagnosticColumn.MEAN: summary.mean,
+        DiagnosticColumn.MEDIAN: summary.median,
+        DiagnosticColumn.POSITIVE: summary.positive_count,
+        Column.CI_LOW: summary.low,
+        Column.CI_HIGH: summary.high,
     }
 
 
@@ -388,10 +403,10 @@ def _strata(config: Config, experiments: tuple[ExperimentName, ...]) -> list[Con
     ]
 
 
-def _gate(contrast: DiagnosticColumn, row: DiagnosticRow, config: Config) -> Passed:
+def _gate(contrast: DiagnosticColumn, row: DiagnosticSummary, config: Config) -> Passed:
     margin = config.statistics.gates.ctk_min_gain
-    low, high = row[Column.CI_LOW], row[Column.CI_HIGH]
-    if low is None:
+    low, high = row.low, row.high
+    if low is None or high is None:
         return False
     if contrast is DiagnosticColumn.PLACEBO_EFFECT:
         return low >= -margin and high <= margin
@@ -415,7 +430,7 @@ def strata_effects(
                 {
                     **_tag(stratum),
                     Column.CONTRAST: contrast,
-                    **summary,
+                    **_summary_row(summary),
                     DiagnosticColumn.GATE: _gate(contrast, summary, config),
                 }
             )
@@ -440,9 +455,15 @@ def client_effects(
                 for contrast in pair:
                     summary = _summary(means[contrast].to_numpy().astype(np.float64), config)
                     row |= {
-                        f"{contrast}{DiagnosticColumn.MEAN_SUFFIX}": summary[DiagnosticColumn.MEAN],
-                        f"{contrast}{DiagnosticColumn.LOW_SUFFIX}": summary[Column.CI_LOW],
-                        f"{contrast}{DiagnosticColumn.HIGH_SUFFIX}": summary[Column.CI_HIGH],
+                        DiagnosticColumnName(
+                            f"{contrast}{DiagnosticColumn.MEAN_SUFFIX}"
+                        ): summary.mean,
+                        DiagnosticColumnName(
+                            f"{contrast}{DiagnosticColumn.LOW_SUFFIX}"
+                        ): summary.low,
+                        DiagnosticColumnName(
+                            f"{contrast}{DiagnosticColumn.HIGH_SUFFIX}"
+                        ): summary.high,
                     }
             rows.append(row)
     return rows
@@ -465,23 +486,23 @@ def reallocation_effects(
             means[label] = _seed_means(subset, pair)
             placebo = _summary(_vector(means[label], pair[0]), config)
             beyond = _summary(_vector(means[label], pair[1]), config)
-            low, high = placebo[Column.CI_LOW], placebo[Column.CI_HIGH]
+            low, high = placebo.low, placebo.high
             rows.append(
                 {
                     **_tag(stratum),
                     DiagnosticColumn.STRATUM: label,
                     DiagnosticColumn.SEEDS: means[label].height,
                     DiagnosticColumn.CELLS: subset.height,
-                    DiagnosticColumn.MEAN: placebo[DiagnosticColumn.MEAN],
+                    DiagnosticColumn.MEAN: placebo.mean,
                     Column.CI_LOW: low,
                     Column.CI_HIGH: high,
                     DiagnosticColumn.EQUIVALENT: low is not None
+                    and high is not None
                     and low >= -margin
                     and high <= margin,
-                    DiagnosticColumn.BEYOND_MEAN: beyond[DiagnosticColumn.MEAN],
-                    DiagnosticColumn.BEYOND_LOW: beyond[Column.CI_LOW],
-                    DiagnosticColumn.BEYOND: beyond[Column.CI_LOW] is not None
-                    and beyond[Column.CI_LOW] > margin,
+                    DiagnosticColumn.BEYOND_MEAN: beyond.mean,
+                    DiagnosticColumn.BEYOND_LOW: beyond.low,
+                    DiagnosticColumn.BEYOND: beyond.low is not None and beyond.low > margin,
                 }
             )
         joined = means[ReallocationStratum.REALLOCATED].join(
@@ -500,9 +521,9 @@ def reallocation_effects(
                 **_tag(stratum),
                 DiagnosticColumn.STRATUM: ReallocationStratum.DIFFERENCE,
                 DiagnosticColumn.SEEDS: joined.height,
-                DiagnosticColumn.MEAN: difference[DiagnosticColumn.MEAN],
-                Column.CI_LOW: difference[Column.CI_LOW],
-                Column.CI_HIGH: difference[Column.CI_HIGH],
+                DiagnosticColumn.MEAN: difference.mean,
+                Column.CI_LOW: difference.low,
+                Column.CI_HIGH: difference.high,
             }
         )
     return rows
@@ -708,9 +729,9 @@ def support_effects(
                         DiagnosticColumn.STRATUM: label,
                         Column.CONTRAST: contrast,
                         DiagnosticColumn.SEEDS: means.height,
-                        DiagnosticColumn.MEAN: summary[DiagnosticColumn.MEAN],
-                        Column.CI_LOW: summary[Column.CI_LOW],
-                        Column.CI_HIGH: summary[Column.CI_HIGH],
+                        DiagnosticColumn.MEAN: summary.mean,
+                        Column.CI_LOW: summary.low,
+                        Column.CI_HIGH: summary.high,
                     }
                 )
     return rows
@@ -803,8 +824,8 @@ def family_seed_level(pairs: DiagnosticTable) -> DiagnosticTable:
     ).agg(pl.col(DiagnosticColumn.CTK).mean())
 
 
-def dose_name(dose: SupportCount) -> DoseName:
-    return DoseLevel.NATURAL if dose == DoseCode.NATURAL else f"{dose}"
+def dose_name(dose: SupportCount) -> DoseLabel:
+    return DoseLabel(DoseLevel.NATURAL if dose == DoseCode.NATURAL else f"{dose}")
 
 
 def wide_by_dose(table: DiagnosticTable) -> DiagnosticTable:
@@ -817,9 +838,13 @@ def _column(wide: DiagnosticTable, dose: SupportCount) -> DiagnosticVector:
     return wide[f"{dose}"].to_numpy().astype(np.float64)
 
 
-def _bca(values: DiagnosticVector, config: Config) -> DiagnosticRow:
+def _bca(values: DiagnosticVector, config: Config) -> DiagnosticInterval:
     interval = seeded_bca(values, config, DiagnosticSeed.DOSE, StatisticsLimit.BCA_SEEDS)
-    return {Column.CI_LOW: interval_low(interval), Column.CI_HIGH: interval_high(interval)}
+    return DiagnosticInterval(low=interval_low(interval), high=interval_high(interval))
+
+
+def _bca_row(interval: DiagnosticInterval) -> DiagnosticRow:
+    return {Column.CI_LOW: interval.low, Column.CI_HIGH: interval.high}
 
 
 def _role(
@@ -870,7 +895,7 @@ def ctk_by_dose(
                                 Column.DOSE: dose_name(dose),
                                 DiagnosticColumn.N: values.size,
                                 Column.MEAN_CTK: values.mean().item(),
-                                **_bca(values, config),
+                                **_bca_row(_bca(values, config)),
                                 Column.POSITIVE_SEEDS: (values > 0).sum().item(),
                             }
                         )
@@ -892,7 +917,7 @@ def dose_increments(
                         values = _column(wide, high) - _column(wide, low)
                         interval = _bca(values, config)
                         scale = DiagnosticLimit.DOSE_UNIT / (high - low)
-                        lower, upper = interval[Column.CI_LOW], interval[Column.CI_HIGH]
+                        lower, upper = interval.low, interval.high
                         rows.append(
                             {
                                 DiagnosticColumn.SET: scoped.scope,
@@ -903,7 +928,8 @@ def dose_increments(
                                 DiagnosticColumn.SEGMENT: f"{low}{Separator.ARROW}{high}",
                                 DiagnosticColumn.N: values.size,
                                 DiagnosticColumn.INCREMENT: values.mean().item(),
-                                **interval,
+                                Column.CI_LOW: lower,
+                                Column.CI_HIGH: upper,
                                 DiagnosticColumn.PER_UNIT: values.mean().item() * scale,
                                 DiagnosticColumn.PER_UNIT_LOW: None
                                 if lower is None
@@ -941,7 +967,7 @@ def family_curves(families: DiagnosticTable, config: Config) -> DiagnosticRows:
                         Column.DOSE: dose_name(dose),
                         DiagnosticColumn.SEEDS: values.size,
                         Column.MEAN_CTK: values.mean().item(),
-                        **_bca(values, config),
+                        **_bca_row(_bca(values, config)),
                     }
                 )
     return rows
@@ -983,7 +1009,9 @@ def family_summary(curves: DiagnosticTable, config: Config) -> DiagnosticRows:
                 Column.FAMILY: head[Column.FAMILY],
                 DiagnosticColumn.SEEDS: end[DiagnosticColumn.SEEDS],
                 **{
-                    f"{DiagnosticColumn.CTK}{dose}": means[dose][Column.MEAN_CTK]
+                    DiagnosticColumnName(f"{DiagnosticColumn.CTK}{dose}"): means[dose][
+                        Column.MEAN_CTK
+                    ]
                     for dose in doses[1:]
                 },
                 DiagnosticColumn.CTK_TOP_LOW: lower,
@@ -1090,7 +1118,7 @@ def client_curves(
                         DiagnosticColumn.SEEDS: wide.height,
                         Column.DOSE: dose_name(dose),
                         Column.MEAN_CTK: values.mean().item(),
-                        **_bca(values, config),
+                        **_bca_row(_bca(values, config)),
                     }
                 )
     return rows
@@ -1189,7 +1217,7 @@ def _model_parameters(model: DoseModel, fit: DoseFit) -> SupportCount:
 
 def model_block(
     wide: DiagnosticTable,
-    label: DoseName,
+    label: DoseLabel | ExtensionScope,
     config: Config,
     rng: np.random.Generator,
 ) -> DiagnosticRow:
@@ -1197,18 +1225,19 @@ def model_block(
     grid = np.array(doses, dtype=np.float64)
     top = doses[-1]
     curves = wide.select([f"{dose}" for dose in doses]).to_numpy().astype(np.float64)
-    natural_name = f"{DoseCode.NATURAL}"
     natural = (
-        wide[natural_name].to_numpy().astype(np.float64) if natural_name in wide.columns else None
+        wide[DoseCode.NATURAL].to_numpy().astype(np.float64)
+        if DoseCode.NATURAL in wide.columns
+        else None
     )
     units = curves.shape[0]
     row: DiagnosticRow = {DiagnosticColumn.CURVE: label, DiagnosticColumn.UNITS: units}
     for model in DoseModel:
         fit = fit_curve(curves, grid, model)
-        row[f"{DiagnosticColumn.AIC}{model}"] = akaike(
+        row[DiagnosticColumnName(f"{DiagnosticColumn.AIC}{model}")] = akaike(
             curves, fit.predicted, _model_parameters(model, fit)
         )
-        row[f"{DiagnosticColumn.CV_MSE}{model}"] = (
+        row[DiagnosticColumnName(f"{DiagnosticColumn.CV_MSE}{model}")] = (
             cross_validated(curves, grid, model) if units >= StatisticsLimit.BCA_SEEDS else np.nan
         )
         if model is DoseModel.EMAX:
@@ -1250,7 +1279,7 @@ def model_block(
             limits = np.quantile(equivalent, [tail, 1.0 - tail])
         row |= {
             DiagnosticColumn.NATURAL_CTK: np.nanmean(natural).item(),
-            f"{DiagnosticColumn.CTK}{top}": mean_curve[-1].item(),
+            DiagnosticColumnName(f"{DiagnosticColumn.CTK}{top}"): mean_curve[-1].item(),
             DiagnosticColumn.EQUIVALENT_DOSE: equivalent_dose(
                 mean_curve, np.nanmean(natural).item(), grid
             ),
@@ -1410,8 +1439,8 @@ def equal_fpr_arms() -> tuple[ArmKey, ...]:
     )
 
 
-def arm_name(arm: ArmKey) -> ArmName:
-    return f"{arm.learner}{NameFragment.ARM_SEPARATOR}{arm.condition}"
+def arm_name(arm: ArmKey) -> ArmLabel:
+    return ArmLabel(f"{arm.learner}{NameFragment.ARM_SEPARATOR}{arm.condition}")
 
 
 def recall_at_fpr(negatives: DiagnosticVector, positives: DiagnosticVector, fpr: Alpha) -> Effect:
@@ -1553,14 +1582,20 @@ def _effect_rows(
         head = group.row(0, named=True)
         differences = (group[value] - group[DiagnosticColumn.REFERENCE]).to_numpy()
         interval = bca_interval(differences, config.statistics)
+        level = group[value].mean()
+        if not isinstance(level, int | float) or isinstance(level, bool):
+            raise ValueError(ErrorMessage.INVALID_DIAGNOSTIC_VALUE)
+        reference_level = group[DiagnosticColumn.REFERENCE].mean()
+        if not isinstance(reference_level, int | float) or isinstance(reference_level, bool):
+            raise ValueError(ErrorMessage.INVALID_DIAGNOSTIC_VALUE)
         row: DiagnosticRow = {
             DiagnosticColumn.READING: reading,
-            DiagnosticColumn.ARM: head[DiagnosticColumn.ARM],
-            Column.GROUP: head[Column.GROUP],
-            Column.REPRESENTATION: head[Column.REPRESENTATION],
+            DiagnosticColumn.ARM: ArmLabel(head[DiagnosticColumn.ARM]),
+            Column.GROUP: RepresentationGroup(head[Column.GROUP]),
+            Column.REPRESENTATION: Representation(head[Column.REPRESENTATION]),
             DiagnosticColumn.SEEDS: differences.size,
-            Column.LEVEL: group[value].mean(),
-            DiagnosticColumn.REFERENCE: group[DiagnosticColumn.REFERENCE].mean(),
+            Column.LEVEL: level,
+            DiagnosticColumn.REFERENCE: reference_level,
             DiagnosticColumn.DIFF: differences.mean().item(),
             DiagnosticColumn.POSITIVE: (differences > 0).sum().item(),
             Column.CI_LOW: interval_low(interval),

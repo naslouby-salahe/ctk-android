@@ -2,20 +2,20 @@ import numpy as np
 
 from ctk_android.enums import ClientId, Column, ExposureCondition, ExposureMode, Learner, SplitRole
 from ctk_android.experiment import design
-from ctk_android.types import ArmKey
+from ctk_android.types import ArmKey, RandomSeed
 from tests.unit.synthetic import synthetic_study, synthetic_targets
 
 BUDGET = 30
 STUDY = synthetic_study()
 TARGETS = synthetic_targets()
 MASKS = design.family_masks(STUDY, ("alpha", "beta"))
-ORDERS = design.training_orders(STUDY, 5, 0)
+ORDERS = design.training_orders(STUDY, RandomSeed(5), 0)
 
 
 def _select(condition: ExposureCondition, dose: int | None = None) -> dict[ClientId, np.ndarray]:
     arm = ArmKey(learner=Learner.CENTRAL, condition=condition, dose=dose)
     spec = design.exposure_spec(arm, ExposureMode.HIDE_FROM_TARGET, TARGETS)
-    priorities = design.row_priorities(STUDY, 5, 0)
+    priorities = design.row_priorities(STUDY, RandomSeed(5), 0)
     allowed = design.allowed_dose_rows(STUDY, MASKS, spec, priorities)
     return design.select_training(ORDERS, MASKS, spec, allowed, BUDGET)
 

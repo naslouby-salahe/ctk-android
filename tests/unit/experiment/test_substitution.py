@@ -5,12 +5,12 @@ import pytest
 from ctk_android.data.preparation import feature_identities
 from ctk_android.enums import ClientId, Column, EligibilityReason, SplitRole
 from ctk_android.experiment import design
-from ctk_android.types import CtkError, StudyData, TargetPair
+from ctk_android.types import CtkError, RandomSeed, StudyData, TargetPair
 
 FAMILIES = ("alpha", "beta", "gamma", "delta", "epsilon")
 PER_CELL = 100
 BUDGET = 60
-SEED = 7
+SEED = RandomSeed(7)
 
 
 def _study() -> StudyData:

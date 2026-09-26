@@ -17,7 +17,7 @@ from ctk_android.enums import (
 )
 from ctk_android.logs import Stopwatch, bind, configure_logging
 from ctk_android.paths import Paths
-from ctk_android.types import CtkError, Overwrite, Promote, Seed, seed_adapter
+from ctk_android.types import CtkError, Overwrite, Promote, RandomSeed, seed_adapter
 from ctk_android.workflows import maintenance as maintenance_workflow
 from ctk_android.workflows import preprocess as preprocess_workflow
 from ctk_android.workflows import report as report_workflow
@@ -131,7 +131,7 @@ def smoke(overwrite: Annotated[Overwrite, typer.Option()] = False) -> None:
 def run(
     experiment: ExperimentName,
     mode: ExecutionMode = ExecutionMode.DEVELOPMENT,
-    seed: Annotated[Seed | None, typer.Option(parser=seed_adapter.validate_python)] = None,
+    seed: Annotated[RandomSeed | None, typer.Option(parser=seed_adapter.validate_python)] = None,
     overwrite: Annotated[Overwrite, typer.Option()] = False,
 ) -> None:
     context = _context(CliCommand.RUN)

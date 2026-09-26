@@ -20,7 +20,7 @@ from ctk_android.enums import (
 from ctk_android.experiment.planning import plan_run, planned_targets
 from ctk_android.paths import Paths
 from ctk_android.reporting.artifacts import collect_evidence
-from ctk_android.types import EligibilityRule, PartitionKey, Provenance, RunKey
+from ctk_android.types import EligibilityRule, PartitionKey, Provenance, RandomSeed, RunKey
 from ctk_android.workflows.maintenance import run_plan
 from ctk_android.workflows.preprocess import (
     representation_keys,
@@ -35,7 +35,7 @@ BASE = load_config(Paths(REPO_ROOT))
 LAMDA_ROWS = 2400
 OVERLAP = list(range(200, 2200))
 MODE = ExecutionMode.DEVELOPMENT
-SEEDS = (1, 2, 3)
+SEEDS = (RandomSeed(1), RandomSeed(2), RandomSeed(3))
 SMALL_BUDGET = 100
 NAMES = (
     ExperimentName.REPRESENTATION_R0,

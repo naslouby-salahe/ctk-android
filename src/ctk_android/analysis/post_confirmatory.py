@@ -1754,7 +1754,7 @@ def _reml(design: RandomEffectsDesign, warm: VarianceVector | None) -> VarianceE
         for start in starts
     ]
     best = min(fits, key=lambda fit: fit.fun)
-    return VarianceEstimate(variances=best.x * scale, converged=bool(best.success))
+    return VarianceEstimate(variances=best.x * scale, converged=best.success)
 
 
 def _shares(estimate: VarianceEstimate) -> VarianceVector:

@@ -11,6 +11,7 @@ from ctk_android.analysis.statistics import (
 )
 from ctk_android.config import load_config
 from ctk_android.paths import Paths
+from ctk_android.types import RandomSeed
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT)).statistics
@@ -69,8 +70,10 @@ def test_cluster_bootstrap_detects_a_real_difference_and_a_null() -> None:
     trials = np.ones(1000, dtype=np.int64)
     strong = (RNG.random(1000) < 0.9).astype(np.int64)
     weak = (RNG.random(1000) < 0.4).astype(np.int64)
-    separated = cluster_bootstrap_difference(strong, weak, trials, groups, 500, 1, LEVEL)
-    null = cluster_bootstrap_difference(strong, strong, trials, groups, 500, 1, LEVEL)
+    separated = cluster_bootstrap_difference(
+        strong, weak, trials, groups, 500, RandomSeed(1), LEVEL
+    )
+    null = cluster_bootstrap_difference(strong, strong, trials, groups, 500, RandomSeed(1), LEVEL)
     assert separated is not None
     assert null is not None
     assert separated.low > 0

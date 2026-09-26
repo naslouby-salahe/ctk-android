@@ -38,6 +38,38 @@ def _target_name(node: ast.Assign | ast.AnnAssign) -> str:
     return target.id if isinstance(target, ast.Name) else ""
 
 
+def _domain_string_comparisons(tree: ast.AST) -> list[int]:
+    offenders: list[int] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Compare):
+            if any(
+                isinstance(value, ast.Constant) and isinstance(value.value, str)
+                for expression in [node.left, *node.comparators]
+                for value in ast.walk(expression)
+            ):
+                offenders.append(node.lineno)
+        elif isinstance(node, ast.Match) and any(
+            isinstance(pattern, ast.MatchValue)
+            and isinstance(pattern.value, ast.Constant)
+            and isinstance(pattern.value.value, str)
+            for case in node.cases
+            for pattern in ast.walk(case.pattern)
+        ):
+            offenders.append(node.lineno)
+    return offenders
+
+
+def _semantic_constant_assignments(tree: ast.Module) -> list[str]:
+    return [
+        _target_name(node)
+        for node in _module_constants(tree)
+        if (
+            (isinstance(node.value, ast.Constant) and isinstance(node.value.value, str))
+            or isinstance(node.value, (ast.List, ast.Tuple, ast.Set))
+        )
+    ]
+
+
 def test_numeric_literals_live_in_enums_or_are_trivial() -> None:
     offenders = [
         f"{location(path, node.lineno)} literal {node.value}"
@@ -60,11 +92,54 @@ def test_constants_are_enum_members_not_module_level_names() -> None:
     assert not offenders, offenders
 
 
+def test_synthetic_magic_string_comparison_mutations_are_detected() -> None:
+    snippets = (
+        'if policy == "local":\n    pass\n',
+        'match status:\n    case "done":\n        pass\n',
+        'if strategy in {"a", "b"}:\n    pass\n',
+        'if mode == "confirmatory":\n    pass\n',
+        'if objective == "threshold_raise":\n    pass\n',
+        'if dataset == "androzoo":\n    pass\n',
+    )
+    for snippet in snippets:
+        assert _domain_string_comparisons(ast.parse(snippet))
+
+
+def test_free_form_string_does_not_count_as_a_domain_comparison() -> None:
+    tree = ast.parse('message = "analysis complete"\n')
+    assert not _domain_string_comparisons(tree)
+
+
+def test_synthetic_semantic_constant_mutations_are_detected() -> None:
+    tree = ast.parse('LOCAL_POLICY = "local"\nSTRATEGIES = ("a", "b")\n')
+    assert _semantic_constant_assignments(tree) == ["LOCAL_POLICY", "STRATEGIES"]
+
+
+def test_mathematical_constant_is_not_misclassified_as_a_domain_choice() -> None:
+    tree = ast.parse("PI = 3.141592653589793\n")
+    assert not _semantic_constant_assignments(tree)
+
+
 def test_no_string_literals_outside_enums_py() -> None:
+    def module_strings(tree: ast.Module) -> list[tuple[int, str]]:
+        newtype_names = {
+            node.args[0].value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "NewType"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+        }
+        return [
+            (line, value) for line, value in string_constants(tree) if value not in newtype_names
+        ]
+
     offenders = [
         f"{location(path, line)} hardcodes {text!r}"
         for path in source_files(ENUMS_MODULE)
-        for line, text in string_constants(parse(path))
+        for line, text in module_strings(parse(path))
     ]
     assert not offenders, offenders
 

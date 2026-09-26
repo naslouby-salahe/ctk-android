@@ -370,14 +370,14 @@ def _forest_selection(synthesis: SynthesisTable, config: Config) -> SynthesisTab
 
 
 def _forest_label(row: ForestRow) -> ForestText:
-    detail = row[Column.METRIC] or row[Column.SENSITIVITY]
-    if row[Column.SCOPE] == RobustnessScope.PARTITION_SALT:
-        detail = PlotText.FOREST_SALT.format(detail=detail, salt=row[Column.SALT])
+    detail = row.metric or row.sensitivity
+    if row.scope is RobustnessScope.PARTITION_SALT:
+        detail = PlotText.FOREST_SALT.format(detail=detail, salt=row.salt)
     return PlotText.FOREST_ROW.format(
-        scope=row[Column.SCOPE],
+        scope=row.scope,
         detail=detail,
-        learner=row[Column.LEARNER],
-        alpha=row[Column.ALPHA],
+        learner=row.learner,
+        alpha=row.alpha,
     )
 
 
@@ -415,7 +415,20 @@ def ctk_robustness_forest(paths: Paths, config: Config, mode: ExecutionMode) -> 
         color=LibraryOption.THRESHOLD_COLOR,
         label=PlotText.PRACTICAL_THRESHOLD,
     )
-    axes.set_yticks(positions, [_forest_label(row) for row in table.iter_rows(named=True)])
+    labels = [
+        _forest_label(
+            ForestRow(
+                metric=row[Column.METRIC],
+                sensitivity=row[Column.SENSITIVITY],
+                scope=row[Column.SCOPE],
+                salt=row[Column.SALT],
+                learner=row[Column.LEARNER],
+                alpha=row[Column.ALPHA],
+            )
+        )
+        for row in table.iter_rows(named=True)
+    ]
+    axes.set_yticks(positions, labels)
     axes.tick_params(axis=LibraryOption.AXIS_Y, labelsize=PlotGeometry.SMALL_FONT)
     axes.set_ylim(table.height - 0.5, -0.5)
     axes.grid(axis=LibraryOption.AXIS_X, alpha=PlotGeometry.GRID_ALPHA)

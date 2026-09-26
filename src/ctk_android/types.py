@@ -1,7 +1,9 @@
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from decimal import Decimal
+from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Protocol
+from typing import Annotated, Any, NewType, Protocol
 
 import numpy as np
 import polars as pl
@@ -25,6 +27,7 @@ from ctk_android.enums import (
     CtkAggregation,
     DatasetName,
     Device,
+    DiagnosticColumn,
     DoctorCheck,
     EligibilityProfile,
     Estimand,
@@ -52,6 +55,7 @@ from ctk_android.enums import (
     LargeFamilyMeasure,
     Learner,
     LibraryOption,
+    LogField,
     MaskingContrast,
     Metric,
     ModelFamily,
@@ -92,7 +96,9 @@ FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 UnitInterval = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 OpenUnitInterval = Annotated[float, Field(gt=0.0, lt=1.0, allow_inf_nan=False)]
 
-Seed = NonNegativeInt
+RandomSeed = NewType("RandomSeed", int)
+SeedComponent = NewType("SeedComponent", int)
+NonNegativeRandomSeed = Annotated[RandomSeed, Field(ge=0)]
 Salt = NonNegativeInt
 RowCount = NonNegativeInt
 FeatureCount = PositiveInt
@@ -112,7 +118,7 @@ Axis = NonNegativeInt
 ExceedanceCount = PositiveInt
 EffectiveDoseCount = NonNegativeInt
 
-seed_adapter: TypeAdapter[Seed] = TypeAdapter(Seed)
+seed_adapter: TypeAdapter[RandomSeed] = TypeAdapter(NonNegativeRandomSeed)
 
 Fraction = UnitInterval
 Seconds = NonNegativeFloat
@@ -136,6 +142,8 @@ Fingerprint = Annotated[str, StringConstraints(pattern=Pattern.SHA256)]
 SerializedConfig = str
 Message = Annotated[str, StringConstraints(min_length=1)]
 FeatureColumn = Annotated[str, StringConstraints(pattern=Pattern.FEATURE_COLUMN)]
+ArmLabel = NewType("ArmLabel", str)
+DoseLabel = NewType("DoseLabel", str)
 
 FloatArray = NDArray[np.float64]
 Float32Array = NDArray[np.float32]
@@ -256,9 +264,8 @@ VarianceVector = FloatArray
 DevianceAndGradient = tuple[float, FloatArray]
 RunsInMode = bool
 ArmSeries = pl.DataFrame
-PositiveOrZeroFloat = NonNegativeFloat
+MeanTrialCount = NonNegativeFloat
 ScopeMap = dict[ExperimentName, RobustnessScope]
-ForestRow = dict[str, Any]
 ForestText = str
 PlotSize = float
 
@@ -270,6 +277,7 @@ Clean = bool
 LamdaReleaseFiles = list[Path]
 EntryName = Annotated[str, StringConstraints(min_length=1)]
 File = Path
+# Exact PyTorch Module.state_dict/load_state_dict boundary payload.
 StateDict = dict[str, torch.Tensor]
 
 
@@ -279,16 +287,23 @@ class FrozenRecord(BaseModel):
     )
 
 
+class ForestRow(FrozenRecord):
+    metric: Metric | None
+    sensitivity: Sensitivity | None
+    scope: RobustnessScope
+    salt: Salt
+    learner: Learner
+    alpha: Alpha
+
+
 LabelPrefix = Annotated[str, StringConstraints(min_length=1)]
 SupportCount = NonNegativeInt
 StatKey = Annotated[str, StringConstraints(min_length=1)]
 FileName = Annotated[str, StringConstraints(min_length=1)]
 
-YamlDocument = dict[str, Any]
-
 
 class PartitionKey(FrozenRecord):
-    seed: Seed
+    seed: NonNegativeRandomSeed
     salt: Salt
     grouping: Grouping
     profile: EligibilityProfile
@@ -297,7 +312,7 @@ class PartitionKey(FrozenRecord):
 class RunKey(FrozenRecord):
     mode: ExecutionMode
     experiment: ExperimentName
-    seed: Seed
+    seed: NonNegativeRandomSeed
     salt: Salt
 
 
@@ -421,12 +436,12 @@ class ArmKey(FrozenRecord):
     dose: DoseRequest
     tuning: TuningPoint | None = None
 
-    def label(self) -> str:
+    def label(self) -> ArmLabel:
         dose = NameFragment.ALL_DOSE if self.dose is None else f"{self.dose}"
         parts = [self.learner, self.condition, f"{NameFragment.DOSE}{dose}"]
         if self.tuning is not None:
             parts.append(f"{self.tuning.parameter}{NameFragment.SEPARATOR}{self.tuning.level}")
-        return NameFragment.ARM_SEPARATOR.join(parts)
+        return ArmLabel(NameFragment.ARM_SEPARATOR.join(parts))
 
     def columns(self) -> ArmRow:
         return ArmRow(
@@ -593,7 +608,7 @@ class PlanSummary(FrozenRecord):
     config_fingerprint: Fingerprint
     runs: RowCount
     infeasible: RowCount
-    seeds: tuple[Seed, ...]
+    seeds: tuple[NonNegativeRandomSeed, ...]
 
 
 class RunStatusDocument(FrozenRecord):
@@ -933,7 +948,7 @@ class ClientCtkRow(FrozenRecord):
     known_family_change_ci_low: Effect | None
     known_family_change_ci_high: Effect | None
     realised_fpr: Fraction | None
-    hidden_family_trials_per_seed: PositiveOrZeroFloat
+    hidden_family_trials_per_seed: MeanTrialCount
     contributing_seeds: RowCount
     eligible_pairs: RowCount
     interval_status: IntervalStatus
@@ -985,14 +1000,14 @@ class AssociationRow(FrozenRecord):
 
 class ClusterRow(FrozenRecord):
     experiment: ExperimentName
-    seed: Seed
+    seed: NonNegativeRandomSeed
     salt: Salt
     ci_low: Effect
     ci_high: Effect
 
 
 class PlotAxes(Protocol):
-    """Typed facade over matplotlib axes; matplotlib's own stubs leave **kwargs unknown."""
+    """Matplotlib boundary; runtime keyword sets vary by artist and backend."""
 
     def bar(self, *args: Any, **kwargs: Any) -> Any: ...
 
@@ -1147,7 +1162,7 @@ Refuted = bool
 Positive = bool
 IncludeAllDose = bool
 Records = Sequence[FrozenRecord]
-LabelValues = Sequence[str]
+LabelValues = Sequence[StrEnum | FamilyName]
 Predicate = pl.Expr
 FamilyMasks = dict[FamilyName, BoolArray]
 ClientPools = dict[ClientId, IntArray]
@@ -1178,7 +1193,7 @@ ExperimentSpecs = dict[ExperimentName, ExperimentSpec]
 
 
 LogValue = str | int | float | bool | None
-LogFields = dict[str, LogValue]
+LogFields = dict[LogField, LogValue]
 
 
 class FrozenHyperparameters(FrozenRecord):
@@ -1347,7 +1362,7 @@ class RecallArm(FrozenRecord):
 
 RepresentationOf = dict[ExperimentName, Representation]
 RepresentationTable = pl.DataFrame
-PlannedTargetsBySeed = dict[Seed, tuple[TargetPair, ...]]
+PlannedTargetsBySeed = dict[RandomSeed, tuple[TargetPair, ...]]
 
 
 class RepresentationEffectRow(FrozenRecord):
@@ -1402,7 +1417,7 @@ class RepresentationTables(FrozenRecord):
 
 StabilitySeedTable = pl.DataFrame
 EligibilityStabilityTable = pl.DataFrame
-SeedPairsTables = dict[Seed, PairsTable]
+SeedPairsTables = dict[RandomSeed, PairsTable]
 
 
 class LargeStabilityRow(FrozenRecord):
@@ -1432,13 +1447,32 @@ AssociationMeasures = tuple[
 
 
 DiagnosticTable = pl.DataFrame
-DiagnosticRow = dict[str, Any]
+DiagnosticCell = (
+    str | bytes | int | float | Decimal | bool | date | datetime | time | timedelta | None
+)
+DiagnosticColumnName = NewType("DiagnosticColumnName", str)
+DiagnosticKey = Column | DiagnosticColumn | DiagnosticColumnName
+DiagnosticRow = dict[DiagnosticKey, DiagnosticCell]
 DiagnosticRows = list[DiagnosticRow]
+
+
+class DiagnosticInterval(FrozenRecord):
+    low: Effect | None
+    high: Effect | None
+
+
+class DiagnosticSummary(FrozenRecord):
+    count: RowCount
+    mean: Effect | None
+    median: Effect | None
+    positive_count: RowCount
+    low: Effect | None
+    high: Effect | None
+
+
 DiagnosticVector = FloatArray
 DiagnosticMatrix = FloatArray
-ArmName = str
-DoseName = str
-ScoreFiles = dict[str, pl.DataFrame]
+ScoreFiles = dict[ArmLabel, pl.DataFrame]
 FitParameters = tuple[float, ...]
 StudyCache = dict[PartitionKey, StudyTable]
 StratumTables = dict[ReallocationStratum, pl.DataFrame]
@@ -1463,7 +1497,7 @@ class DoseFit(FrozenRecord):
 # Stored per-row scores and operating tables of one representation run, read-only.
 class ScoredRun(FrozenRecord):
     representation: Representation
-    seed: Seed
+    seed: NonNegativeRandomSeed
     targets: tuple[TargetPair, ...]
     study: StudyTable
     thresholds: OperatingTable
@@ -1535,7 +1569,7 @@ class DataFingerprints(FrozenRecord):
 class StudyProvenance(FrozenRecord):
     name: ExtensionStudy
     mode: ExecutionMode
-    seeds: tuple[Seed, ...]
+    seeds: tuple[NonNegativeRandomSeed, ...]
     evidence_class: EvidenceClass
     protocol: FileDigest | None
     config_fingerprint: Fingerprint

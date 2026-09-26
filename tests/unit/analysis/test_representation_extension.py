@@ -26,7 +26,7 @@ from ctk_android.enums import (
     RepresentationOutcome,
 )
 from ctk_android.paths import Paths
-from ctk_android.types import RepresentationEffectRow, RepresentationTables, TargetPair
+from ctk_android.types import RandomSeed, RepresentationEffectRow, RepresentationTables, TargetPair
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT))
@@ -34,7 +34,7 @@ MODE = ExecutionMode.EXTENSION_B
 EXPERIMENTS = representation_experiments(CONFIG, MODE)
 ALPHA = CONFIG.experiments.operating.primary_alpha
 MARGIN = CONFIG.statistics.gates.ctk_min_gain
-SEEDS = tuple(range(330, 340))
+SEEDS = tuple(RandomSeed(seed) for seed in range(330, 340))
 TRIALS = 400
 PRIORITY = CONFIG.experiments.representation_priority_families
 CONTRAST = CONFIG.experiments.representation_contrast_families
@@ -284,8 +284,8 @@ def test_empty_evidence_gives_empty_tables() -> None:
 
 def test_eligibility_report_lists_every_primary_family_and_marks_the_dropped_ones() -> None:
     planned = {
-        330: (TargetPair(client=ClientId.ANZHI, family="hiddad"),),
-        331: (),
+        RandomSeed(330): (TargetPair(client=ClientId.ANZHI, family="hiddad"),),
+        RandomSeed(331): (),
     }
     table = eligibility_table(planned, ("hiddad", "adwo"))
     assert table.height == 4

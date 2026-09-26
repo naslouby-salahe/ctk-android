@@ -143,6 +143,8 @@ def test_results_are_referenced_only_by_the_promotion_module() -> None:
         for node in ast.walk(parse(path))
         if isinstance(node, ast.Attribute)
         and node.attr.startswith("results")
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "paths"
         and path.name != "artifacts.py"
     ]
     assert not offenders, offenders

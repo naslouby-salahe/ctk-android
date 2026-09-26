@@ -5,11 +5,13 @@ from ctk_android.config import load_config
 from ctk_android.data.partitions import assign_roles
 from ctk_android.enums import EligibilityProfile, Grouping, SplitRole
 from ctk_android.paths import Paths
-from ctk_android.types import PartitionKey
+from ctk_android.types import PartitionKey, RandomSeed
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT)).data
-KEY = PartitionKey(seed=3, salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY)
+KEY = PartitionKey(
+    seed=RandomSeed(3), salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY
+)
 GROUPS = np.random.default_rng(0).integers(0, 400, size=6000).astype(np.int64)
 GROUP_TOLERANCE = 0.05
 
@@ -37,6 +39,6 @@ def test_roles_are_deterministic_and_seed_dependent() -> None:
     first = assign_roles(GROUPS, KEY, 0, CONFIG)
     assert first.equals(assign_roles(GROUPS, KEY, 0, CONFIG))
     other = PartitionKey(
-        seed=4, salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY
+        seed=RandomSeed(4), salt=0, grouping=Grouping.COMPONENT, profile=EligibilityProfile.PRIMARY
     )
     assert not first.equals(assign_roles(GROUPS, other, 0, CONFIG))

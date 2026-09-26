@@ -59,3 +59,18 @@ def test_the_primitive_boundary_rule_also_flags_bool(tmp_path: Path) -> None:
         result["check_id"].split(".")[-1] for result in json.loads(completed.stdout)["results"]
     }
     assert "no-primitive-function-boundary" in flagged
+
+
+def test_scalar_conversion_rule_flags_bool_calls(tmp_path: Path) -> None:
+    sample = tmp_path / "sample.py"
+    sample.write_text("value = bool(other)\n", encoding="utf-8")
+    completed = subprocess.run(
+        [str(BIN / "semgrep"), "--config", str(RULES), "--json", "--quiet", str(sample)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    flagged = {
+        result["check_id"].split(".")[-1] for result in json.loads(completed.stdout)["results"]
+    }
+    assert "no-type-hiding-scalar-call" in flagged
