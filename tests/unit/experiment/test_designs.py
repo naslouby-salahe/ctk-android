@@ -104,4 +104,4 @@ def test_placebo_design_trains_the_mean_and_both_robust_aggregations() -> None:
     assert placebo.height == len(TARGETS)
     hidden = {pair.family for pair in TARGETS}
     assert not hidden & set(placebo["placebo_family"].to_list())
-    assert {ClientId.ANZHI.value, ClientId.APPCHINA.value} == set(placebo[Column.CLIENT])
+    assert set(placebo[Column.CLIENT]) == {ClientId.ANZHI.value, ClientId.APPCHINA.value}
