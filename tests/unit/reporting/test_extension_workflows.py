@@ -142,6 +142,7 @@ def test_large_family_analysis_writes_metrics_and_stability_tables(
 def test_empty_evidence_stops_extension_workflows_before_analysis(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    paths = Paths(tmp_path)
     empty = EVIDENCE.model_copy(update={"summary": EMPTY})
     monkeypatch.setattr(workflow, "collect_evidence", lambda *_args, **_kwargs: empty)
     for name, function in (
@@ -153,4 +154,4 @@ def test_empty_evidence_stops_extension_workflows_before_analysis(
             workflow, name, lambda *_args: (ExperimentName.EXACT_EFFECTIVE_DOSE_PRIMARY,)
         )
         with pytest.raises(workflow.CtkError):
-            function(Paths(tmp_path), CONFIG, MODE, False)
+            function(paths, CONFIG, MODE, False)

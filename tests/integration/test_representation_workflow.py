@@ -112,8 +112,9 @@ def test_preprocess_builds_once_then_reuses_and_rebuilds_on_overwrite(workspace:
 
 
 def test_preprocess_needs_the_lamda_stages(tmp_path: Path) -> None:
+    paths = Paths(tmp_path)
     with pytest.raises(Exception, match="preprocess"):
-        run_representation_preprocess(Paths(tmp_path), CONFIG, False, (MODE,))
+        run_representation_preprocess(paths, CONFIG, False, (MODE,))
 
 
 def test_every_representation_shares_the_partition_and_the_planned_targets(

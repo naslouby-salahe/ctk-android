@@ -97,7 +97,9 @@ def test_seeded_bca_is_deterministic_and_skips_degenerate_samples() -> None:
     values = np.array([0.1, 0.3, 0.2, 0.5, 0.4, np.nan])
     first = seeded_bca(values, CONFIG, DiagnosticSeed.CONTROLS, 5)
     second = seeded_bca(values, CONFIG, DiagnosticSeed.CONTROLS, 5)
-    assert first == second and first is not None and first.low < 0.3 < first.high
+    assert first == second
+    assert first is not None
+    assert first.low < 0.3 < first.high
     assert seeded_bca(np.full(8, 0.2), CONFIG, DiagnosticSeed.DOSE, 3) is None
     assert seeded_bca(values, CONFIG, DiagnosticSeed.DOSE, 6) is None
 

@@ -238,13 +238,22 @@ class ExperimentsConfig(Frozen):
         return mode in self.experiments[experiment].modes
 
     def design_fingerprint_parts(self, design: ExperimentDesign) -> tuple[SerializedConfig, ...]:
-        if design is ExperimentDesign.EXACT_DOSE:
-            return (f"{design}{self.exact_dose_levels}",)
-        if design is ExperimentDesign.PLACEBO_ROBUST:
-            return (f"{design}{self.placebo_min_malware_rows}{self.robust_trim_per_side}",)
-        if design is ExperimentDesign.REPRESENTATION:
-            return (f"{design}{self.representation_min_prevalence}",)
-        return ()
+        parts = [
+            part
+            for part in (
+                f"{design}{self.exact_dose_levels}"
+                if design is ExperimentDesign.EXACT_DOSE
+                else None,
+                f"{design}{self.placebo_min_malware_rows}{self.robust_trim_per_side}"
+                if design is ExperimentDesign.PLACEBO_ROBUST
+                else None,
+                f"{design}{self.representation_min_prevalence}"
+                if design is ExperimentDesign.REPRESENTATION
+                else None,
+            )
+            if part is not None
+        ]
+        return tuple(parts)
 
 
 class GateConfig(Frozen):

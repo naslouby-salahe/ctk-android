@@ -578,15 +578,17 @@ def _data_fingerprints(paths: Paths, study: ExtensionStudy) -> DataFingerprints:
 
 
 def _superseded(paths: Paths, study: ExtensionStudy) -> tuple[FileDigest, ...]:
+    entries: list[FileDigest] = []
     if study is not ExtensionStudy.REPRESENTATION:
-        return ()
+        return tuple(entries)
     name = SupersededFile.EXT_REP_TRANSDUCTIVE
-    return (
+    entries.append(
         FileDigest(
             name=name,
             sha256=fingerprint_file(paths.results_file(ResultsDirectory.EXTENSION_B, name)),
-        ),
+        )
     )
+    return tuple(entries)
 
 
 # One entry per extension study in results/extension-provenance.json, replaced on each

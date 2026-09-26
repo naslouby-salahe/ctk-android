@@ -913,32 +913,46 @@ def dose_increments(
             for population in _populations():
                 for alpha in config.experiments.operating.alphas:
                     wide = wide_by_dose(_selected(level, learner, population, alpha))
-                    for low, high in pairwise(doses):
-                        values = _column(wide, high) - _column(wide, low)
-                        interval = _bca(values, config)
-                        scale = DiagnosticLimit.DOSE_UNIT / (high - low)
-                        lower, upper = interval.low, interval.high
-                        rows.append(
-                            {
-                                DiagnosticColumn.SET: scoped.scope,
-                                Column.LEARNER: learner,
-                                Column.POPULATION: population,
-                                Column.ALPHA: alpha,
-                                Column.ROLE: _role(learner, population, alpha, config),
-                                DiagnosticColumn.SEGMENT: f"{low}{Separator.ARROW}{high}",
-                                DiagnosticColumn.N: values.size,
-                                DiagnosticColumn.INCREMENT: values.mean().item(),
-                                Column.CI_LOW: lower,
-                                Column.CI_HIGH: upper,
-                                DiagnosticColumn.PER_UNIT: values.mean().item() * scale,
-                                DiagnosticColumn.PER_UNIT_LOW: None
-                                if lower is None
-                                else lower * scale,
-                                DiagnosticColumn.PER_UNIT_HIGH: None
-                                if upper is None
-                                else upper * scale,
-                            }
+                    rows.extend(
+                        _dose_increment_rows(
+                            wide, scoped, learner, population, alpha, doses, config
                         )
+                    )
+    return rows
+
+
+def _dose_increment_rows(
+    wide: DiagnosticTable,
+    scoped: ScopedExperiments,
+    learner: Learner,
+    population: EvaluationPopulation,
+    alpha: Alpha,
+    doses: tuple[SupportCount, ...],
+    config: Config,
+) -> DiagnosticRows:
+    rows: DiagnosticRows = []
+    for low, high in pairwise(doses):
+        values = _column(wide, high) - _column(wide, low)
+        interval = _bca(values, config)
+        scale = DiagnosticLimit.DOSE_UNIT / (high - low)
+        lower, upper = interval.low, interval.high
+        rows.append(
+            {
+                DiagnosticColumn.SET: scoped.scope,
+                Column.LEARNER: learner,
+                Column.POPULATION: population,
+                Column.ALPHA: alpha,
+                Column.ROLE: _role(learner, population, alpha, config),
+                DiagnosticColumn.SEGMENT: f"{low}{Separator.ARROW}{high}",
+                DiagnosticColumn.N: values.size,
+                DiagnosticColumn.INCREMENT: values.mean().item(),
+                Column.CI_LOW: lower,
+                Column.CI_HIGH: upper,
+                DiagnosticColumn.PER_UNIT: values.mean().item() * scale,
+                DiagnosticColumn.PER_UNIT_LOW: None if lower is None else lower * scale,
+                DiagnosticColumn.PER_UNIT_HIGH: None if upper is None else upper * scale,
+            }
+        )
     return rows
 
 
@@ -995,13 +1009,12 @@ def family_summary(curves: DiagnosticTable, config: Config) -> DiagnosticRows:
         )
         responsive = not (end[Column.MEAN_CTK] < onset or lower is None or lower <= 0)
         early = first_mean is not None and first_mean <= DiagnosticLimit.EARLY_ONSET
-        response = (
-            DoseResponseClass.NONRESPONSIVE
-            if not responsive
-            else DoseResponseClass.EARLY
-            if early
-            else DoseResponseClass.LATE
-        )
+        if not responsive:
+            response = DoseResponseClass.NONRESPONSIVE
+        elif early:
+            response = DoseResponseClass.EARLY
+        else:
+            response = DoseResponseClass.LATE
         rows.append(
             {
                 DiagnosticColumn.SET: head[DiagnosticColumn.SET],

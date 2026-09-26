@@ -139,7 +139,8 @@ def test_placebo_specificity_uses_the_equivalence_band_and_the_margin_test() -> 
 
 def test_robust_aggregation_is_holm_adjusted_across_the_two_aggregators_only() -> None:
     trimmed, median = (_row(ExtensionContrast.CTK_TRIMMED), _row(ExtensionContrast.CTK_MEDIAN))
-    assert trimmed.p_holm is not None and median.p_holm is not None
+    assert trimmed.p_holm is not None
+    assert median.p_holm is not None
     assert trimmed.p_holm >= trimmed.p_value
     assert _row(ExtensionContrast.CTK_MEAN).p_holm is None
     assert _row(ExtensionContrast.PLACEBO_EFFECT).p_holm is None

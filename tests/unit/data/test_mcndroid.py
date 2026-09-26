@@ -32,11 +32,12 @@ def test_shards_cover_every_split_of_every_representation(tmp_path: Path) -> Non
 
 
 def test_missing_source_files_are_reported(tmp_path: Path) -> None:
+    paths = Paths(tmp_path)
     with pytest.raises(FileNotFoundError):
-        representations.shards(Paths(tmp_path), Representation.MCNDROID_STATIC)
+        representations.shards(paths, Representation.MCNDROID_STATIC)
     (tmp_path / "data/mcndroid/raw/data_feature/processed_data/init_2013").mkdir(parents=True)
     with pytest.raises(CtkError):
-        representations.shards(Paths(tmp_path), Representation.MCNDROID_STATIC)
+        representations.shards(paths, Representation.MCNDROID_STATIC)
 
 
 def test_hashes_follow_shard_order_for_every_key_spelling(tmp_path: Path) -> None:
@@ -70,10 +71,9 @@ def test_alignment_rejects_rows_missing_from_the_shards(tmp_path: Path) -> None:
         paths, Representation.MCNDROID_STATIC, pl.Series([sha(10)], dtype=pl.String)
     )
     assert isinstance(block, ShaBlock)
+    missing = pl.Series([sha(10), sha(99)], dtype=pl.String)
     with pytest.raises(CtkError):
-        representations.alignment(
-            block, pl.Series([sha(10), sha(99)], dtype=pl.String), Representation.MCNDROID_STATIC
-        )
+        representations.alignment(block, missing, Representation.MCNDROID_STATIC)
 
 
 def test_source_fingerprint_hashes_every_file_and_changes_with_content(tmp_path: Path) -> None:

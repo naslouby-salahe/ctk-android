@@ -25,6 +25,7 @@ from ctk_android.enums import (
     ErrorMessage,
     ExecutionMode,
     ExperimentDesign,
+    ExperimentName,
     FailureReason,
     FamilySetName,
     Grouping,
@@ -39,6 +40,7 @@ from ctk_android.paths import Paths
 from ctk_android.types import (
     CtkError,
     Directory,
+    ExperimentSpec,
     FamilySetDocument,
     File,
     Fingerprint,
@@ -76,9 +78,19 @@ def required_partition_keys(
             continue
         if spec.design is not ExperimentDesign.STANDARD and not include_designs:
             continue
-        for mode in modes:
-            if not config.experiments.runs_in(name, mode):
-                continue
+        _keys_for_experiment(config, name, spec, modes, keys)
+    return sorted(keys, key=lambda key: (key.seed, key.salt, key.grouping, key.profile))
+
+
+def _keys_for_experiment(
+    config: Config,
+    name: ExperimentName,
+    spec: ExperimentSpec,
+    modes: ModeSelection,
+    keys: list[PartitionKey],
+) -> None:
+    for mode in modes:
+        if config.experiments.runs_in(name, mode):
             for seed in config.seeds_for(name, mode):
                 for salt in spec.salts:
                     key = PartitionKey(
@@ -86,7 +98,6 @@ def required_partition_keys(
                     )
                     if key not in keys:
                         keys.append(key)
-    return sorted(keys, key=lambda key: (key.seed, key.salt, key.grouping, key.profile))
 
 
 def record_validations(
@@ -608,16 +619,7 @@ def representation_keys(config: Config, modes: ModeSelection) -> list[PartitionK
     for name, spec in config.experiments.experiments.items():
         if spec.representation is None:
             continue
-        for mode in modes:
-            if not config.experiments.runs_in(name, mode):
-                continue
-            for seed in config.seeds_for(name, mode):
-                for salt in spec.salts:
-                    key = PartitionKey(
-                        seed=seed, salt=salt, grouping=spec.grouping, profile=spec.eligibility
-                    )
-                    if key not in keys:
-                        keys.append(key)
+        _keys_for_experiment(config, name, spec, modes, keys)
     return sorted(keys, key=lambda key: (key.seed, key.salt))
 
 

@@ -155,7 +155,8 @@ def test_differences_are_seed_paired_against_the_lamda_static_baseline() -> None
     assert macro.family is None
     assert macro.mean == pytest.approx((0.15 + 0.15 + 0.0) / 3, abs=0.01)
     contrast = _effect(TABLES, Representation.MCNDROID_STATIC, RepresentationGroup.CONTRAST_MACRO)
-    assert abs(contrast.mean) < 0.01 and contrast.within_band
+    assert abs(contrast.mean) < 0.01
+    assert contrast.within_band
     adwo = _effect(TABLES, Representation.MCNDROID_STATIC, RepresentationGroup.FAMILY, "adwo")
     assert adwo.mean == pytest.approx(0.2, abs=0.01)
     assert not any(row.representation is Representation.LAMDA_STATIC for row in TABLES.effects)
@@ -164,11 +165,15 @@ def test_differences_are_seed_paired_against_the_lamda_static_baseline() -> None
 def test_margin_flags_follow_the_bca_interval_and_the_configured_band() -> None:
     macro = _effect(TABLES, Representation.MCNDROID_STATIC, RepresentationGroup.PRIORITY_MACRO)
     assert macro.margin == MARGIN
-    assert macro.ci_low is not None and macro.ci_low > MARGIN
-    assert macro.above_margin and not macro.below_margin
+    assert macro.ci_low is not None
+    assert macro.ci_low > MARGIN
+    assert macro.above_margin
+    assert not macro.below_margin
     assert macro.p_margin < 0.05
     hiddad = _effect(TABLES, Representation.MCNDROID_STATIC, RepresentationGroup.FAMILY, "hiddad")
-    assert hiddad.below_margin and hiddad.within_band and not hiddad.above_margin
+    assert hiddad.below_margin
+    assert hiddad.within_band
+    assert not hiddad.above_margin
 
 
 def test_holm_covers_exactly_the_nine_priority_by_representation_tests() -> None:
@@ -242,7 +247,8 @@ def test_an_inconclusive_hiddad_interval_is_unresolved_not_a_rescue() -> None:
     gains: Gains = {**GAINS, Representation.MCNDROID_STATIC: static}
     tables = representation_tables(_families(gains), CONFIG, EXPERIMENTS)
     hiddad = _effect(tables, Representation.MCNDROID_STATIC, RepresentationGroup.FAMILY, "hiddad")
-    assert hiddad.ci_low is not None and hiddad.ci_high is not None
+    assert hiddad.ci_low is not None
+    assert hiddad.ci_high is not None
     assert hiddad.ci_low <= MARGIN <= hiddad.ci_high
     verdicts = _verdict(tables)
     assert verdicts[ExtensionHypothesis.REPRESENTATION_HIDDAD]["met"] is False
@@ -279,7 +285,9 @@ def test_a_dropped_hiddad_leaves_the_verdicts_undetermined_and_is_never_replaced
 
 def test_empty_evidence_gives_empty_tables() -> None:
     tables = representation_tables(_families().clear(), CONFIG, EXPERIMENTS)
-    assert tables.effects == () and tables.levels == () and tables.seeds.height == 0
+    assert tables.effects == ()
+    assert tables.levels == ()
+    assert tables.seeds.height == 0
 
 
 def test_eligibility_report_lists_every_primary_family_and_marks_the_dropped_ones() -> None:

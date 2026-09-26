@@ -73,11 +73,11 @@ def test_exact_dose_design_trains_every_level_for_both_learners_with_identical_v
     assert designed.placebo is None
     assert not _failed(designed.checks)
     kinds = {check.check for check in designed.checks}
-    assert {
+    assert kinds >= {
         ValidationCheck.EXACT_DOSE_REALISED,
         ValidationCheck.EXACT_DOSE_TARGET_ZERO,
         ValidationCheck.DOSE_ZERO_IS_ABSENT,
-    } <= kinds
+    }
     volumes = {
         tuple(sorted((client.value, rows.size) for client, rows in per_client.items()))
         for per_client in designed.trainings.values()

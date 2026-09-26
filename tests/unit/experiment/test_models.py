@@ -130,7 +130,9 @@ def test_prevalence_selection_is_fitted_on_the_training_rows() -> None:
     dense[5:, 2] = 1.0
     matrix = sp.csr_matrix(dense)
     selected = fit_transform(matrix, np.arange(5), TransformRule(min_prevalence=0.5))
-    assert selected.columns is not None and selected.columns.tolist() == [0]
+    assert selected.columns is not None
+    assert selected.columns.tolist() == [0]
     assert model_inputs(matrix, np.arange(10), selected).shape == (10, 1)
     everyone = fit_transform(matrix, np.arange(10), TransformRule(min_prevalence=0.5))
-    assert everyone.columns is not None and everyone.columns.tolist() == [0, 2]
+    assert everyone.columns is not None
+    assert everyone.columns.tolist() == [0, 2]

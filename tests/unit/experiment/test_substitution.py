@@ -185,7 +185,7 @@ def test_placebo_pairs_are_processed_from_the_largest_hidden_family() -> None:
 
 
 def test_placebo_choice_fails_when_no_family_reaches_the_row_minimum() -> None:
+    totals = design.family_totals(STUDY)
+    peer, absent = _peer(), _absent()
     with pytest.raises(CtkError):
-        design.choose_placebos(
-            FIT, design.family_totals(STUDY), MASKS, _peer(), _absent(), TARGETS, 10**6
-        )
+        design.choose_placebos(FIT, totals, MASKS, peer, absent, TARGETS, 10**6)

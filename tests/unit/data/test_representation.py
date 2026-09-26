@@ -104,7 +104,8 @@ def test_namespace_aligns_every_representation_to_the_overlap_rows(tmp_path: Pat
     paths, lamda = _workspace(tmp_path)
     written = write_mcndroid(tmp_path, {"train": SPLITS["train"], "test": SPLITS["test"]})
     manifest = representations.build_namespace(paths)
-    assert manifest.rows == len(OVERLAP) and manifest.lamda_rows == LAMDA_ROWS
+    assert manifest.rows == len(OVERLAP)
+    assert manifest.lamda_rows == LAMDA_ROWS
     assert manifest.malware_rows + manifest.benign_rows == manifest.rows
     overlap = pl.read_parquet(paths.representation_file(Artifact.OVERLAP))
     assert overlap[Column.SOURCE_ROW].to_list() == OVERLAP
@@ -130,7 +131,8 @@ def test_namespace_aligns_every_representation_to_the_overlap_rows(tmp_path: Pat
     np.testing.assert_allclose(
         report.toarray(), np.sign(raw) * np.log1p(np.abs(raw)), rtol=1e-2, atol=1e-2
     )
-    assert manifest.json_columns_total == REPORT_WIDTH and manifest.graph_features == GRAPH_WIDTH
+    assert manifest.json_columns_total == REPORT_WIDTH
+    assert manifest.graph_features == GRAPH_WIDTH
 
 
 def test_studies_load_raw_representations_and_leave_fitting_to_training(
@@ -164,9 +166,10 @@ def test_studies_load_raw_representations_and_leave_fitting_to_training(
 
 
 def test_a_missing_namespace_is_reported_when_a_study_is_loaded(tmp_path: Path) -> None:
+    paths = Paths(tmp_path)
     spec = CONFIG.experiments.experiments[ExperimentName.REPRESENTATION_R1]
     with pytest.raises(Exception, match="representation-preprocess"):
-        representations.load_study(Paths(tmp_path), CONFIG, spec, KEY)
+        representations.load_study(paths, CONFIG, spec, KEY)
 
 
 def test_the_partition_grouping_never_splits_a_component(tmp_path: Path) -> None:

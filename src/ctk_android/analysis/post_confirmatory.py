@@ -333,45 +333,56 @@ def _within_tolerance(measure: TradeoffMeasure, mean: Effect, config: Config) ->
     return None
 
 
+def _tradeoff_rows_for_learner(
+    summary: SummaryTable,
+    measure: TradeoffMeasure,
+    learner: Learner,
+    reference: SeedEffects | None,
+    alpha: Alpha,
+    config: Config,
+) -> list[TradeoffRow]:
+    values = _measure(summary, learner, measure, alpha)
+    if values is None:
+        return []
+    versus_local = summarize_seeds(values, config.statistics)
+    if versus_local is None:
+        return []
+    rows = [
+        TradeoffRow(
+            evidence_class=EvidenceClass.POST_CONFIRMATORY,
+            learner=learner,
+            comparison=TradeoffComparison.VERSUS_LOCAL,
+            measure=measure,
+            within_tolerance=_within_tolerance(measure, versus_local.mean_difference, config),
+            **versus_local.model_dump(),
+        )
+    ]
+    if learner is Learner.FEDAVG or reference is None:
+        return rows
+    difference = summarize_seeds(values - reference, config.statistics)
+    if difference is not None:
+        rows.append(
+            TradeoffRow(
+                evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                learner=learner,
+                comparison=TradeoffComparison.VERSUS_FEDAVG,
+                measure=measure,
+                within_tolerance=None,
+                **difference.model_dump(),
+            )
+        )
+    return rows
+
+
 def federated_arm_tradeoff(summary: SummaryTable, config: Config) -> TradeoffTable:
     alpha = config.experiments.operating.primary_alpha
-    arms = [*federated_arms(), Learner.BLEND, Learner.CENTRAL]
+    arms = (*federated_arms(), Learner.BLEND, Learner.CENTRAL)
     rows: list[TradeoffRow] = []
     for measure in TradeoffMeasure:
         reference = _measure(summary, Learner.FEDAVG, measure, alpha)
         for learner in arms:
-            values = _measure(summary, learner, measure, alpha)
-            if values is None:
-                continue
-            versus_local = summarize_seeds(values, config.statistics)
-            if versus_local is None:
-                continue
-            rows.append(
-                TradeoffRow(
-                    evidence_class=EvidenceClass.POST_CONFIRMATORY,
-                    learner=learner,
-                    comparison=TradeoffComparison.VERSUS_LOCAL,
-                    measure=measure,
-                    within_tolerance=_within_tolerance(
-                        measure, versus_local.mean_difference, config
-                    ),
-                    **versus_local.model_dump(),
-                )
-            )
-            if learner is Learner.FEDAVG or reference is None:
-                continue
-            difference = summarize_seeds(values - reference, config.statistics)
-            if difference is None:
-                continue
-            rows.append(
-                TradeoffRow(
-                    evidence_class=EvidenceClass.POST_CONFIRMATORY,
-                    learner=learner,
-                    comparison=TradeoffComparison.VERSUS_FEDAVG,
-                    measure=measure,
-                    within_tolerance=None,
-                    **difference.model_dump(),
-                )
+            rows.extend(
+                _tradeoff_rows_for_learner(summary, measure, learner, reference, alpha, config)
             )
     return records_to_frame(rows)
 
@@ -818,96 +829,105 @@ def _high(interval: Interval | None) -> Effect | None:
     return None if interval is None else interval.high
 
 
+def _client_ctk_rows(
+    clients: ClientCountsTable,
+    families: FamilyCountsTable,
+    config: Config,
+    client: ClientId,
+    learner: Learner,
+    alpha: Alpha,
+    own_minimum: SupportCount,
+) -> list[ClientCtkRow]:
+    known = _client_change(
+        clients,
+        client,
+        learner,
+        EvaluationPopulation.KNOWN_FAMILY,
+        alpha,
+        Column.KNOWN_LOCAL_RECALL,
+        Column.KNOWN_PEER_RECALL,
+    )
+    benign = _arm_series(
+        clients,
+        client,
+        ArmSpec(learner=learner, condition=ExposureCondition.PEER_PRESENT),
+        EvaluationPopulation.BENIGN,
+        alpha,
+        1,
+        Column.BENIGN_FPR,
+    )
+    known_change = summarize_seeds(
+        (known[Column.KNOWN_PEER_RECALL] - known[Column.KNOWN_LOCAL_RECALL]).to_numpy(),
+        config.statistics,
+    )
+    rows: list[ClientCtkRow] = []
+    populations = (
+        (EvaluationPopulation.FEDERATION_WIDE, 1),
+        (EvaluationPopulation.OWN_DOMAIN, own_minimum),
+    )
+    for population, minimum in populations:
+        wide = _client_wide(clients, client, learner, population, alpha, minimum)
+        if wide.height == 0:
+            continue
+        peer = wide[Column.PEER_RECALL].to_numpy()
+        absent = wide[Column.ABSENT_RECALL].to_numpy()
+        base = wide[Column.LOCAL_RECALL].to_numpy()
+        total = summarize_seeds(peer - base, config.statistics)
+        pooling = summarize_seeds(absent - base, config.statistics)
+        ctk = summarize_seeds(peer - absent, config.statistics)
+        if total is None or pooling is None or ctk is None:
+            continue
+        total_ci, pooling_ci, ctk_ci = _interval(total), _interval(pooling), _interval(ctk)
+        known_ci = None if known_change is None else _interval(known_change)
+        rows.append(
+            ClientCtkRow(
+                evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                client=client,
+                learner=learner,
+                alpha=alpha,
+                population=population,
+                local_recall=base.mean().item(),
+                absent_recall=absent.mean().item(),
+                peer_recall=peer.mean().item(),
+                full_recall=_column_mean(wide, Column.FULL_RECALL),
+                total_gain=total.mean_difference,
+                total_ci_low=_low(total_ci),
+                total_ci_high=_high(total_ci),
+                pooling_gain=pooling.mean_difference,
+                pooling_ci_low=_low(pooling_ci),
+                pooling_ci_high=_high(pooling_ci),
+                ctk_gain=ctk.mean_difference,
+                ctk_ci_low=_low(ctk_ci),
+                ctk_ci_high=_high(ctk_ci),
+                ctk_positive_seeds=ctk.positive_seeds,
+                known_family_recall_local=_column_mean(known, Column.KNOWN_LOCAL_RECALL),
+                known_family_recall_collaborative=_column_mean(known, Column.KNOWN_PEER_RECALL),
+                known_family_change=None if known_change is None else known_change.mean_difference,
+                known_family_change_ci_low=_low(known_ci),
+                known_family_change_ci_high=_high(known_ci),
+                realised_fpr=_column_mean(benign, Column.BENIGN_FPR),
+                hidden_family_trials_per_seed=_column_mean(wide, Column.TRIALS) or 0.0,
+                contributing_seeds=wide.height,
+                eligible_pairs=_pair_count(families, client, population, alpha),
+                interval_status=IntervalStatus.OMITTED_NOT_COMPUTABLE
+                if ctk_ci is None
+                else IntervalStatus.EXPLORATORY_BCA,
+            )
+        )
+    return rows
+
+
 def client_ctk_analysis(
     clients: ClientCountsTable, families: FamilyCountsTable, config: Config
 ) -> ClientCtkTable:
     alpha = config.experiments.operating.primary_alpha
     own_minimum = config.data.eligibility[EligibilityProfile.PRIMARY].own_domain_min_test
-    rows: list[ClientCtkRow] = []
-    for client in ClientId:
-        for learner in (Learner.FEDAVG, Learner.FEDPROX, Learner.CENTRAL):
-            known = _client_change(
-                clients,
-                client,
-                learner,
-                EvaluationPopulation.KNOWN_FAMILY,
-                alpha,
-                Column.KNOWN_LOCAL_RECALL,
-                Column.KNOWN_PEER_RECALL,
-            )
-            benign = _arm_series(
-                clients,
-                client,
-                ArmSpec(learner=learner, condition=ExposureCondition.PEER_PRESENT),
-                EvaluationPopulation.BENIGN,
-                alpha,
-                1,
-                Column.BENIGN_FPR,
-            )
-            known_change = summarize_seeds(
-                (known[Column.KNOWN_PEER_RECALL] - known[Column.KNOWN_LOCAL_RECALL]).to_numpy(),
-                config.statistics,
-            )
-            for population, minimum in (
-                (EvaluationPopulation.FEDERATION_WIDE, 1),
-                (EvaluationPopulation.OWN_DOMAIN, own_minimum),
-            ):
-                wide = _client_wide(clients, client, learner, population, alpha, minimum)
-                if wide.height == 0:
-                    continue
-                peer = wide[Column.PEER_RECALL].to_numpy()
-                absent = wide[Column.ABSENT_RECALL].to_numpy()
-                base = wide[Column.LOCAL_RECALL].to_numpy()
-                total = summarize_seeds(peer - base, config.statistics)
-                pooling = summarize_seeds(absent - base, config.statistics)
-                ctk = summarize_seeds(peer - absent, config.statistics)
-                if total is None or pooling is None or ctk is None:
-                    continue
-                total_ci, pooling_ci, ctk_ci = (
-                    _interval(total),
-                    _interval(pooling),
-                    _interval(ctk),
-                )
-                known_ci = None if known_change is None else _interval(known_change)
-                rows.append(
-                    ClientCtkRow(
-                        evidence_class=EvidenceClass.POST_CONFIRMATORY,
-                        client=client,
-                        learner=learner,
-                        alpha=alpha,
-                        population=population,
-                        local_recall=base.mean().item(),
-                        absent_recall=absent.mean().item(),
-                        peer_recall=peer.mean().item(),
-                        full_recall=_column_mean(wide, Column.FULL_RECALL),
-                        total_gain=total.mean_difference,
-                        total_ci_low=_low(total_ci),
-                        total_ci_high=_high(total_ci),
-                        pooling_gain=pooling.mean_difference,
-                        pooling_ci_low=_low(pooling_ci),
-                        pooling_ci_high=_high(pooling_ci),
-                        ctk_gain=ctk.mean_difference,
-                        ctk_ci_low=_low(ctk_ci),
-                        ctk_ci_high=_high(ctk_ci),
-                        ctk_positive_seeds=ctk.positive_seeds,
-                        known_family_recall_local=_column_mean(known, Column.KNOWN_LOCAL_RECALL),
-                        known_family_recall_collaborative=_column_mean(
-                            known, Column.KNOWN_PEER_RECALL
-                        ),
-                        known_family_change=None
-                        if known_change is None
-                        else known_change.mean_difference,
-                        known_family_change_ci_low=_low(known_ci),
-                        known_family_change_ci_high=_high(known_ci),
-                        realised_fpr=_column_mean(benign, Column.BENIGN_FPR),
-                        hidden_family_trials_per_seed=_column_mean(wide, Column.TRIALS) or 0.0,
-                        contributing_seeds=wide.height,
-                        eligible_pairs=_pair_count(families, client, population, alpha),
-                        interval_status=IntervalStatus.OMITTED_NOT_COMPUTABLE
-                        if ctk_ci is None
-                        else IntervalStatus.EXPLORATORY_BCA,
-                    )
-                )
+    rows = [
+        row
+        for client in ClientId
+        for learner in (Learner.FEDAVG, Learner.FEDPROX, Learner.CENTRAL)
+        for row in _client_ctk_rows(clients, families, config, client, learner, alpha, own_minimum)
+    ]
     return _ordered(records_to_frame(rows), Column.CLIENT, Column.POPULATION, Column.LEARNER)
 
 
@@ -1961,40 +1981,57 @@ def _masking_row(
 
 def aggregate_metric_masking(summary: SummaryTable, config: Config) -> MaskingTable:
     alpha = config.experiments.operating.primary_alpha
-    peer = ExposureCondition.PEER_PRESENT
-    absent = ExposureCondition.FAMILY_ABSENT_EVERYWHERE
-    local = ArmSpec(learner=Learner.LOCAL, condition=peer)
     rows: list[MaskingRow] = []
     for experiment in frozen_family_set_experiments():
         for learner in masking_arms():
-            present = ArmSpec(learner=learner, condition=peer)
-            contrasts = (
-                ContrastSpec(
-                    contrast=MaskingContrast.PEER_VERSUS_LOCAL,
-                    arms=ArmPair(minuend=present, subtrahend=local),
-                ),
-                ContrastSpec(
-                    contrast=MaskingContrast.PEER_VERSUS_FAMILY_ABSENT,
-                    arms=ArmPair(
-                        minuend=present, subtrahend=ArmSpec(learner=learner, condition=absent)
-                    ),
-                ),
-            )
-            for spec in contrasts:
-                for aggregate in masking_aggregates():
-                    for recall in masking_recalls():
-                        row = _masking_row(
-                            experiment,
-                            learner,
-                            spec.contrast,
-                            MetricPair(aggregate=aggregate, recall=recall),
-                            _seed_difference(summary, experiment, spec.arms, aggregate, alpha),
-                            _seed_difference(summary, experiment, spec.arms, recall, alpha),
-                            config,
-                        )
-                        if row is not None:
-                            rows.append(row)
+            rows.extend(_masking_rows_for_learner(summary, experiment, learner, alpha, config))
     return records_to_frame(rows)
+
+
+def _masking_rows_for_learner(
+    summary: SummaryTable,
+    experiment: ExperimentName,
+    learner: Learner,
+    alpha: Alpha,
+    config: Config,
+) -> list[MaskingRow]:
+    peer = ExposureCondition.PEER_PRESENT
+    present = ArmSpec(learner=learner, condition=peer)
+    contrasts = (
+        ContrastSpec(
+            contrast=MaskingContrast.PEER_VERSUS_LOCAL,
+            arms=ArmPair(
+                minuend=present, subtrahend=ArmSpec(learner=Learner.LOCAL, condition=peer)
+            ),
+        ),
+        ContrastSpec(
+            contrast=MaskingContrast.PEER_VERSUS_FAMILY_ABSENT,
+            arms=ArmPair(
+                minuend=present,
+                subtrahend=ArmSpec(
+                    learner=learner, condition=ExposureCondition.FAMILY_ABSENT_EVERYWHERE
+                ),
+            ),
+        ),
+    )
+    return [
+        row
+        for spec in contrasts
+        for aggregate in masking_aggregates()
+        for recall in masking_recalls()
+        if (
+            row := _masking_row(
+                experiment,
+                learner,
+                spec.contrast,
+                MetricPair(aggregate=aggregate, recall=recall),
+                _seed_difference(summary, experiment, spec.arms, aggregate, alpha),
+                _seed_difference(summary, experiment, spec.arms, recall, alpha),
+                config,
+            )
+        )
+        is not None
+    ]
 
 
 def _transfer_row(

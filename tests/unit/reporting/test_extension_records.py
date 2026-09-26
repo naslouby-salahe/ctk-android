@@ -53,10 +53,11 @@ def test_placebo_pairs_are_collected_only_for_completed_runs(tmp_path: Path) -> 
 
 
 def test_the_analysis_commands_refuse_to_run_without_completed_runs(tmp_path: Path) -> None:
+    paths = Paths(tmp_path)
     with pytest.raises(CtkError):
-        run_dose_extension(Paths(tmp_path), CONFIG, MODE, False)
+        run_dose_extension(paths, CONFIG, MODE, False)
     with pytest.raises(CtkError):
-        run_controls_extension(Paths(tmp_path), CONFIG, MODE, False)
+        run_controls_extension(paths, CONFIG, MODE, False)
 
 
 def test_promotion_is_limited_to_the_extension_b_mode(tmp_path: Path) -> None:

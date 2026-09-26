@@ -64,8 +64,10 @@ def test_artifact_copy_and_csv_write_return_digest_entries(tmp_path: Path) -> No
         pl.DataFrame({Column.CLAIM: ["claim"]}), csv_target, EvidenceClass.POST_CONFIRMATORY
     )
 
-    assert copied.is_file() and csv_target.is_file()
-    assert copy_entry.digest and copy_entry.evidence_class is EvidenceClass.CONFIRMATORY_SEEDS
+    assert copied.is_file()
+    assert csv_target.is_file()
+    assert copy_entry.digest
+    assert copy_entry.evidence_class is EvidenceClass.CONFIRMATORY_SEEDS
     assert csv_entry.evidence_class is EvidenceClass.POST_CONFIRMATORY
     assert copy_entry.name != csv_entry.name
 
