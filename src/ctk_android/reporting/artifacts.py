@@ -4,10 +4,12 @@ from pathlib import Path
 
 import polars as pl
 
+from ctk_android import logs
 from ctk_android.config import Config
 from ctk_android.data.cache import (
     fingerprint_file,
     is_reusable,
+    normalise_arm_columns,
     read_record,
     run_provenance,
     write_record,
@@ -21,6 +23,8 @@ from ctk_android.enums import (
     ExecutionMode,
     ExtensionStudy,
     FileSuffix,
+    LogEvent,
+    LogField,
     PromotionBlock,
     PromotionState,
     ProtocolDocument,
@@ -32,25 +36,33 @@ from ctk_android.enums import (
     Stage,
     SupersededFile,
 )
+from ctk_android.experiment.planning import experiments_for, planned_targets
 from ctk_android.paths import Paths
+from ctk_android.provenance import git_revision, revision_at_or_before, sources_are_clean
 from ctk_android.types import (
     CodeProvenance,
     DataFingerprints,
     DesignPromotion,
     ExperimentScope,
     ExtensionProvenance,
+    FairnessGrid,
     File,
     FileDigest,
+    FrameLists,
+    LogFields,
     ManifestEntry,
     Moment,
+    PlaceboTable,
     PromotedOutput,
     PromotionDecision,
     ProtocolProvenance,
     ResultsManifest,
     RunConfigFingerprint,
+    RunEvidence,
     RunIndexTable,
     RunKey,
     RunManifest,
+    RunStatusDocument,
     SourceFingerprint,
     SourceProvenance,
     Stale,
@@ -58,8 +70,131 @@ from ctk_android.types import (
     StudyRequest,
     Table,
 )
-from ctk_android.workflows.doctor import git_revision, revision_at_or_before, sources_are_clean
-from ctk_android.workflows.plan import experiments_for, planned_targets
+
+
+def _tagged(frame: Table, key: RunKey) -> Table:
+    return normalise_arm_columns(frame).with_columns(
+        pl.lit(key.experiment).alias(Column.EXPERIMENT),
+        pl.lit(key.seed).alias(Column.SEED),
+        pl.lit(key.salt).alias(Column.SALT),
+    )
+
+
+def _concat(frames: list[Table]) -> Table:
+    return pl.concat(frames) if frames else pl.DataFrame()
+
+
+def _is_stale(paths: Paths, config: Config, key: RunKey) -> Stale:
+    current = run_provenance(paths, config, key, planned_targets(paths, key).targets)
+    return not is_reusable(paths.provenance_file(paths.run_dir(key)), current)
+
+
+def _stale_fields(key: RunKey) -> LogFields:
+    return {
+        LogField.EXPERIMENT: key.experiment,
+        LogField.SEED: key.seed,
+        LogField.SALT: key.salt,
+    }
+
+
+def _run_keys(
+    config: Config, mode: ExecutionMode, fairness: FairnessGrid, only: ExperimentScope
+) -> list[RunKey]:
+    return [
+        RunKey(mode=mode, experiment=experiment, seed=seed, salt=salt)
+        for experiment in experiments_for(config, mode)
+        if config.experiments.experiments[experiment].fairness_grid == fairness
+        and (
+            experiment in only
+            if only is not None
+            else config.experiments.experiments[experiment].representation is None
+        )
+        for seed in config.seeds_for(experiment, mode)
+        for salt in config.experiments.experiments[experiment].salts
+    ]
+
+
+def _document(paths: Paths, config: Config, key: RunKey) -> RunStatusDocument:
+    status_file = paths.run_file(key, Artifact.STATUS)
+    if not status_file.is_file():
+        return RunStatusDocument(status=RunStatus.INCOMPLETE, reason=None)
+    document = read_record(status_file, RunStatusDocument)
+    if document.status is RunStatus.COMPLETED and _is_stale(paths, config, key):
+        logs.warning(LogEvent.RUN_STALE, _stale_fields(key))
+        return RunStatusDocument(status=RunStatus.STALE, reason=document.reason)
+    return document
+
+
+def _load_tables(paths: Paths, key: RunKey, tables: FrameLists) -> None:
+    for artifact, frames in tables.items():
+        file = (
+            paths.run_file(key, artifact)
+            if artifact in (Artifact.EXPOSURE, Artifact.NOVELTY)
+            else paths.run_metric_file(key, artifact)
+        )
+        frames.append(_tagged(pl.read_parquet(file), key))
+
+
+def collect_placebo_pairs(paths: Paths, index: RunIndexTable, mode: ExecutionMode) -> PlaceboTable:
+    completed = index.filter(pl.col(Column.STATUS) == RunStatus.COMPLETED)
+    frames = [
+        _tagged(
+            pl.read_parquet(
+                paths.run_file(
+                    RunKey(
+                        mode=mode,
+                        experiment=row[Column.EXPERIMENT],
+                        seed=row[Column.SEED],
+                        salt=row[Column.SALT],
+                    ),
+                    Artifact.PLACEBO_PAIRS,
+                )
+            ),
+            RunKey(
+                mode=mode,
+                experiment=row[Column.EXPERIMENT],
+                seed=row[Column.SEED],
+                salt=row[Column.SALT],
+            ),
+        )
+        for row in completed.iter_rows(named=True)
+    ]
+    return _concat(frames)
+
+
+def collect_evidence(
+    paths: Paths,
+    config: Config,
+    mode: ExecutionMode,
+    fairness: FairnessGrid,
+    only: ExperimentScope = None,
+) -> RunEvidence:
+    index: list[RunIndexTable] = []
+    tables: FrameLists = {
+        Artifact.SUMMARY: [],
+        Artifact.CLIENT_METRICS: [],
+        Artifact.FAMILY_METRICS: [],
+        Artifact.EXPOSURE: [],
+        Artifact.NOVELTY: [],
+    }
+    for key in _run_keys(config, mode, fairness, only):
+        document = _document(paths, config, key)
+        index.append(
+            _tagged(
+                pl.DataFrame({Column.STATUS: [document.status], Column.REASON: [document.reason]}),
+                key,
+            )
+        )
+        if document.status is RunStatus.COMPLETED:
+            _load_tables(paths, key, tables)
+    return RunEvidence(
+        index=_concat(index),
+        summary=_concat(tables[Artifact.SUMMARY]),
+        clients=_concat(tables[Artifact.CLIENT_METRICS]),
+        families=_concat(tables[Artifact.FAMILY_METRICS]),
+        exposure=_concat(tables[Artifact.EXPOSURE]),
+        novelty=_concat(tables[Artifact.NOVELTY]),
+    )
 
 
 def row_level_columns() -> list[Column]:
@@ -498,7 +633,7 @@ def record_study(paths: Paths, config: Config, request: StudyRequest) -> None:
 def _code(paths: Paths, index: RunIndexTable, mode: ExecutionMode) -> CodeProvenance:
     return CodeProvenance(
         execution_revision=revision_at_or_before(paths, _first_run_written(paths, index, mode)),
-        analysis_revision=git_revision(paths).detail,
+        analysis_revision=git_revision(paths),
         analysis_sources_clean=sources_are_clean(paths),
     )
 
@@ -613,7 +748,7 @@ def promote(paths: Paths, config: Config, mode: ExecutionMode) -> PromotionDecis
         paths.results_file(ResultsDirectory.PROVENANCE, ResultsFile.CODE),
         CodeProvenance(
             execution_revision=revision_at_or_before(paths, _first_run_written(paths, index, mode)),
-            analysis_revision=git_revision(paths).detail,
+            analysis_revision=git_revision(paths),
             analysis_sources_clean=sources_are_clean(paths),
         ),
     )

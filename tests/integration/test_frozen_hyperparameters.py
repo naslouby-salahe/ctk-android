@@ -1,10 +1,10 @@
 import pytest
 
-from ctk_android.analysis.fairness import frozen_drift, select_hyperparameters
+from ctk_android.analysis.post_confirmatory import frozen_drift, select_hyperparameters
 from ctk_android.config import load_config
 from ctk_android.enums import Artifact, ExecutionMode
 from ctk_android.paths import Paths
-from ctk_android.reporting.records import collect_evidence
+from ctk_android.reporting.artifacts import collect_evidence
 from tests.architecture.source_index import REPO_ROOT
 
 PATHS = Paths(REPO_ROOT)

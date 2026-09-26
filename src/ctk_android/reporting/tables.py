@@ -1,6 +1,6 @@
 import polars as pl
 
-from ctk_android.analysis.dose_response import dose_levels
+from ctk_android.analysis.decomposition import dose_levels
 from ctk_android.config import Config
 from ctk_android.data.cache import is_one_of
 from ctk_android.enums import (

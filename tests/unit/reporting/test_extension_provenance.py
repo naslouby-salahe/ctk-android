@@ -14,7 +14,7 @@ from ctk_android.enums import (
     SupersededFile,
 )
 from ctk_android.paths import Paths
-from ctk_android.reporting.promotion import record_study
+from ctk_android.reporting.artifacts import record_study
 from ctk_android.types import (
     CodeProvenance,
     ExtensionProvenance,

@@ -1,7 +1,7 @@
 import numpy as np
 import polars as pl
 
-from ctk_android.data.identity import build_identities
+from ctk_android.data.preparation import build_identities
 from ctk_android.enums import Column
 
 

@@ -2,8 +2,8 @@ import numpy as np
 import polars as pl
 
 from ctk_android.config import load_config
-from ctk_android.data.families import large_family_sets, select_large_family_sets
 from ctk_android.data.partitions import client_fit_rows
+from ctk_android.data.preparation import large_family_sets, select_large_family_sets
 from ctk_android.enums import (
     ClientId,
     Column,

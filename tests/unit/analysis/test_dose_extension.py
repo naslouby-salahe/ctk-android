@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.dose_extension import (
+from ctk_android.analysis.extensions import (
     dose_consistency,
     dose_effects,
     dose_experiments,

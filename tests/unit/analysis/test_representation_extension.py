@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.representation_extension import (
+from ctk_android.analysis.extensions import (
     eligibility_table,
     representation_experiments,
     representation_map,

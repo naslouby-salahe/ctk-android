@@ -1,17 +1,16 @@
 import numpy as np
 import polars as pl
+from scipy import linalg, optimize, stats
+from threadpoolctl import threadpool_limits
 
-from ctk_android.analysis.decomposition import decomposed_learners
-from ctk_android.analysis.gates import (
-    federated_arms,
-    frozen_family_set_experiments,
-    permutation_outcome,
-    simple_baselines,
-)
+from ctk_android.analysis.decomposition import decomposed_learners, dose_levels, with_level_exposure
 from ctk_android.analysis.statistics import paired_effect
-from ctk_android.config import Config, StatisticsConfig
+from ctk_android.config import Config, StatisticsConfig, TrainingConfig
 from ctk_android.data.cache import is_one_of, records_to_frame
 from ctk_android.enums import (
+    AllowedWording,
+    ClaimName,
+    ClaimStatus,
     ClientId,
     Column,
     CtkAggregation,
@@ -21,44 +20,89 @@ from ctk_android.enums import (
     EvidenceClass,
     ExperimentName,
     ExposureCondition,
+    FamilyOutcomeMeasure,
+    FamilyPredictor,
     IntervalStatus,
+    IntervalVerdict,
     Learner,
     LibraryOption,
+    MaskingContrast,
     Metric,
     OperatingPointStatus,
+    PermutationOutcome,
     RobustnessScope,
+    Sensitivity,
+    StatisticsLimit,
+    Tolerance,
     TradeoffComparison,
     TradeoffMeasure,
+    TransferScope,
+    TunedParameter,
+    VarianceComponent,
+    VarianceSource,
 )
 from ctk_android.types import (
     Alpha,
     AnchoredEffectRow,
     AnchoredSelectionRow,
     AnchoredTable,
+    ArmPair,
     ArmSeries,
     ArmSpec,
+    AssociationTable,
     AuditTable,
+    CellTable,
+    ClaimResult,
+    ClaimsTable,
     ClientCountsTable,
     ClientCtkRow,
     ClientCtkTable,
     ComparisonTable,
+    Confidence,
+    ContrastSpec,
+    Correlation,
+    DevianceAndGradient,
     Effect,
     EffectRow,
     EffectsTable,
+    FamilyAssociationRow,
+    FamilyClientRow,
+    FamilyClientTable,
     FamilyCountsTable,
     FamilyEffectsTable,
+    FamilyGainsTable,
+    FamilyName,
     FamilySeedTable,
     FidelityTable,
+    Fraction,
+    FrozenHyperparameters,
+    GateEvidence,
+    GroupCodes,
     HeadroomRow,
     HeadroomTable,
+    HeterogeneityRow,
+    HeterogeneityTable,
     Interval,
+    MaskingRow,
+    MaskingTable,
+    MetricPair,
+    MicroGainTable,
     Passed,
     PatternTable,
     PermutationAuditRow,
+    PooledRecallTable,
+    Positive,
+    RandomEffectsDesign,
     RatesTable,
+    Refuted,
+    ResampleCount,
+    RobustnessRow,
     RobustnessTable,
+    RowCount,
     ScopeMap,
     SeedEffects,
+    SeedMatrix,
+    SeedMeansTable,
     SeedSummary,
     SelectionTable,
     SummaryTable,
@@ -68,6 +112,15 @@ from ctk_android.types import (
     Table,
     TradeoffRow,
     TradeoffTable,
+    TransferRow,
+    TransferScopeSpec,
+    TransferTable,
+    TuningValue,
+    ValueSeries,
+    VarianceEstimate,
+    VarianceRow,
+    VarianceTable,
+    VarianceVector,
 )
 
 
@@ -856,3 +909,1168 @@ def client_ctk_analysis(
                     )
                 )
     return _ordered(records_to_frame(rows), Column.CLIENT, Column.POPULATION, Column.LEARNER)
+
+
+def federated_arms() -> tuple[Learner, ...]:
+    return (Learner.FEDAVG, Learner.FEDPROX, Learner.FEDAVG_FINETUNE)
+
+
+def simple_baselines() -> list[Learner]:
+    return [Learner.CENTRAL, *federated_arms(), Learner.BLEND]
+
+
+def _mean(values: ValueSeries) -> Effect | None:
+    present = values.drop_nulls().to_numpy()
+    return present.mean().item() if present.size else None
+
+
+def _effect(
+    effects: EffectsTable,
+    experiment: ExperimentName,
+    learner: Learner,
+    estimand: Estimand,
+    metric: Metric,
+    alpha: Alpha,
+) -> EffectRow | None:
+    rows = effects.filter(
+        (pl.col(Column.EXPERIMENT) == experiment)
+        & (pl.col(Column.LEARNER) == learner)
+        & (pl.col(Column.ESTIMAND) == estimand)
+        & (pl.col(Column.METRIC) == metric)
+        & (pl.col(Column.ALPHA) == alpha)
+        & (pl.col(Column.SALT) == 0)
+    )
+    return EffectRow.model_validate(rows.row(0, named=True)) if rows.height else None
+
+
+def _passes(row: EffectRow | None, minimum: Effect, positive_seeds: SupportCount) -> Passed:
+    return (
+        row is not None
+        and row.mean_difference >= minimum
+        and row.ci_low is not None
+        and row.ci_low > 0
+        and (row.positive_seeds or 0) >= positive_seeds
+    )
+
+
+def _refuted(row: EffectRow | None, minimum: Effect) -> Refuted:
+    return row is not None and row.ci_high is not None and row.ci_high < minimum
+
+
+def _decide(passed: list[Passed], refuted: list[Refuted]) -> ClaimStatus:
+    if passed and all(passed):
+        return ClaimStatus.PROMOTED
+    if any(passed):
+        return ClaimStatus.NARROWED
+    if refuted and all(refuted):
+        return ClaimStatus.REJECTED
+    return ClaimStatus.INSUFFICIENT_EVIDENCE
+
+
+def _result(
+    claim: ClaimName,
+    status: ClaimStatus,
+    passed: RowCount,
+    total: RowCount,
+    wording: AllowedWording | None = None,
+) -> ClaimResult:
+    return ClaimResult(
+        claim=claim,
+        claim_status=status,
+        scopes_passed=passed,
+        scopes_total=total,
+        wording=AllowedWording[status.name] if wording is None else wording,
+    )
+
+
+def _scoped(
+    claim: ClaimName,
+    rows: list[EffectRow | None],
+    minimum: Effect,
+    positive_seeds: SupportCount,
+) -> ClaimResult:
+    passed = [_passes(row, minimum, positive_seeds) for row in rows]
+    refuted = [_refuted(row, minimum) for row in rows]
+    return _result(claim, _decide(passed, refuted), sum(passed), len(passed))
+
+
+def _population_metrics() -> tuple[Metric, ...]:
+    return (Metric.FEDERATION_UNSEEN_RECALL, Metric.OWN_DOMAIN_UNSEEN_RECALL)
+
+
+def local_deficit(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
+    rows = [
+        _effect(
+            evidence.effects,
+            ExperimentName.CONTROLLED_EXPOSURE,
+            Learner.CENTRAL,
+            Estimand.LOCAL_DEFICIT,
+            metric,
+            alpha,
+        )
+        for metric in _population_metrics()
+    ]
+    return _scoped(
+        ClaimName.LOCAL_DEFICIT, rows, gates.local_deficit_min_gap, gates.local_deficit_min_seeds
+    )
+
+
+def collaboration_benefit(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
+    rows = [
+        _effect(
+            evidence.effects,
+            ExperimentName.CONTROLLED_EXPOSURE,
+            Learner.FEDAVG,
+            Estimand.TOTAL_GAIN,
+            metric,
+            alpha,
+        )
+        for metric in _population_metrics()
+    ]
+    return _scoped(ClaimName.COLLABORATION_BENEFIT, rows, gates.collaboration_min_gain, 0)
+
+
+def _ctk(
+    evidence: GateEvidence, experiment: ExperimentName, metric: Metric, alpha: Alpha
+) -> EffectRow | None:
+    return _effect(evidence.effects, experiment, Learner.FEDAVG, Estimand.CTK_GAIN, metric, alpha)
+
+
+def permutation_outcome(row: EffectRow | None, band: Effect) -> PermutationOutcome:
+    if row is None or row.ci_low is None or row.ci_high is None:
+        return PermutationOutcome.UNRESOLVED
+    if row.ci_low >= -band and row.ci_high <= band:
+        return PermutationOutcome.EQUIVALENT
+    if row.ci_low > band or row.ci_high < -band:
+        return PermutationOutcome.EXCEEDS_BAND
+    return PermutationOutcome.UNRESOLVED
+
+
+def complementary_knowledge(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
+    scopes = [
+        _ctk(evidence, ExperimentName.CONTROLLED_EXPOSURE, Metric.FEDERATION_UNSEEN_RECALL, alpha),
+        _ctk(evidence, ExperimentName.CONTROLLED_EXPOSURE, Metric.OWN_DOMAIN_UNSEEN_RECALL, alpha),
+        _ctk(
+            evidence, ExperimentName.REPLICATION_FAMILY_SET, Metric.FEDERATION_UNSEEN_RECALL, alpha
+        ),
+    ]
+    permutation = _ctk(
+        evidence, ExperimentName.FAMILY_PERMUTATION_CONTROL, Metric.FEDERATION_UNSEEN_RECALL, alpha
+    )
+    outcome = permutation_outcome(permutation, gates.ctk_min_gain)
+    if outcome is PermutationOutcome.EXCEEDS_BAND:
+        return _result(ClaimName.COMPLEMENTARY_KNOWLEDGE, ClaimStatus.REJECTED, 0, len(scopes))
+    if outcome is PermutationOutcome.UNRESOLVED or evidence.failed_validation_runs:
+        return _result(
+            ClaimName.COMPLEMENTARY_KNOWLEDGE, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, len(scopes)
+        )
+    return _scoped(
+        ClaimName.COMPLEMENTARY_KNOWLEDGE, scopes, gates.ctk_min_gain, gates.ctk_min_positive_seeds
+    )
+
+
+def generic_pooling_majority(evidence: GateEvidence, config: Config) -> ClaimResult:
+    alpha = config.experiments.operating.primary_alpha
+    threshold = config.statistics.gates.pooling_majority_share
+    rows = [
+        _effect(
+            evidence.effects,
+            ExperimentName.CONTROLLED_EXPOSURE,
+            Learner.FEDAVG,
+            Estimand.POOLING_SHARE,
+            metric,
+            alpha,
+        )
+        for metric in _population_metrics()
+    ]
+    passed = [row is not None and row.ci_low is not None and row.ci_low > threshold for row in rows]
+    refuted = [
+        row is not None and row.ci_high is not None and row.ci_high < threshold for row in rows
+    ]
+    return _result(
+        ClaimName.GENERIC_POOLING_MAJORITY, _decide(passed, refuted), sum(passed), len(passed)
+    )
+
+
+def dose_response(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates = config.statistics.gates
+    fedavg = evidence.dose.filter(pl.col(Column.LEARNER) == Learner.FEDAVG)
+    curve = dose_levels(fedavg, gates.dose_min_peers)
+    if curve.height < 2:
+        return _result(
+            ClaimName.DOSE_RESPONSE,
+            ClaimStatus.INSUFFICIENT_EVIDENCE,
+            0,
+            StatisticsLimit.DOSE_CRITERIA,
+        )
+    recall = curve[Column.RECALL].to_numpy()
+    monotone = (np.diff(recall) >= -gates.dose_monotone_tolerance).all().item()
+    enough = curve.filter(pl.col(Column.MEETS_DOSE_CRITERION))
+    gain = enough[Column.CTK_GAIN].to_numpy().max().item() if enough.height else None
+    improves = gain is not None and gain >= gates.dose_min_gain
+    family_gains = (
+        with_level_exposure(fedavg)
+        .filter(pl.col(Column.LEVEL_EFFECTIVE_DOSE) >= gates.dose_min_peers)
+        .group_by(Column.FAMILY)
+        .agg(pl.col(Column.CTK_GAIN).mean())
+    )
+    not_one_family = family_gains.height > 1 and all(
+        _without(family_gains, family) >= gates.dose_min_gain
+        for family in family_gains[Column.FAMILY]
+    )
+    passed = [monotone, improves, not_one_family]
+    status = ClaimStatus.NARROWED
+    if all(passed):
+        status = ClaimStatus.PROMOTED
+    elif not any(passed):
+        status = ClaimStatus.REJECTED
+    return _result(ClaimName.DOSE_RESPONSE, status, sum(passed), len(passed))
+
+
+def _without(gains: FamilyGainsTable, family: FamilyName) -> Fraction:
+    return _mean(gains.filter(pl.col(Column.FAMILY) != family)[Column.CTK_GAIN]) or 0.0
+
+
+def own_domain_benefit(evidence: GateEvidence, config: Config) -> ClaimResult:
+    alpha = config.experiments.operating.primary_alpha
+    row = _ctk(evidence, ExperimentName.CONTROLLED_EXPOSURE, Metric.OWN_DOMAIN_UNSEEN_RECALL, alpha)
+    return _scoped(ClaimName.OWN_DOMAIN_BENEFIT, [row], 0.0, 0)
+
+
+def worst_client_benefit(evidence: GateEvidence, config: Config) -> ClaimResult:
+    alpha = config.experiments.operating.primary_alpha
+    row = _ctk(
+        evidence, ExperimentName.CONTROLLED_EXPOSURE, Metric.WORST_CLIENT_UNSEEN_RECALL, alpha
+    )
+    return _scoped(ClaimName.WORST_CLIENT_BENEFIT, [row], 0.0, 0)
+
+
+def _seed_means(
+    summary: SummaryTable, learner: Learner, metric: Metric, alpha: Alpha
+) -> SeedMeansTable:
+    return summary.filter(
+        (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
+        & (pl.col(Column.LEARNER) == learner)
+        & (pl.col(Column.CONDITION) == ExposureCondition.PEER_PRESENT)
+        & pl.col(Column.DOSE).is_null()
+        & (pl.col(Column.METRIC) == metric)
+        & (pl.col(Column.ALPHA) == alpha)
+    ).select(Column.SEED, Column.VALUE)
+
+
+def known_family_safety(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
+    recalls = {
+        learner: _mean(
+            _seed_means(evidence.summary, learner, Metric.FEDERATION_UNSEEN_RECALL, alpha)[
+                Column.VALUE
+            ]
+        )
+        for learner in federated_arms()
+    }
+    measured = {learner: value for learner, value in recalls.items() if value is not None}
+    if not measured:
+        return _result(ClaimName.KNOWN_FAMILY_SAFETY, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, 2)
+    strongest = max(measured, key=lambda learner: measured[learner])
+
+    def shift(metric: Metric) -> Effect | None:
+        arm = _seed_means(evidence.summary, strongest, metric, alpha)
+        local = _seed_means(evidence.summary, Learner.LOCAL, metric, alpha)
+        joined = arm.join(local.rename({Column.VALUE: Column.LOCAL_RECALL}), on=Column.SEED)
+        return _mean(joined[Column.VALUE] - joined[Column.LOCAL_RECALL])
+
+    recall_shift, fpr_shift = shift(Metric.KNOWN_FAMILY_RECALL), shift(Metric.REALISED_FPR)
+    if recall_shift is None or fpr_shift is None:
+        return _result(ClaimName.KNOWN_FAMILY_SAFETY, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, 2)
+    passed = [abs(recall_shift) <= gates.known_family_tolerance, fpr_shift <= gates.fpr_tolerance]
+    status = ClaimStatus.PROMOTED if all(passed) else ClaimStatus.REJECTED
+    return _result(
+        ClaimName.KNOWN_FAMILY_SAFETY,
+        status,
+        sum(passed),
+        len(passed),
+        AllowedWording.STRONGEST_ARM_ONLY if status is ClaimStatus.PROMOTED else None,
+    )
+
+
+def frozen_family_set_experiments() -> tuple[ExperimentName, ...]:
+    return (ExperimentName.CONTROLLED_EXPOSURE, ExperimentName.REPLICATION_FAMILY_SET)
+
+
+def family_dependence(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates = config.statistics.gates
+    per_family = (
+        evidence.family_seed.filter(
+            (pl.col(Column.LEARNER) == Learner.FEDAVG)
+            & is_one_of(Column.EXPERIMENT, list(frozen_family_set_experiments()))
+        )
+        .group_by(Column.FAMILY)
+        .agg(pl.col(Column.CTK_GAIN).mean())
+    )
+    if per_family.height < 2:
+        return _result(ClaimName.FAMILY_DEPENDENCE, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, 1)
+    gains = per_family[Column.CTK_GAIN].to_numpy()
+    spread = gains.max() - gains.min()
+    heterogeneous = spread >= gates.heterogeneity_min
+    status = ClaimStatus.PROMOTED if heterogeneous else ClaimStatus.REJECTED
+    return _result(ClaimName.FAMILY_DEPENDENCE, status, 1 if heterogeneous else 0, 1)
+
+
+def representation_limited_family(evidence: GateEvidence, config: Config) -> ClaimResult:
+    poor = config.statistics.gates.poor_full_recall
+
+    def poor_families(experiment: ExperimentName, learner: Learner) -> set[FamilyName]:
+        table = evidence.family_effects.filter(
+            (pl.col(Column.EXPERIMENT) == experiment)
+            & (pl.col(Column.LEARNER) == learner)
+            & (pl.col(Column.FULL_RECALL) < poor)
+        )
+        return set(table[Column.FAMILY].to_list())
+
+    primary = poor_families(ExperimentName.CONTROLLED_EXPOSURE, Learner.CENTRAL)
+    independent = poor_families(
+        ExperimentName.MODEL_FAMILY_REPLICATION_LINEAR, Learner.CENTRAL
+    ) | poor_families(ExperimentName.MODEL_FAMILY_REPLICATION_TREES, Learner.CENTRAL)
+    qualifying = primary & independent
+    status = ClaimStatus.PROMOTED if qualifying else ClaimStatus.REJECTED
+    partial = status is ClaimStatus.PROMOTED and len(qualifying) < len(primary)
+    return _result(
+        ClaimName.REPRESENTATION_LIMITED_FAMILY,
+        status,
+        len(qualifying),
+        len(primary),
+        AllowedWording.NARROWED if partial else None,
+    )
+
+
+def feature_novelty_explanation(evidence: GateEvidence, config: Config) -> ClaimResult:
+    minimum = config.statistics.gates.novelty_min_abs_spearman
+    outcomes: list[Passed] = []
+    directions: set[Positive] = set()
+    for experiment in (ExperimentName.CONTROLLED_EXPOSURE, ExperimentName.REPLICATION_FAMILY_SET):
+        association = evidence.associations.get(experiment)
+        if association is None or association.interval is None:
+            outcomes.append(False)
+            continue
+        excludes_zero = association.interval.low > 0 or association.interval.high < 0
+        outcomes.append(abs(association.rho) >= minimum and excludes_zero)
+        directions.add(association.rho > 0)
+    consistent = len(directions) <= 1
+    passed = [outcome and consistent for outcome in outcomes]
+    resolved = all(
+        evidence.associations.get(experiment) is not None for experiment in evidence.associations
+    )
+    status = _decide(passed, [not outcome and resolved for outcome in outcomes])
+    return _result(ClaimName.FEATURE_NOVELTY_EXPLANATION, status, sum(passed), len(passed))
+
+
+def new_mechanism_trigger(evidence: GateEvidence, config: Config) -> ClaimResult:
+    gates, alpha = config.statistics.gates, config.experiments.operating.primary_alpha
+
+    def best_gap(metric: Metric) -> Effect | None:
+        full = _mean(
+            evidence.summary.filter(
+                (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
+                & (pl.col(Column.LEARNER) == Learner.CENTRAL)
+                & (pl.col(Column.CONDITION) == ExposureCondition.FULL_EXPOSURE)
+                & (pl.col(Column.METRIC) == metric)
+                & (pl.col(Column.ALPHA) == alpha)
+            )[Column.VALUE]
+        )
+        baselines = [
+            _mean(_seed_means(evidence.summary, learner, metric, alpha)[Column.VALUE])
+            for learner in simple_baselines()
+        ]
+        measured = [value for value in baselines if value is not None]
+        return None if full is None or not measured else full - max(measured)
+
+    mean_gap, worst_gap = (
+        best_gap(Metric.FEDERATION_UNSEEN_RECALL),
+        best_gap(Metric.WORST_CLIENT_UNSEEN_RECALL),
+    )
+    if mean_gap is None or worst_gap is None:
+        return _result(ClaimName.NEW_MECHANISM_TRIGGER, ClaimStatus.INSUFFICIENT_EVIDENCE, 0, 2)
+    headroom = mean_gap > gates.mechanism_mean_gap or worst_gap > gates.mechanism_worst_gap
+    status = ClaimStatus.INSUFFICIENT_EVIDENCE if headroom else ClaimStatus.REJECTED
+    return _result(ClaimName.NEW_MECHANISM_TRIGGER, status, 1 if headroom else 0, 2)
+
+
+def evaluate_claims(evidence: GateEvidence, config: Config) -> ClaimsTable:
+    return records_to_frame(
+        [
+            local_deficit(evidence, config),
+            collaboration_benefit(evidence, config),
+            complementary_knowledge(evidence, config),
+            generic_pooling_majority(evidence, config),
+            dose_response(evidence, config),
+            own_domain_benefit(evidence, config),
+            worst_client_benefit(evidence, config),
+            known_family_safety(evidence, config),
+            family_dependence(evidence, config),
+            representation_limited_family(evidence, config),
+            feature_novelty_explanation(evidence, config),
+            new_mechanism_trigger(evidence, config),
+        ]
+    )
+
+
+def top_support_families(families: FamilyCountsTable, count: SupportCount) -> list[FamilyName]:
+    ranked = (
+        families.filter(pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+        .group_by(Column.FAMILY)
+        .agg(pl.col(Column.TRIALS).mean())
+        .sort([Column.TRIALS, Column.FAMILY], descending=[True, False])
+    )
+    return ranked[Column.FAMILY].head(count).to_list()
+
+
+def micro_ctk_by_seed(
+    families: FamilyCountsTable,
+    alpha: Alpha,
+    excluded: list[FamilyName],
+    hits: Column = Column.HITS,
+    trials: Column = Column.TRIALS,
+) -> MicroGainTable:
+    def pooled(condition: ExposureCondition, name: Column) -> PooledRecallTable:
+        return (
+            families.filter(
+                (pl.col(Column.LEARNER) == Learner.FEDAVG)
+                & (pl.col(Column.CONDITION) == condition)
+                & pl.col(Column.DOSE).is_null()
+                & (pl.col(Column.ALPHA) == alpha)
+                & (pl.col(Column.POPULATION) == EvaluationPopulation.FEDERATION_WIDE)
+                & ~is_one_of(Column.FAMILY, excluded)
+            )
+            .group_by(Column.EXPERIMENT, Column.SEED, Column.SALT)
+            .agg((pl.col(hits).sum() / pl.col(trials).sum()).alias(name))
+        )
+
+    return (
+        pooled(ExposureCondition.PEER_PRESENT, Column.PEER_RECALL)
+        .join(
+            pooled(ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Column.ABSENT_RECALL),
+            on=[Column.EXPERIMENT, Column.SEED, Column.SALT],
+        )
+        .with_columns(
+            (pl.col(Column.PEER_RECALL) - pl.col(Column.ABSENT_RECALL)).alias(
+                Column.MICRO_POOLED_CTK_GAIN
+            )
+        )
+    )
+
+
+def robustness_table(families: FamilyCountsTable, config: Config) -> RobustnessTable:
+    alpha = config.experiments.operating.primary_alpha
+    removed = top_support_families(families, config.experiments.top_family_removal_count)
+    rows: list[RobustnessRow] = []
+    for sensitivity, excluded, hits, trials in (
+        (Sensitivity.ALL_FAMILIES, [], Column.HITS, Column.TRIALS),
+        (Sensitivity.TOP_FAMILY_REMOVAL, removed, Column.HITS, Column.TRIALS),
+        (Sensitivity.DEDUPLICATED_TEST, [], Column.UNIQUE_HITS, Column.UNIQUE_TRIALS),
+    ):
+        gains = micro_ctk_by_seed(families, alpha, excluded, hits, trials)
+        for group in gains.sort(Column.SEED).partition_by(Column.EXPERIMENT, Column.SALT):
+            head = group.row(0, named=True)
+            effect = paired_effect(
+                group[Column.MICRO_POOLED_CTK_GAIN].to_numpy(), config.statistics
+            )
+            rows.append(
+                RobustnessRow(
+                    experiment=head[Column.EXPERIMENT],
+                    salt=head[Column.SALT],
+                    alpha=alpha,
+                    sensitivity=sensitivity,
+                    aggregation=CtkAggregation.MICRO_POOLED,
+                    micro_pooled_ctk_gain=effect.mean,
+                    median_difference=effect.median,
+                    ci_low=effect.interval.low if effect.interval else None,
+                    ci_high=effect.interval.high if effect.interval else None,
+                    positive_seeds=effect.positive_seeds,
+                    seed_count=effect.seeds,
+                )
+            )
+    return records_to_frame(rows).sort(Column.EXPERIMENT, Column.SALT, Column.SENSITIVITY)
+
+
+def select_hyperparameters(summary: SummaryTable, alpha: Alpha) -> SelectionTable:
+    grid = summary.filter(
+        (pl.col(Column.EXPERIMENT) == ExperimentName.BASELINE_FAIRNESS)
+        & (pl.col(Column.METRIC) == Metric.CALIBRATION_AUROC)
+        & (pl.col(Column.ALPHA) == alpha)
+        & pl.col(Column.PARAMETER).is_not_null()
+    )
+    per_value = (
+        grid.group_by(Column.PARAMETER, Column.TUNING_VALUE)
+        .agg(
+            pl.col(Column.VALUE).mean().alias(Column.CALIBRATION_AUROC),
+            pl.col(Column.SEED).n_unique().alias(Column.SEED_COUNT),
+        )
+        .sort(
+            [Column.PARAMETER, Column.CALIBRATION_AUROC, Column.TUNING_VALUE],
+            descending=[False, True, False],
+        )
+    )
+    return per_value.with_columns(
+        (pl.int_range(pl.len()).over(Column.PARAMETER) == 0).alias(Column.SELECTED)
+    )
+
+
+def selected_value(selection: SelectionTable, parameter: TunedParameter) -> TuningValue:
+    chosen = selection.filter((pl.col(Column.PARAMETER) == parameter) & pl.col(Column.SELECTED))
+    return chosen[Column.TUNING_VALUE].item()
+
+
+def frozen_hyperparameters(selection: SelectionTable) -> FrozenHyperparameters:
+    return FrozenHyperparameters(
+        local_epochs=selected_value(selection, TunedParameter.LOCAL_EPOCHS),
+        finetune_epochs=selected_value(selection, TunedParameter.FINETUNE_EPOCHS),
+        fedprox_mu=selected_value(selection, TunedParameter.FEDPROX_STRENGTH),
+    )
+
+
+def frozen_drift(selection: SelectionTable, training: TrainingConfig) -> list[TunedParameter]:
+    chosen = frozen_hyperparameters(selection)
+    configured = {
+        TunedParameter.LOCAL_EPOCHS: (chosen.local_epochs, training.local_epochs),
+        TunedParameter.FINETUNE_EPOCHS: (chosen.finetune_epochs, training.finetune_epochs),
+        TunedParameter.FEDPROX_STRENGTH: (chosen.fedprox_mu, training.fedprox_mu),
+    }
+    return [parameter for parameter, (found, frozen) in configured.items() if found != frozen]
+
+
+def _variance_rows(
+    experiment: ExperimentName, learner: Learner, matrix: SeedMatrix
+) -> list[VarianceRow]:
+    families, seeds = matrix.shape
+    grand = matrix.mean()
+    total = ((matrix - grand) ** 2).sum()
+    by_family = seeds * ((matrix.mean(axis=1) - grand) ** 2).sum()
+    by_seed = families * ((matrix.mean(axis=0) - grand) ** 2).sum()
+    parts = (
+        (VarianceSource.FAMILY, by_family, families - 1),
+        (VarianceSource.SEED, by_seed, seeds - 1),
+        (VarianceSource.RESIDUAL, total - by_family - by_seed, (families - 1) * (seeds - 1)),
+    )
+    return [
+        VarianceRow(
+            evidence_class=EvidenceClass.POST_CONFIRMATORY,
+            experiment=experiment,
+            learner=learner,
+            source=source,
+            sum_squares=np.maximum(squares, 0.0).item(),
+            degrees_of_freedom=degrees,
+            share=np.maximum(squares, 0.0).item() / total.item() if total > 0 else 0.0,
+        )
+        for source, squares, degrees in parts
+    ]
+
+
+def _mean_or_zero(values: SeedEffects) -> Effect:
+    return values.mean().item() if values.size else 0.0
+
+
+def ctk_variance_components(family_seed: FamilySeedTable) -> VarianceTable:
+    rows: list[VarianceRow] = []
+    for experiment in frozen_family_set_experiments():
+        per_pair = (
+            family_seed.filter(
+                (pl.col(Column.EXPERIMENT) == experiment)
+                & (pl.col(Column.LEARNER) == Learner.FEDAVG)
+            )
+            .group_by(Column.FAMILY, Column.SEED)
+            .agg(pl.col(Column.CTK_GAIN).mean())
+        )
+        if per_pair.height == 0:
+            continue
+        wide = per_pair.pivot(on=Column.SEED, index=Column.FAMILY, values=Column.CTK_GAIN)
+        complete = wide.drop_nulls()
+        if complete.height < 2 or complete.width <= 2:
+            continue
+        matrix = complete.drop(Column.FAMILY).to_numpy().astype(np.float64)
+        rows.extend(_variance_rows(experiment, Learner.FEDAVG, matrix))
+    return records_to_frame(rows)
+
+
+def family_associations(family_effects: FamilyEffectsTable) -> AssociationTable:
+    rows: list[FamilyAssociationRow] = []
+    for experiment in frozen_family_set_experiments():
+        fedavg = family_effects.filter(
+            (pl.col(Column.EXPERIMENT) == experiment) & (pl.col(Column.LEARNER) == Learner.FEDAVG)
+        )
+        if fedavg.height < StatisticsLimit.ASSOCIATION_FAMILIES:
+            continue
+        local = fedavg[Column.LOCAL_RECALL].to_numpy()
+        pooling = (fedavg[Column.ABSENT_RECALL] - fedavg[Column.LOCAL_RECALL]).to_numpy()
+        total = (fedavg[Column.PEER_RECALL] - fedavg[Column.LOCAL_RECALL]).to_numpy()
+        ctk = fedavg[Column.CTK_GAIN].to_numpy()
+        for predictor, x in (
+            (FamilyPredictor.LOCAL_RECALL, local),
+            (FamilyPredictor.POOLING_GAIN, pooling),
+        ):
+            for outcome, y in (
+                (FamilyOutcomeMeasure.CTK_GAIN, ctk),
+                (FamilyOutcomeMeasure.TOTAL_GAIN, total),
+            ):
+                result = stats.spearmanr(x, y)
+                if not np.isfinite(result.statistic):
+                    continue
+                rows.append(
+                    FamilyAssociationRow(
+                        evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                        experiment=experiment,
+                        predictor=predictor,
+                        outcome_measure=outcome,
+                        rho=result.statistic.item(),
+                        p_value=result.pvalue.item(),
+                        families=fedavg.height,
+                    )
+                )
+    return records_to_frame(rows)
+
+
+def family_client_ctk(families: FamilyCountsTable, config: Config) -> FamilyClientTable:
+    alpha = config.experiments.operating.primary_alpha
+    own = families.filter(
+        (pl.col(Column.EXPERIMENT) == ExperimentName.CONTROLLED_EXPOSURE)
+        & (pl.col(Column.ALPHA) == alpha)
+        & (pl.col(Column.POPULATION) == EvaluationPopulation.OWN_DOMAIN)
+        & pl.col(Column.DOSE).is_null()
+        & (pl.col(Column.TRIALS) > 0)
+        & is_one_of(Column.LEARNER, [Learner.LOCAL, Learner.FEDAVG])
+    ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
+    if own.height == 0:
+        return pl.DataFrame()
+
+    def arm(learner: Learner, condition: ExposureCondition, name: Column) -> FamilyClientTable:
+        return own.filter(
+            (pl.col(Column.LEARNER) == learner) & (pl.col(Column.CONDITION) == condition)
+        ).select(
+            Column.SEED,
+            Column.CLIENT,
+            Column.FAMILY,
+            pl.col(Column.RECALL).alias(name),
+            pl.col(Column.TRIALS),
+        )
+
+    keys = [Column.SEED, Column.CLIENT, Column.FAMILY]
+    wide = (
+        arm(Learner.FEDAVG, ExposureCondition.PEER_PRESENT, Column.PEER_RECALL)
+        .join(
+            arm(
+                Learner.FEDAVG, ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Column.ABSENT_RECALL
+            ).drop(Column.TRIALS),
+            on=keys,
+        )
+        .join(
+            arm(Learner.LOCAL, ExposureCondition.PEER_PRESENT, Column.LOCAL_RECALL).drop(
+                Column.TRIALS
+            ),
+            on=keys,
+            how=LibraryOption.JOIN_LEFT,
+        )
+        .sort(Column.SEED)
+    )
+    rows: list[FamilyClientRow] = []
+    for group in wide.partition_by(Column.CLIENT, Column.FAMILY):
+        head = group.row(0, named=True)
+        peer = group[Column.PEER_RECALL].to_numpy()
+        absent = group[Column.ABSENT_RECALL].to_numpy()
+        summary = summarize_seeds(peer - absent, config.statistics)
+        if summary is None:
+            continue
+        rows.append(
+            FamilyClientRow(
+                evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                experiment=ExperimentName.CONTROLLED_EXPOSURE,
+                client=head[Column.CLIENT],
+                family=head[Column.FAMILY],
+                local_recall=_mean_or_zero(group[Column.LOCAL_RECALL].drop_nulls().to_numpy()),
+                absent_recall=absent.mean().item(),
+                peer_recall=peer.mean().item(),
+                hidden_trials_per_seed=_mean_or_zero(group[Column.TRIALS].to_numpy()),
+                **summary.model_dump(),
+            )
+        )
+    return records_to_frame(rows).sort(Column.CLIENT, Column.FAMILY) if rows else pl.DataFrame()
+
+
+def hidden_populations() -> tuple[EvaluationPopulation, ...]:
+    return (EvaluationPopulation.OWN_DOMAIN, EvaluationPopulation.FEDERATION_WIDE)
+
+
+def variance_components() -> tuple[VarianceComponent, ...]:
+    return (
+        VarianceComponent.FAMILY,
+        VarianceComponent.CLIENT,
+        VarianceComponent.FAMILY_BY_CLIENT,
+        VarianceComponent.SEED,
+        VarianceComponent.RESIDUAL,
+    )
+
+
+def transfer_scopes() -> tuple[TransferScopeSpec, ...]:
+    return (
+        TransferScopeSpec(scope=TransferScope.CELL, keys=(Column.CLIENT, Column.FAMILY)),
+        TransferScopeSpec(scope=TransferScope.FAMILY, keys=(Column.FAMILY,)),
+        TransferScopeSpec(scope=TransferScope.CLIENT, keys=(Column.CLIENT,)),
+        TransferScopeSpec(scope=TransferScope.OVERALL, keys=()),
+    )
+
+
+def masking_arms() -> tuple[Learner, ...]:
+    return (*federated_arms(), Learner.BLEND)
+
+
+def masking_aggregates() -> tuple[Metric, ...]:
+    return (Metric.AUROC, Metric.AUPRC)
+
+
+def masking_recalls() -> tuple[Metric, ...]:
+    return (Metric.OWN_DOMAIN_UNSEEN_RECALL, Metric.FEDERATION_UNSEEN_RECALL)
+
+
+def hidden_cells(families: FamilyCountsTable, alpha: Alpha) -> CellTable:
+    keys = [
+        Column.EXPERIMENT,
+        Column.SEED,
+        Column.SALT,
+        Column.POPULATION,
+        Column.CLIENT,
+        Column.FAMILY,
+    ]
+    recalls = families.filter(
+        is_one_of(Column.EXPERIMENT, list(frozen_family_set_experiments()))
+        & is_one_of(Column.POPULATION, list(hidden_populations()))
+        & is_one_of(Column.LEARNER, [Learner.LOCAL, Learner.FEDAVG])
+        & (pl.col(Column.ALPHA) == alpha)
+        & pl.col(Column.DOSE).is_null()
+        & (pl.col(Column.TRIALS) > 0)
+    ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.RECALL))
+
+    def arm(learner: Learner, condition: ExposureCondition, name: Column) -> CellTable:
+        return recalls.filter(
+            (pl.col(Column.LEARNER) == learner) & (pl.col(Column.CONDITION) == condition)
+        ).select(*keys, pl.col(Column.RECALL).alias(name), Column.TRIALS)
+
+    peer = pl.col(Column.PEER_RECALL)
+    absent = pl.col(Column.ABSENT_RECALL)
+    local = pl.col(Column.LOCAL_RECALL)
+    wide = (
+        arm(Learner.FEDAVG, ExposureCondition.PEER_PRESENT, Column.PEER_RECALL)
+        .join(
+            arm(
+                Learner.FEDAVG, ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Column.ABSENT_RECALL
+            ).drop(Column.TRIALS),
+            on=keys,
+        )
+        .join(
+            arm(Learner.LOCAL, ExposureCondition.PEER_PRESENT, Column.LOCAL_RECALL).drop(
+                Column.TRIALS
+            ),
+            on=keys,
+        )
+        .with_columns(
+            (absent - local).alias(Column.POOLING_GAIN),
+            (peer - local).alias(Column.TOTAL_GAIN),
+            (peer - absent).alias(Column.CTK_GAIN),
+        )
+    )
+    gain = pl.max_horizontal(pl.col(Column.CTK_GAIN), pl.lit(0))
+    repair = pl.min_horizontal(gain, pl.max_horizontal(-pl.col(Column.POOLING_GAIN), pl.lit(0)))
+    return (
+        wide.with_columns(repair.alias(Column.REPAIR))
+        .with_columns(
+            (gain - pl.col(Column.REPAIR)).alias(Column.NEW_CAPABILITY),
+            pl.min_horizontal(pl.col(Column.CTK_GAIN), pl.lit(0)).alias(Column.CTK_HARM),
+        )
+        .sort(*keys)
+    )
+
+
+def _codes(labels: ValueSeries) -> GroupCodes:
+    return np.unique(labels.to_numpy(), return_inverse=True)[1].reshape(-1).astype(np.int64)
+
+
+def _pair_codes(first: GroupCodes, second: GroupCodes) -> GroupCodes:
+    stacked = np.stack([first, second], axis=1)
+    return np.unique(stacked, axis=0, return_inverse=True)[1].reshape(-1).astype(np.int64)
+
+
+def _design(cells: CellTable) -> RandomEffectsDesign:
+    family = _codes(cells[Column.FAMILY])
+    client = _codes(cells[Column.CLIENT])
+    return RandomEffectsDesign(
+        response=cells[Column.CTK_GAIN].to_numpy().astype(np.float64),
+        factors=(family, client, _pair_codes(family, client), _codes(cells[Column.SEED])),
+    )
+
+
+def _reml_deviance(
+    variances: VarianceVector, response: SeedEffects, grams: list[SeedEffects]
+) -> DevianceAndGradient:
+    covariance = sum(
+        (weight * gram for weight, gram in zip(variances, grams, strict=True)),
+        np.eye(response.size) * Tolerance.VARIANCE_FLOOR,
+    )
+    factor = linalg.cho_factor(covariance, lower=True)
+    inverse = linalg.cho_solve(factor, np.eye(response.size))
+    inverse_ones = inverse.sum(axis=1)
+    total = inverse_ones.sum()
+    projection = inverse - np.outer(inverse_ones, inverse_ones) / total
+    projected = projection @ response
+    deviance = 2 * np.log(np.diag(factor[0])).sum() + np.log(total) + response @ projected
+    gradient = np.array(
+        [(projection * gram).sum() - projected @ gram @ projected for gram in grams]
+    )
+    return deviance.item(), gradient
+
+
+def _reml(design: RandomEffectsDesign, warm: VarianceVector | None) -> VarianceEstimate:
+    centred = design.response - design.response.mean()
+    scale = centred.var().item()
+    count = len(design.factors) + 1
+    if scale <= 0:
+        return VarianceEstimate(variances=np.zeros(count), converged=True)
+    response = centred / np.sqrt(scale)
+    grams = [(codes[:, None] == codes[None, :]).astype(np.float64) for codes in design.factors]
+    grams.append(np.eye(response.size))
+    starts = (
+        (np.full(count, 1 / count), np.append(np.full(count - 1, 0.5 / count), 0.5))
+        if warm is None
+        else (np.maximum(warm, Tolerance.WARM_START_FLOOR),)
+    )
+    fits = [
+        optimize.minimize(
+            _reml_deviance,
+            start,
+            args=(response, grams),
+            jac=True,
+            method=LibraryOption.LBFGSB,
+            bounds=optimize.Bounds(0, np.inf),
+        )
+        for start in starts
+    ]
+    best = min(fits, key=lambda fit: fit.fun)
+    return VarianceEstimate(variances=best.x * scale, converged=bool(best.success))
+
+
+def _shares(estimate: VarianceEstimate) -> VarianceVector:
+    total = estimate.variances.sum()
+    return estimate.variances / total if total > 0 else np.zeros(estimate.variances.size)
+
+
+def _resampled(design: RandomEffectsDesign, rng: np.random.Generator) -> RandomEffectsDesign:
+    seed_codes = design.factors[-1]
+    draws = rng.choice(np.unique(seed_codes), size=np.unique(seed_codes).size)
+    rows: list[GroupCodes] = [np.flatnonzero(seed_codes == draw) for draw in draws]
+    relabelled = np.concatenate([np.full(part.size, index) for index, part in enumerate(rows)])
+    chosen = np.concatenate(rows)
+    return RandomEffectsDesign(
+        response=design.response[chosen],
+        factors=(*(codes[chosen] for codes in design.factors[:-1]), relabelled.astype(np.int64)),
+    )
+
+
+def _share_interval(
+    design: RandomEffectsDesign,
+    warm: VarianceVector,
+    resamples: ResampleCount,
+    seed: RowCount,
+    level: Confidence,
+) -> list[Interval]:
+    rng = np.random.default_rng(seed)
+    with threadpool_limits(limits=1):
+        draws = np.stack([_shares(_reml(_resampled(design, rng), warm)) for _ in range(resamples)])
+    low, high = np.quantile(draws, [(1 - level) / 2, (1 + level) / 2], axis=0)
+    return [
+        Interval(low=lower.item(), high=upper.item())
+        for lower, upper in zip(low, high, strict=True)
+    ]
+
+
+def _sampling_noise(cells: CellTable) -> Effect:
+    peer = cells[Column.PEER_RECALL].to_numpy()
+    absent = cells[Column.ABSENT_RECALL].to_numpy()
+    trials = cells[Column.TRIALS].to_numpy()
+    return ((peer * (1 - peer) + absent * (1 - absent)) / trials).mean().item()
+
+
+def ctk_heterogeneity_components(cells: CellTable, config: Config) -> HeterogeneityTable:
+    rows: list[HeterogeneityRow] = []
+    for experiment in frozen_family_set_experiments():
+        for population in hidden_populations():
+            scoped = cells.filter(
+                (pl.col(Column.EXPERIMENT) == experiment)
+                & (pl.col(Column.POPULATION) == population)
+            )
+            if scoped.height == 0 or scoped[Column.SEED].n_unique() < StatisticsLimit.BCA_SEEDS:
+                continue
+            design = _design(scoped)
+            with threadpool_limits(limits=1):
+                estimate = _reml(design, None)
+            shares = _shares(estimate)
+            intervals = _share_interval(
+                design,
+                shares,
+                config.statistics.cluster_bootstrap_resamples,
+                config.statistics.statistics_seed,
+                config.statistics.confidence_level,
+            )
+            pair_sizes = np.bincount(design.factors[2])
+            for index, component in enumerate(variance_components()):
+                interval = intervals[index]
+                rows.append(
+                    HeterogeneityRow(
+                        evidence_class=EvidenceClass.POST_CONFIRMATORY,
+                        experiment=experiment,
+                        population=population,
+                        component=component,
+                        variance=estimate.variances[index].item(),
+                        share=shares[index].item(),
+                        share_ci_low=interval.low,
+                        share_ci_high=interval.high,
+                        observations=scoped.height,
+                        cells=pair_sizes.size,
+                        replicated_cells=(pair_sizes > 1).sum().item(),
+                        seeds=scoped[Column.SEED].n_unique(),
+                        families=scoped[Column.FAMILY].n_unique(),
+                        clients=scoped[Column.CLIENT].n_unique(),
+                        sampling_noise_reference=_sampling_noise(scoped),
+                        converged=estimate.converged,
+                        bootstrap_resamples=config.statistics.cluster_bootstrap_resamples,
+                    )
+                )
+    return records_to_frame(rows)
+
+
+def _verdict(interval: Interval | None, reference: Effect) -> IntervalVerdict:
+    if interval is None:
+        return IntervalVerdict.INCONCLUSIVE
+    if interval.low > reference:
+        return IntervalVerdict.POSITIVE
+    if interval.high < reference:
+        return IntervalVerdict.NEGATIVE
+    return IntervalVerdict.INCONCLUSIVE
+
+
+def _metric_by_seed(
+    summary: SummaryTable,
+    experiment: ExperimentName,
+    arm: ArmSpec,
+    metric: Metric,
+    alpha: Alpha,
+    name: Column,
+) -> Table:
+    return summary.filter(
+        (pl.col(Column.EXPERIMENT) == experiment)
+        & (pl.col(Column.LEARNER) == arm.learner)
+        & (pl.col(Column.CONDITION) == arm.condition)
+        & (pl.col(Column.METRIC) == metric)
+        & (pl.col(Column.ALPHA) == alpha)
+        & (pl.col(Column.OPERATING_STATUS) == OperatingPointStatus.VALID)
+        & pl.col(Column.DOSE).is_null()
+        & pl.col(Column.VALUE).is_finite()
+    ).select(Column.SEED, pl.col(Column.VALUE).alias(name))
+
+
+def _seed_difference(
+    summary: SummaryTable,
+    experiment: ExperimentName,
+    arms: ArmPair,
+    metric: Metric,
+    alpha: Alpha,
+) -> Table:
+    minuend = _metric_by_seed(summary, experiment, arms.minuend, metric, alpha, Column.MINUEND)
+    subtrahend = _metric_by_seed(
+        summary, experiment, arms.subtrahend, metric, alpha, Column.SUBTRAHEND
+    )
+    return minuend.join(subtrahend, on=Column.SEED).select(
+        Column.SEED, (pl.col(Column.MINUEND) - pl.col(Column.SUBTRAHEND)).alias(Column.DIFFERENCE)
+    )
+
+
+def _opposed(first: IntervalVerdict, second: IntervalVerdict) -> Passed:
+    return {first, second} == {IntervalVerdict.POSITIVE, IntervalVerdict.NEGATIVE}
+
+
+def _seed_correlation(aggregate: SeedEffects, recall: SeedEffects) -> Correlation | None:
+    if aggregate.size < StatisticsLimit.BCA_SEEDS or np.ptp(aggregate) == 0 or np.ptp(recall) == 0:
+        return None
+    return np.corrcoef(aggregate, recall)[0, 1].item()
+
+
+def _masking_row(
+    experiment: ExperimentName,
+    learner: Learner,
+    contrast: MaskingContrast,
+    metrics: MetricPair,
+    aggregate_differences: Table,
+    recall_differences: Table,
+    config: Config,
+) -> MaskingRow | None:
+    paired = aggregate_differences.join(
+        recall_differences, on=Column.SEED, suffix=Column.SUBTRAHEND
+    )
+    if paired.height == 0:
+        return None
+    aggregate = paired[Column.DIFFERENCE].to_numpy()
+    recall = paired[f"{Column.DIFFERENCE}{Column.SUBTRAHEND}"].to_numpy()
+    aggregate_effect = paired_effect(aggregate, config.statistics)
+    recall_effect = paired_effect(recall, config.statistics)
+    threshold = config.statistics.gates.ctk_min_gain
+    aggregate_verdict = _verdict(aggregate_effect.interval, 0)
+    recall_verdict = _verdict(recall_effect.interval, 0)
+    missed = ((recall >= threshold) & (aggregate <= 0)).sum().item()
+    reassured = ((recall <= -threshold) & (aggregate >= 0)).sum().item()
+    low = recall_effect.interval.low if recall_effect.interval else None
+    high = recall_effect.interval.high if recall_effect.interval else None
+    return MaskingRow(
+        evidence_class=EvidenceClass.POST_CONFIRMATORY,
+        experiment=experiment,
+        learner=learner,
+        contrast=contrast,
+        aggregate_metric=metrics.aggregate,
+        recall_metric=metrics.recall,
+        seed_count=paired.height,
+        aggregate_mean=aggregate_effect.mean,
+        aggregate_ci_low=aggregate_effect.interval.low if aggregate_effect.interval else None,
+        aggregate_ci_high=aggregate_effect.interval.high if aggregate_effect.interval else None,
+        aggregate_verdict=aggregate_verdict,
+        recall_mean=recall_effect.mean,
+        recall_ci_low=low,
+        recall_ci_high=high,
+        recall_verdict=recall_verdict,
+        material_gain_threshold=threshold,
+        verdicts_opposed=_opposed(aggregate_verdict, recall_verdict),
+        masked_gain=low is not None
+        and low > threshold
+        and aggregate_verdict is not IntervalVerdict.POSITIVE,
+        masked_loss=high is not None
+        and high < -threshold
+        and aggregate_verdict is not IntervalVerdict.NEGATIVE,
+        sign_disagreement_seeds=(np.sign(aggregate) * np.sign(recall) < 0).sum().item(),
+        gain_missed_seeds=missed,
+        false_reassurance_seeds=reassured,
+        opposite_conclusion_seeds=missed + reassured,
+        seed_correlation=_seed_correlation(aggregate, recall),
+    )
+
+
+def aggregate_metric_masking(summary: SummaryTable, config: Config) -> MaskingTable:
+    alpha = config.experiments.operating.primary_alpha
+    peer = ExposureCondition.PEER_PRESENT
+    absent = ExposureCondition.FAMILY_ABSENT_EVERYWHERE
+    local = ArmSpec(learner=Learner.LOCAL, condition=peer)
+    rows: list[MaskingRow] = []
+    for experiment in frozen_family_set_experiments():
+        for learner in masking_arms():
+            present = ArmSpec(learner=learner, condition=peer)
+            contrasts = (
+                ContrastSpec(
+                    contrast=MaskingContrast.PEER_VERSUS_LOCAL,
+                    arms=ArmPair(minuend=present, subtrahend=local),
+                ),
+                ContrastSpec(
+                    contrast=MaskingContrast.PEER_VERSUS_FAMILY_ABSENT,
+                    arms=ArmPair(
+                        minuend=present, subtrahend=ArmSpec(learner=learner, condition=absent)
+                    ),
+                ),
+            )
+            for spec in contrasts:
+                for aggregate in masking_aggregates():
+                    for recall in masking_recalls():
+                        row = _masking_row(
+                            experiment,
+                            learner,
+                            spec.contrast,
+                            MetricPair(aggregate=aggregate, recall=recall),
+                            _seed_difference(summary, experiment, spec.arms, aggregate, alpha),
+                            _seed_difference(summary, experiment, spec.arms, recall, alpha),
+                            config,
+                        )
+                        if row is not None:
+                            rows.append(row)
+    return records_to_frame(rows)
+
+
+def _transfer_row(
+    experiment: ExperimentName,
+    population: EvaluationPopulation,
+    spec: TransferScopeSpec,
+    group: CellTable,
+    config: Config,
+) -> TransferRow | None:
+    per_seed = group.group_by(Column.SEED, maintain_order=True).agg(
+        pl.col(Column.POOLING_GAIN).mean(),
+        pl.col(Column.CTK_GAIN).mean(),
+        pl.col(Column.REPAIR).mean(),
+        pl.col(Column.NEW_CAPABILITY).mean(),
+        pl.col(Column.CTK_HARM).mean(),
+    )
+
+    def summary(column: Column) -> SeedSummary | None:
+        return summarize_seeds(per_seed[column].to_numpy(), config.statistics)
+
+    pooling = summary(Column.POOLING_GAIN)
+    ctk = summary(Column.CTK_GAIN)
+    repair = summary(Column.REPAIR)
+    new = summary(Column.NEW_CAPABILITY)
+    harm = summary(Column.CTK_HARM)
+    if pooling is None or ctk is None or repair is None or new is None or harm is None:
+        return None
+    head = group.row(0, named=True)
+    gross = repair.mean_difference + new.mean_difference
+    return TransferRow(
+        evidence_class=EvidenceClass.POST_CONFIRMATORY,
+        experiment=experiment,
+        population=population,
+        scope=spec.scope,
+        client=head[Column.CLIENT] if Column.CLIENT in spec.keys else None,
+        family=head[Column.FAMILY] if Column.FAMILY in spec.keys else None,
+        seed_count=per_seed.height,
+        observations=group.height,
+        cells=group.select(Column.CLIENT, Column.FAMILY).n_unique(),
+        pooling_mean=pooling.mean_difference,
+        pooling_ci_low=pooling.ci_low,
+        pooling_ci_high=pooling.ci_high,
+        hurt_seeds=(per_seed[Column.POOLING_GAIN].to_numpy() < 0).sum().item(),
+        hurts=pooling.mean_difference < 0,
+        hurts_interval_below_zero=pooling.ci_high is not None and pooling.ci_high < 0,
+        ctk_mean=ctk.mean_difference,
+        ctk_ci_low=ctk.ci_low,
+        ctk_ci_high=ctk.ci_high,
+        repair_mean=repair.mean_difference,
+        repair_ci_low=repair.ci_low,
+        repair_ci_high=repair.ci_high,
+        new_capability_mean=new.mean_difference,
+        new_capability_ci_low=new.ci_low,
+        new_capability_ci_high=new.ci_high,
+        harm_mean=harm.mean_difference,
+        harm_ci_low=harm.ci_low,
+        harm_ci_high=harm.ci_high,
+        repair_share=repair.mean_difference / gross if gross > 0 else None,
+    )
+
+
+def negative_transfer_decomposition(cells: CellTable, config: Config) -> TransferTable:
+    rows: list[TransferRow | None] = []
+    for experiment in frozen_family_set_experiments():
+        for population in hidden_populations():
+            scoped = cells.filter(
+                (pl.col(Column.EXPERIMENT) == experiment)
+                & (pl.col(Column.POPULATION) == population)
+            )
+            if scoped.height == 0:
+                continue
+            for spec in transfer_scopes():
+                groups = (
+                    scoped.partition_by(*spec.keys, maintain_order=True) if spec.keys else [scoped]
+                )
+                rows.extend(
+                    _transfer_row(experiment, population, spec, group, config) for group in groups
+                )
+    return records_to_frame([row for row in rows if row is not None])

@@ -18,20 +18,10 @@ from ctk_android.enums import (
 from ctk_android.logs import Stopwatch, bind, configure_logging
 from ctk_android.paths import Paths
 from ctk_android.types import CtkError, Overwrite, Promote, Seed, seed_adapter
-from ctk_android.workflows import controlsextension as controlsextension_workflow
-from ctk_android.workflows import diagnostics as diagnostics_workflow
-from ctk_android.workflows import doctor as doctor_workflow
-from ctk_android.workflows import doseextension as doseextension_workflow
-from ctk_android.workflows import largefamily as largefamily_workflow
-from ctk_android.workflows import plan as plan_workflow
-from ctk_android.workflows import posthoc as posthoc_workflow
+from ctk_android.workflows import maintenance as maintenance_workflow
 from ctk_android.workflows import preprocess as preprocess_workflow
 from ctk_android.workflows import report as report_workflow
-from ctk_android.workflows import representationextension as representationextension_workflow
-from ctk_android.workflows import representationprep as representationprep_workflow
 from ctk_android.workflows import run as run_workflow
-from ctk_android.workflows import smoke as smoke_workflow
-from ctk_android.workflows import status as status_workflow
 
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
@@ -79,7 +69,7 @@ def _failed(context: CliContext, error: CtkError) -> None:
 @app.command(name=CliCommand.DOCTOR)
 def doctor() -> None:
     context = _context(CliCommand.DOCTOR)
-    results = doctor_workflow.run_doctor(context.paths, context.config)
+    results = maintenance_workflow.run_doctor(context.paths, context.config)
     for result in results:
         verdict = Verdict.PASS if result.passed else Verdict.FAIL
         typer.echo(
@@ -117,7 +107,7 @@ def preprocess(
 def plan(mode: ExecutionMode) -> None:
     context = _context(CliCommand.PLAN)
     try:
-        planned = plan_workflow.run_plan(context.paths, context.config, mode)
+        planned = maintenance_workflow.run_plan(context.paths, context.config, mode)
     except CtkError as error:
         _failed(context, error)
         raise typer.Exit(code=1) from error
@@ -129,7 +119,7 @@ def plan(mode: ExecutionMode) -> None:
 def smoke(overwrite: Annotated[Overwrite, typer.Option()] = False) -> None:
     context = _context(CliCommand.SMOKE)
     try:
-        report = smoke_workflow.run_smoke(context.paths, context.config, overwrite)
+        report = run_workflow.run_smoke(context.paths, context.config, overwrite)
     except CtkError as error:
         _failed(context, error)
         raise typer.Exit(code=1) from error
@@ -166,7 +156,7 @@ def run(
 @app.command(name=CliCommand.STATUS)
 def status(mode: ExecutionMode = ExecutionMode.CONFIRMATORY) -> None:
     context = _context(CliCommand.STATUS)
-    typer.echo(status_workflow.run_status(context.paths, mode))
+    typer.echo(maintenance_workflow.run_status(context.paths, mode))
     _finished(context, Verdict.PASS)
 
 
@@ -194,7 +184,7 @@ def posthoc(
 ) -> None:
     context = _context(CliCommand.POSTHOC)
     try:
-        decision = posthoc_workflow.run_posthoc(context.paths, context.config, mode, promote)
+        decision = report_workflow.run_posthoc(context.paths, context.config, mode, promote)
     except CtkError as error:
         typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
         _failed(context, error)
@@ -211,9 +201,7 @@ def large_family(
 ) -> None:
     context = _context(CliCommand.LARGE_FAMILY)
     try:
-        decision = largefamily_workflow.run_large_family(
-            context.paths, context.config, mode, promote
-        )
+        decision = report_workflow.run_large_family(context.paths, context.config, mode, promote)
     except CtkError as error:
         typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
         _failed(context, error)
@@ -230,9 +218,7 @@ def dose_extension(
 ) -> None:
     context = _context(CliCommand.DOSE_EXTENSION)
     try:
-        decision = doseextension_workflow.run_dose_extension(
-            context.paths, context.config, mode, promote
-        )
+        decision = report_workflow.run_dose_extension(context.paths, context.config, mode, promote)
     except CtkError as error:
         typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
         _failed(context, error)
@@ -249,7 +235,7 @@ def controls_extension(
 ) -> None:
     context = _context(CliCommand.CONTROLS_EXTENSION)
     try:
-        decision = controlsextension_workflow.run_controls_extension(
+        decision = report_workflow.run_controls_extension(
             context.paths, context.config, mode, promote
         )
     except CtkError as error:
@@ -268,7 +254,7 @@ def representation_preprocess(
 ) -> None:
     context = _context(CliCommand.REPRESENTATION_PREPROCESS)
     try:
-        reports = representationprep_workflow.run_representation_preprocess(
+        reports = preprocess_workflow.run_representation_preprocess(
             context.paths,
             context.config,
             overwrite,
@@ -294,7 +280,7 @@ def representation_extension(
 ) -> None:
     context = _context(CliCommand.REPRESENTATION_EXTENSION)
     try:
-        decision = representationextension_workflow.run_representation_extension(
+        decision = report_workflow.run_representation_extension(
             context.paths, context.config, mode, promote
         )
     except CtkError as error:
@@ -313,9 +299,7 @@ def diagnostics(
 ) -> None:
     context = _context(CliCommand.DIAGNOSTICS)
     try:
-        decision = diagnostics_workflow.run_diagnostics(
-            context.paths, context.config, mode, promote
-        )
+        decision = report_workflow.run_diagnostics(context.paths, context.config, mode, promote)
     except CtkError as error:
         typer.echo(CliMessage.FAILURE_LINE.format(reason=error.reason, error=error))
         _failed(context, error)

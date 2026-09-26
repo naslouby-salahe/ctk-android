@@ -2,14 +2,15 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.extension_effects import (
+from ctk_android.analysis.extensions import (
+    family_relatedness,
     holm_group,
+    known_family_centroids,
     scope_experiments,
     seed_recalls,
     shifted_wilcoxon,
     with_holm,
 )
-from ctk_android.analysis.novelty import family_relatedness, known_family_centroids
 from ctk_android.config import load_config
 from ctk_android.enums import (
     ClientId,

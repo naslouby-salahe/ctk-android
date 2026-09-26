@@ -10,7 +10,7 @@ from ctk_android.enums import (
     OperatingPointStatus,
     SplitRole,
 )
-from ctk_android.experiment import evaluation, exposure
+from ctk_android.experiment import design, evaluation
 from ctk_android.paths import Paths
 from ctk_android.types import ArmKey
 from tests.architecture.source_index import REPO_ROOT
@@ -19,7 +19,7 @@ from tests.unit.synthetic import synthetic_study, synthetic_targets
 OPERATING = load_config(Paths(REPO_ROOT)).experiments.operating
 STUDY = synthetic_study()
 TARGETS = synthetic_targets()
-MASKS = exposure.family_masks(STUDY, ("alpha", "beta"))
+MASKS = design.family_masks(STUDY, ("alpha", "beta"))
 ATTRIBUTES = evaluation.row_attributes(STUDY, MASKS)
 POOLS = evaluation.build_pools(ATTRIBUTES, TARGETS)
 ARM = ArmKey(learner=Learner.CENTRAL, condition=ExposureCondition.PEER_PRESENT, dose=None)

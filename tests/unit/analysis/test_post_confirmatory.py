@@ -6,8 +6,8 @@ from ctk_android.analysis.post_confirmatory import (
     client_ctk_analysis,
     ctk_robustness_synthesis,
     federated_arm_tradeoff,
+    robustness_table,
 )
-from ctk_android.analysis.robustness import robustness_table
 from ctk_android.config import load_config
 from ctk_android.enums import (
     ClientId,

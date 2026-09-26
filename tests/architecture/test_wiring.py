@@ -15,20 +15,20 @@ CLI_ALLOWED_MODULES = {
     "ctk_android.cli",
 }
 COMMAND_WORKFLOW = {
-    CliCommand.DOCTOR: "doctor_workflow",
+    CliCommand.DOCTOR: "maintenance_workflow",
     CliCommand.PREPROCESS: "preprocess_workflow",
-    CliCommand.PLAN: "plan_workflow",
-    CliCommand.SMOKE: "smoke_workflow",
+    CliCommand.PLAN: "maintenance_workflow",
+    CliCommand.SMOKE: "run_workflow",
     CliCommand.RUN: "run_workflow",
-    CliCommand.STATUS: "status_workflow",
+    CliCommand.STATUS: "maintenance_workflow",
     CliCommand.REPORT: "report_workflow",
-    CliCommand.POSTHOC: "posthoc_workflow",
-    CliCommand.LARGE_FAMILY: "largefamily_workflow",
-    CliCommand.DOSE_EXTENSION: "doseextension_workflow",
-    CliCommand.CONTROLS_EXTENSION: "controlsextension_workflow",
-    CliCommand.REPRESENTATION_PREPROCESS: "representationprep_workflow",
-    CliCommand.REPRESENTATION_EXTENSION: "representationextension_workflow",
-    CliCommand.DIAGNOSTICS: "diagnostics_workflow",
+    CliCommand.POSTHOC: "report_workflow",
+    CliCommand.LARGE_FAMILY: "report_workflow",
+    CliCommand.DOSE_EXTENSION: "report_workflow",
+    CliCommand.CONTROLS_EXTENSION: "report_workflow",
+    CliCommand.REPRESENTATION_PREPROCESS: "preprocess_workflow",
+    CliCommand.REPRESENTATION_EXTENSION: "report_workflow",
+    CliCommand.DIAGNOSTICS: "report_workflow",
 }
 
 
@@ -92,6 +92,22 @@ def test_every_workflow_module_is_used_by_the_cli() -> None:
         for alias in node.names
     }
     assert modules == aliased, (modules, aliased)
+
+
+def test_domain_and_reporting_modules_do_not_import_workflows() -> None:
+    offenders: list[str] = []
+    for package in ("data", "experiment", "analysis", "reporting"):
+        for path in (SRC_ROOT / package).rglob("*.py"):
+            for node in ast.walk(parse(path)):
+                if isinstance(node, ast.ImportFrom):
+                    module, line = node.module, node.lineno
+                elif isinstance(node, ast.Import):
+                    module, line = node.names[0].name, node.lineno
+                else:
+                    continue
+                if module and module.startswith("ctk_android.workflows"):
+                    offenders.append(f"{location(path, line)} imports {module}")
+    assert not offenders, offenders
 
 
 def test_cli_holds_no_scientific_imports() -> None:

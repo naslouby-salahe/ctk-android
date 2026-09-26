@@ -1,6 +1,6 @@
 import polars as pl
 
-from ctk_android.analysis.fairness import (
+from ctk_android.analysis.post_confirmatory import (
     frozen_drift,
     frozen_hyperparameters,
     select_hyperparameters,

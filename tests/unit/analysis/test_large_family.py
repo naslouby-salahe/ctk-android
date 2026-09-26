@@ -1,7 +1,7 @@
 import polars as pl
 import pytest
 
-from ctk_android.analysis.large_family import (
+from ctk_android.analysis.extensions import (
     eligibility_stability_summary,
     eligibility_stability_table,
     expected_ci_width,
@@ -11,7 +11,7 @@ from ctk_android.analysis.large_family import (
     stability_seed_table,
 )
 from ctk_android.config import load_config
-from ctk_android.data.families import large_family_sets
+from ctk_android.data.preparation import large_family_sets
 from ctk_android.enums import (
     ClientId,
     Column,

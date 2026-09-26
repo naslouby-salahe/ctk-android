@@ -1,7 +1,7 @@
 import polars as pl
 import pytest
 
-from ctk_android.analysis.heterogeneity import (
+from ctk_android.analysis.post_confirmatory import (
     ctk_variance_components,
     family_associations,
     family_client_ctk,

@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.hidden_family import (
+from ctk_android.analysis.post_confirmatory import (
     aggregate_metric_masking,
     ctk_heterogeneity_components,
     hidden_cells,

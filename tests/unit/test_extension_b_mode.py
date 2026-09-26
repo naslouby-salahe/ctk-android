@@ -1,5 +1,5 @@
 from ctk_android.config import load_config
-from ctk_android.data.families import large_family_sets
+from ctk_android.data.preparation import large_family_sets
 from ctk_android.enums import ExecutionMode, ExperimentName
 from ctk_android.paths import Paths
 from tests.architecture.source_index import REPO_ROOT

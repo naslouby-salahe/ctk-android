@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.novelty import descriptor_by_family, novelty_association
+from ctk_android.analysis.extensions import descriptor_by_family, novelty_association
 from ctk_android.config import load_config
 from ctk_android.enums import Column, NoveltyDescriptor
 from ctk_android.paths import Paths

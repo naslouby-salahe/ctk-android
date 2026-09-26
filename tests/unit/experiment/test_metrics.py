@@ -12,7 +12,7 @@ from ctk_android.enums import (
     OperatingPointStatus,
     SplitRole,
 )
-from ctk_android.experiment.metrics import summarize
+from ctk_android.experiment.evaluation import summarize
 from ctk_android.types import ClientCountRow, DiscriminationRow, FamilyCountRow, OperatingRow
 
 ALPHA = 0.05

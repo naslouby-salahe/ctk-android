@@ -17,15 +17,16 @@ from ctk_android.enums import (
     RunStatus,
     Stage,
 )
+from ctk_android.experiment.planning import plan_run, planned_targets
 from ctk_android.paths import Paths
-from ctk_android.reporting.records import collect_evidence
+from ctk_android.reporting.artifacts import collect_evidence
 from ctk_android.types import EligibilityRule, PartitionKey, Provenance, RunKey
-from ctk_android.workflows.plan import plan_run, planned_targets, run_plan
-from ctk_android.workflows.representationextension import run_representation_extension
-from ctk_android.workflows.representationprep import (
+from ctk_android.workflows.maintenance import run_plan
+from ctk_android.workflows.preprocess import (
     representation_keys,
     run_representation_preprocess,
 )
+from ctk_android.workflows.report import run_representation_extension
 from ctk_android.workflows.run import run_experiment
 from tests.architecture.source_index import REPO_ROOT
 from tests.unit.data.mcndroid_fixture import PRIMARY, write_lamda, write_mcndroid

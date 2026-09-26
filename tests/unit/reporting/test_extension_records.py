@@ -16,11 +16,9 @@ from ctk_android.enums import (
     RunStatus,
 )
 from ctk_android.paths import Paths
-from ctk_android.reporting.promotion import promote_extension_design
-from ctk_android.reporting.records import collect_placebo_pairs
+from ctk_android.reporting.artifacts import collect_placebo_pairs, promote_extension_design
 from ctk_android.types import CtkError, DesignPromotion, RunKey
-from ctk_android.workflows.controlsextension import run_controls_extension
-from ctk_android.workflows.doseextension import run_dose_extension
+from ctk_android.workflows.report import run_controls_extension, run_dose_extension
 from tests.architecture.source_index import REPO_ROOT
 
 CONFIG = load_config(Paths(REPO_ROOT))

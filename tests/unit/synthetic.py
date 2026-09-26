@@ -1,7 +1,7 @@
 import numpy as np
 import polars as pl
 
-from ctk_android.data.identity import feature_identities
+from ctk_android.data.preparation import feature_identities
 from ctk_android.enums import ClientId, Column, EligibilityReason, SplitRole
 from ctk_android.types import StudyData, TargetPair
 

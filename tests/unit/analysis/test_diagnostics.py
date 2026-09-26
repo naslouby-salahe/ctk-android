@@ -1,29 +1,44 @@
+# Pyright cannot infer callback signatures for monkeypatch lambda stubs.
+# pyright: reportUnknownLambdaType=false, reportUnknownArgumentType=false
 import numpy as np
 import polars as pl
 import pytest
 from scipy import stats
 
-from ctk_android.analysis.diagnostics_dose import (
-    equivalent_dose,
-    family_summary,
-    fit_curve,
-)
-from ctk_android.analysis.diagnostics_influence import (
+from ctk_android.analysis.diagnostic_synthesis import (
+    family_taxonomy,
     influence_tables,
     kendall_w,
+    large_family_associations,
+    large_family_table,
+    large_family_taxonomy,
     leave_one_out,
+    rank_concordance,
     weighted_spearman,
 )
-from ctk_android.analysis.diagnostics_representation import (
+from ctk_android.analysis.diagnostics import (
+    client_curves,
+    control_cells,
+    control_diagnostics,
+    ctk_by_dose,
+    dose_increments,
     equal_fpr_arms,
+    equivalent_dose,
+    family_curves,
+    family_seed_level,
+    family_summary,
+    fit_curve,
+    pair_ctk,
     recall_at_fpr,
+    scope_members,
     score_health,
     scored_targets,
+    seeded_bca,
 )
-from ctk_android.analysis.diagnostics_statistics import scope_members, seeded_bca
-from ctk_android.analysis.diagnostics_synthesis import large_family_taxonomy
+from ctk_android.analysis.extensions import dose_experiments
 from ctk_android.config import load_config
 from ctk_android.enums import (
+    Aggregation,
     ClientId,
     Column,
     DiagnosticColumn,
@@ -32,8 +47,16 @@ from ctk_android.enums import (
     DoseModel,
     DoseResponseClass,
     EvaluationPopulation,
+    EvidenceClass,
+    ExecutionMode,
+    ExperimentDesign,
+    ExperimentName,
+    ExposureCondition,
     ExtensionScope,
+    FamilySetName,
     InfluenceStatistic,
+    Learner,
+    NoveltyDescriptor,
     Representation,
     SplitRole,
     TaxonomyLabel,
@@ -265,3 +288,306 @@ def test_score_health_counts_non_finite_and_extreme_scores() -> None:
     assert rows[0][DiagnosticColumn.NONFINITE] == 2
     assert rows[0][DiagnosticColumn.ABOVE_LARGE] == 3
     assert rows[0][DiagnosticColumn.ABOVE_EXTREME] == 2
+
+
+def test_control_diagnostics_builds_paired_control_cells_and_summaries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    experiments = tuple(
+        name
+        for name, spec in CONFIG.experiments.experiments.items()
+        if spec.design is ExperimentDesign.PLACEBO_ROBUST
+        and CONFIG.experiments.runs_in(name, ExecutionMode.EXTENSION_B)
+    )
+    assert experiments
+    alphas = CONFIG.experiments.operating.alphas
+    family_rows: list[dict[Column, object]] = []
+    novelty_rows: list[dict[Column, object]] = []
+    placebo_rows: list[dict[Column | DiagnosticColumn, object]] = []
+    exposure_rows: list[dict[Column, object]] = []
+    arms = (
+        (ExposureCondition.PLACEBO, None, 20),
+        (ExposureCondition.PEER_PRESENT, None, 40),
+        (ExposureCondition.PEER_PRESENT, Aggregation.TRIMMED_MEAN, 38),
+        (ExposureCondition.PEER_PRESENT, Aggregation.COORDINATE_MEDIAN, 36),
+        (ExposureCondition.FAMILY_ABSENT_EVERYWHERE, None, 30),
+        (ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Aggregation.TRIMMED_MEAN, 31),
+        (ExposureCondition.FAMILY_ABSENT_EVERYWHERE, Aggregation.COORDINATE_MEDIAN, 29),
+    )
+    for experiment in experiments:
+        for seed in (1, 2):
+            for condition, tuning, hits in arms:
+                for population in (
+                    EvaluationPopulation.FEDERATION_WIDE,
+                    EvaluationPopulation.OWN_DOMAIN,
+                ):
+                    for alpha in alphas:
+                        family_rows.append(
+                            {
+                                Column.EXPERIMENT: experiment,
+                                Column.SEED: seed,
+                                Column.LEARNER: Learner.FEDAVG,
+                                Column.CONDITION: condition,
+                                Column.TUNING_VALUE: tuning,
+                                Column.POPULATION: population,
+                                Column.ALPHA: alpha,
+                                Column.CLIENT: ClientId.ANZHI,
+                                Column.FAMILY: "hidden",
+                                Column.HITS: hits + seed,
+                                Column.TRIALS: 100,
+                            }
+                        )
+            for descriptor, value in (
+                (NoveltyDescriptor.CENTROID_DISTANCE_TO_KNOWN_MALWARE, 0.4),
+                (NoveltyDescriptor.MAX_JACCARD_TO_KNOWN_FAMILY, 0.2),
+            ):
+                novelty_rows.append(
+                    {
+                        Column.EXPERIMENT: experiment,
+                        Column.SEED: seed,
+                        Column.CLIENT: ClientId.ANZHI,
+                        Column.FAMILY: "hidden",
+                        Column.DESCRIPTOR: descriptor,
+                        Column.VALUE: value + seed,
+                    }
+                )
+            placebo_rows.append(
+                {
+                    Column.EXPERIMENT: experiment,
+                    Column.SEED: seed,
+                    Column.CLIENT: ClientId.ANZHI,
+                    Column.FAMILY: "hidden",
+                    DiagnosticColumn.PLACEBO_FAMILY: "placebo",
+                    DiagnosticColumn.NEED: 10,
+                    DiagnosticColumn.REALLOCATED: 1 + seed,
+                    DiagnosticColumn.CENTROID_DISTANCE: 0.3 + seed,
+                    DiagnosticColumn.NEAREST_KNOWN_DISTANCE: 0.2 + seed,
+                    DiagnosticColumn.PLACEBO_RANK: 2,
+                    DiagnosticColumn.HIDDEN_PEER_FIT: 100,
+                    DiagnosticColumn.PLACEBO_PEER_FIT: 80,
+                }
+            )
+            exposure_rows.append(
+                {
+                    Column.EXPERIMENT: experiment,
+                    Column.SEED: seed,
+                    Column.CONDITION: ExposureCondition.PEER_PRESENT,
+                    Column.TUNING_VALUE: None,
+                    Column.CLIENT: ClientId.APPCHINA,
+                    Column.FAMILY: "hidden",
+                    Column.ROWS: 100,
+                }
+            )
+
+    cells = control_cells(
+        pl.DataFrame(family_rows),
+        pl.DataFrame(exposure_rows),
+        pl.DataFrame(novelty_rows),
+        pl.DataFrame(placebo_rows),
+        CONFIG,
+        experiments,
+    )
+    assert cells.height == 4 * len(experiments) * len(alphas)
+    assert cells[DiagnosticColumn.CTK_MEAN].to_list() == pytest.approx([0.1] * cells.height)
+    assert cells[DiagnosticColumn.PEERS].to_list() == [1] * cells.height
+    assert cells[DiagnosticColumn.FIT_RATIO].to_list() == pytest.approx([0.8] * cells.height)
+
+    monkeypatch.setattr("ctk_android.analysis.diagnostics.reallocation_slopes", lambda *_args: [])
+    result = control_diagnostics(cells, CONFIG, experiments)
+    assert result.strata.height > 0
+    assert result.clients.height > 0
+    assert result.families.height > 0
+    assert result.support_levels.height > 0
+
+
+def test_dose_diagnostic_tables_keep_seed_family_and_natural_arm_contrasts() -> None:
+    experiments = dose_experiments(CONFIG, ExecutionMode.EXTENSION_B)
+    assert experiments
+    rows: list[dict[Column, object]] = []
+    for experiment in experiments:
+        for seed in (1, 2):
+            for learner in (Learner.FEDAVG, Learner.CENTRAL):
+                for population in (
+                    EvaluationPopulation.FEDERATION_WIDE,
+                    EvaluationPopulation.OWN_DOMAIN,
+                ):
+                    for alpha in CONFIG.experiments.operating.alphas:
+                        for family_index in range(2):
+                            family = f"family-{family_index}"
+                            baseline = 10 + seed + family_index
+                            for dose in CONFIG.experiments.exact_dose_levels:
+                                rows.append(
+                                    {
+                                        Column.EXPERIMENT: experiment,
+                                        Column.SEED: seed,
+                                        Column.LEARNER: learner,
+                                        Column.CONDITION: ExposureCondition.EXACT_DOSE,
+                                        Column.DOSE: dose,
+                                        Column.POPULATION: population,
+                                        Column.ALPHA: alpha,
+                                        Column.CLIENT: ClientId.ANZHI,
+                                        Column.FAMILY: family,
+                                        Column.HITS: baseline + dose,
+                                        Column.TRIALS: 100,
+                                    }
+                                )
+                            rows.append(
+                                {
+                                    Column.EXPERIMENT: experiment,
+                                    Column.SEED: seed,
+                                    Column.LEARNER: learner,
+                                    Column.CONDITION: ExposureCondition.PEER_PRESENT,
+                                    Column.DOSE: None,
+                                    Column.POPULATION: population,
+                                    Column.ALPHA: alpha,
+                                    Column.CLIENT: ClientId.ANZHI,
+                                    Column.FAMILY: family,
+                                    Column.HITS: baseline + 30,
+                                    Column.TRIALS: 100,
+                                }
+                            )
+
+    pairs = pair_ctk(pl.DataFrame(rows), CONFIG, experiments)
+    assert pairs.height > 0
+    natural = pairs.filter(pl.col(DiagnosticColumn.DOSE_CODE) == DoseCode.NATURAL)
+    assert natural.height > 0
+    assert (natural[DiagnosticColumn.CTK] > 0).all()
+
+    curves_by_seed = family_seed_level(pairs)
+    curves = family_curves(curves_by_seed, CONFIG)
+    summary = family_summary(pl.DataFrame(curves), CONFIG)
+    assert ctk_by_dose(pairs, CONFIG, experiments)
+    assert dose_increments(pairs, CONFIG, experiments)
+    assert summary
+    assert client_curves(pairs, CONFIG, experiments) == []
+
+
+def test_confirmatory_family_taxonomy_uses_intervals_and_model_family_context() -> None:
+    rows: list[dict[Column | DiagnosticColumn, object]] = []
+    experiments = (
+        ExperimentName.CONTROLLED_EXPOSURE,
+        ExperimentName.REPLICATION_FAMILY_SET,
+    )
+    for experiment in experiments:
+        for population in (
+            EvaluationPopulation.OWN_DOMAIN,
+            EvaluationPopulation.FEDERATION_WIDE,
+        ):
+            for family, gain, full in (("responsive", 0.2, 0.9), ("poor", 0.0, 0.1)):
+                for seed in range(1, 11):
+                    for learner, recall in (
+                        (Learner.FEDAVG, full),
+                        (Learner.CENTRAL, full + 0.05),
+                    ):
+                        rows.append(
+                            {
+                                Column.EXPERIMENT: experiment,
+                                Column.POPULATION: population,
+                                Column.FAMILY: family,
+                                Column.SEED: seed,
+                                Column.LEARNER: learner,
+                                Column.FULL_RECALL: recall,
+                                DiagnosticColumn.CTK: gain,
+                                DiagnosticColumn.POOLING: 0.1 if family == "responsive" else -0.1,
+                                Column.LOCAL_RECALL: 0.4 if family == "responsive" else 0.05,
+                                DiagnosticColumn.HEADROOM: 0.5 if family == "responsive" else 0.05,
+                                Column.PEER_RECALL: 0.6,
+                                Column.ABSENT_RECALL: 0.3,
+                            }
+                        )
+    for experiment in (
+        ExperimentName.MODEL_FAMILY_REPLICATION_LINEAR,
+        ExperimentName.MODEL_FAMILY_REPLICATION_TREES,
+    ):
+        for population in (EvaluationPopulation.OWN_DOMAIN, EvaluationPopulation.FEDERATION_WIDE):
+            for family in ("responsive", "poor"):
+                for seed in range(1, 11):
+                    rows.append(
+                        {
+                            Column.EXPERIMENT: experiment,
+                            Column.POPULATION: population,
+                            Column.FAMILY: family,
+                            Column.SEED: seed,
+                            Column.LEARNER: Learner.FEDAVG,
+                            Column.FULL_RECALL: 0.8 if family == "responsive" else 0.1,
+                            DiagnosticColumn.CTK: 0.1,
+                            DiagnosticColumn.POOLING: 0.0,
+                            Column.LOCAL_RECALL: 0.3,
+                            DiagnosticColumn.HEADROOM: 0.5,
+                            Column.PEER_RECALL: 0.5,
+                            Column.ABSENT_RECALL: 0.3,
+                        }
+                    )
+
+    table = family_taxonomy(pl.DataFrame(rows), CONFIG, np.random.default_rng(7))
+    flags = dict(table.select(Column.FAMILY, DiagnosticColumn.LABELS).unique().rows())
+    assert "responsive" in flags
+    assert "poor" in flags
+    assert table[Column.EVIDENCE_CLASS].unique().to_list() == [EvidenceClass.POST_CONFIRMATORY]
+
+
+def test_large_family_diagnostic_table_and_rank_associations_preserve_seed_pairs() -> None:
+    names = [f"family-{index}" for index in range(8)]
+    seeds: list[dict[Column | DiagnosticColumn, object]] = []
+    for index, family in enumerate(names):
+        for seed in (1, 2):
+            seeds.append(
+                {
+                    Column.LEARNER: Learner.FEDAVG,
+                    Column.FAMILY: family,
+                    Column.SEED: seed,
+                    Column.CTK_GAIN: index / 10,
+                    Column.LOCAL_RECALL: index / 20,
+                    Column.FULL_RECALL: 0.4 + index / 20,
+                    Column.ABSENT_RECALL: 0.2 + index / 20,
+                    Column.PEER_RECALL: 0.5 + index / 20,
+                    Column.TRIALS: 50 + index,
+                }
+            )
+    families = pl.DataFrame(
+        {
+            Column.FAMILY: names,
+            Column.NOVELTY: [float(index) for index in range(8)],
+            Column.MIN_TRIALS: [50 + index for index in range(8)],
+            Column.MEETS_THRESHOLD: [False, *([True] * 7)],
+        }
+    )
+    selection = pl.DataFrame(
+        {
+            Column.FAMILY: names,
+            Column.ROWS: [100 + index for index in range(8)],
+            Column.FAMILY_SET: [FamilySetName.LARGE_1] * 8,
+        }
+    )
+
+    table = large_family_table(pl.DataFrame(seeds), families, selection)
+    assert table.height == 8
+    assert table[DiagnosticColumn.HEADROOM].to_list() == pytest.approx([0.4] * 8)
+    assert table[DiagnosticColumn.LOG_ROWS].is_sorted()
+    taxonomy = large_family_taxonomy(table, CONFIG)
+    assert len(taxonomy[DiagnosticColumn.LABELS]) == 8
+
+    family_ctk = pl.DataFrame(
+        [
+            {
+                Column.EXPERIMENT: ExperimentName.LARGE_FAMILY_SET_1,
+                Column.POPULATION: population,
+                Column.LEARNER: Learner.FEDAVG,
+                Column.FAMILY: family,
+                DiagnosticColumn.CTK: index / 10,
+            }
+            for population in (
+                EvaluationPopulation.OWN_DOMAIN,
+                EvaluationPopulation.FEDERATION_WIDE,
+            )
+            for index, family in enumerate(names)
+        ]
+    )
+    large = pl.DataFrame(
+        {Column.FAMILY: names, Column.CTK_GAIN: [index / 10 for index in range(8)]}
+    )
+    concordance = rank_concordance(family_ctk, large, CONFIG)
+    associations = large_family_associations(table, CONFIG)
+    assert len(concordance) == 2
+    assert all(row[Column.FAMILIES] == 8 for row in concordance)
+    assert len(associations) == 7

@@ -1,28 +1,52 @@
 import numpy as np
 import polars as pl
+from scipy.sparse import coo_matrix
+from scipy.sparse.csgraph import connected_components
 
+from ctk_android import logs
 from ctk_android.config import DataConfig
-from ctk_android.data.cache import is_one_of
+from ctk_android.data.cache import is_one_of, read_record
 from ctk_android.enums import (
     ClientId,
     Column,
+    DetailMessage,
     EligibilityReason,
     FamilySetName,
+    Grouping,
     LibraryOption,
+    LogEvent,
+    LogField,
+    Market,
+    MarketCount,
+    Separator,
     SourceFamilyLabel,
     SplitRole,
+    ValidationCheck,
 )
+from ctk_android.paths import Paths
 from ctk_android.types import (
+    AndroZooTable,
     AssignmentsTable,
+    BinaryMatrix,
     ClientFitRowsTable,
+    ClientSupportTable,
+    ComponentSummaryTable,
     EligibilityRule,
     EligibilityTable,
     FamilyName,
+    FamilySetDocument,
     FamilySets,
     FamilySupportTable,
     Fraction,
+    GroupIds,
+    IdentitiesTable,
+    IdentityIds,
+    JoinedTable,
+    JoinResult,
     LabelledTable,
+    LamdaMetadataTable,
     LargeFamilySelection,
+    PackageSeries,
     PairsTable,
     Rank,
     RoleCountsTable,
@@ -31,7 +55,12 @@ from ctk_android.types import (
     Seed,
     SupportCount,
     TargetPair,
+    ValidationRecord,
 )
+
+
+def read_family_set(paths: Paths, name: FamilySetName) -> tuple[FamilyName, ...]:
+    return read_record(paths.family_set_file(name), FamilySetDocument).families
 
 
 def classify_labels(assignments: AssignmentsTable, config: DataConfig) -> LabelledTable:
@@ -279,3 +308,160 @@ def permute_family_labels(labelled: LabelledTable, seed: Seed, offset: Seed) -> 
     permuted = labelled[Column.FAMILY].to_numpy().copy()
     permuted[positions] = permuted[positions][rng.permutation(positions.size)]
     return labelled.with_columns(pl.Series(Column.FAMILY, permuted))
+
+
+def _first_occurrence_ids(labels: IdentityIds) -> IdentityIds:
+    _, first_index, inverse = np.unique(labels, return_index=True, return_inverse=True)
+    rank = np.empty(first_index.size, dtype=np.int64)
+    rank[np.argsort(first_index, kind=LibraryOption.SORT_STABLE)] = np.arange(first_index.size)
+    return rank[inverse.reshape(-1)]
+
+
+def feature_identities(features: BinaryMatrix) -> IdentityIds:
+    packed = np.ascontiguousarray(np.packbits(features, axis=1))
+    voids = packed.view(np.dtype((np.void, packed.shape[1]))).reshape(-1)
+    _, inverse = np.unique(voids, return_inverse=True)
+    return _first_occurrence_ids(inverse.reshape(-1).astype(np.int64))
+
+
+def package_identities(packages: PackageSeries) -> IdentityIds:
+    return _first_occurrence_ids(
+        packages.rank(LibraryOption.RANK_DENSE).to_numpy().astype(np.int64)
+    )
+
+
+def connected_component_ids(package_ids: IdentityIds, feature_ids: IdentityIds) -> GroupIds:
+    rows = package_ids.size
+    package_count = package_ids.max(initial=-1).item() + 1
+    feature_count = feature_ids.max(initial=-1).item() + 1
+    row_index = np.arange(rows)
+    sources = np.concatenate([row_index, row_index])
+    targets = np.concatenate([rows + package_ids, rows + package_count + feature_ids])
+    nodes = rows + package_count + feature_count
+    graph = coo_matrix(
+        (np.ones(sources.size, dtype=np.int8), (sources, targets)), shape=(nodes, nodes)
+    )
+    _, labels = connected_components(graph, directed=False)
+    return _first_occurrence_ids(labels[:rows].astype(np.int64))
+
+
+def build_identities(assignments: AssignmentsTable, features: BinaryMatrix) -> IdentitiesTable:
+    package_ids = package_identities(assignments[Column.PACKAGE])
+    feature_ids = feature_identities(features)
+    return pl.DataFrame(
+        {
+            Column.SHA256: assignments[Column.SHA256],
+            Column.PACKAGE_ID: package_ids,
+            Column.FEATURE_ID: feature_ids,
+            Column.COMPONENT: connected_component_ids(package_ids, feature_ids),
+        }
+    ).with_row_index(Column.ROW)
+
+
+def grouping_ids(identities: IdentitiesTable, grouping: Grouping) -> GroupIds:
+    column = Column.COMPONENT if grouping is Grouping.COMPONENT else Column.PACKAGE_ID
+    return identities[column].to_numpy().astype(np.int64)
+
+
+def component_summary(
+    identities: IdentitiesTable, assignments: AssignmentsTable
+) -> ComponentSummaryTable:
+    return (
+        identities.with_columns(assignments[Column.LABEL])
+        .group_by(Column.COMPONENT)
+        .agg(
+            pl.len().alias(Column.ROWS),
+            (pl.col(Column.LABEL) == 1).sum().alias(Column.MALWARE_ROWS),
+            pl.col(Column.PACKAGE_ID).n_unique().alias(Column.PACKAGES),
+        )
+        .sort(Column.COMPONENT)
+    )
+
+
+def assign_clients(joined: JoinedTable, config: DataConfig) -> AssignmentsTable:
+    single = joined.filter(pl.col(Column.MARKET_COUNT) == MarketCount.SINGLE)
+    early_play = pl.col(Column.YEAR_MONTH) < config.play_era_boundary
+    client = (
+        pl.when(pl.col(Column.MARKETS) == Market.GOOGLE_PLAY)
+        .then(
+            pl.when(early_play)
+            .then(pl.lit(ClientId.PLAY_EARLY))
+            .otherwise(pl.lit(ClientId.PLAY_LATE))
+        )
+        .when(pl.col(Column.MARKETS) == Market.ANZHI)
+        .then(pl.lit(ClientId.ANZHI))
+        .when(pl.col(Column.MARKETS) == Market.APPCHINA)
+        .then(pl.lit(ClientId.APPCHINA))
+        .otherwise(None)
+        .alias(Column.CLIENT)
+    )
+    return (
+        single.with_columns(client)
+        .filter(pl.col(Column.CLIENT).is_not_null())
+        .select(
+            Column.SHA256,
+            Column.PACKAGE,
+            Column.LABEL,
+            Column.FAMILY,
+            Column.VT_COUNT,
+            Column.YEAR_MONTH,
+            Column.CLIENT,
+        )
+    )
+
+
+def client_support(assignments: AssignmentsTable) -> ClientSupportTable:
+    return (
+        assignments.group_by(Column.CLIENT)
+        .agg(
+            pl.len().alias(Column.ROWS),
+            (pl.col(Column.LABEL) == 1).sum().alias(Column.MALWARE_ROWS),
+            (pl.col(Column.LABEL) == 0).sum().alias(Column.BENIGN_ROWS),
+            pl.col(Column.PACKAGE).n_unique().alias(Column.PACKAGES),
+        )
+        .sort(Column.CLIENT)
+    )
+
+
+def join_sources(lamda: LamdaMetadataTable, androzoo: AndroZooTable) -> JoinResult:
+    unique_links = androzoo[Column.SHA256].n_unique() == androzoo.height
+    linked = lamda.join(
+        androzoo.rename({Column.VT_COUNT: Column.LINKED_VT}),
+        on=Column.SHA256,
+        how=LibraryOption.JOIN_LEFT,
+    )
+    unmatched = linked.filter(pl.col(Column.PACKAGE).is_null()).select(Column.SHA256)
+    joined = linked.filter(pl.col(Column.PACKAGE).is_not_null())
+    vt_agrees = joined.select((pl.col(Column.VT_COUNT) == pl.col(Column.LINKED_VT)).all()).item()
+    joined = joined.drop(Column.LINKED_VT).with_columns(
+        pl.col(Column.MARKETS)
+        .str.split(Separator.PIPE)
+        .list.eval(pl.element().sort())
+        .list.join(Separator.PIPE)
+        .alias(Column.MARKETS),
+        pl.col(Column.MARKETS).str.split(Separator.PIPE).list.len().alias(Column.MARKET_COUNT),
+    )
+    logs.info(
+        LogEvent.LINKAGE_AUDITED,
+        {
+            LogField.ROWS: joined.height,
+            LogField.UNMATCHED: unmatched.height,
+            LogField.PASSED: unique_links and vt_agrees,
+        },
+    )
+    return JoinResult(
+        joined=joined,
+        unmatched=unmatched,
+        validations=(
+            ValidationRecord(
+                check=ValidationCheck.LINKAGE_COMPLETE,
+                passed=unmatched.height == 0 and unique_links and vt_agrees,
+                detail=DetailMessage.LINKAGE.format(
+                    matched=joined.height,
+                    unmatched=unmatched.height,
+                    unique=unique_links,
+                    agrees=vt_agrees,
+                ),
+            ),
+        ),
+    )

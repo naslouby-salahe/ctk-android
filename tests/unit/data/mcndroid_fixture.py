@@ -6,7 +6,7 @@ import numpy as np
 import polars as pl
 import scipy.sparse as sp
 
-from ctk_android.data import cache, identity
+from ctk_android.data import cache, preparation
 from ctk_android.enums import (
     Artifact,
     ClientId,
@@ -105,7 +105,7 @@ def write_lamda(root: Path, rows: int, width: int) -> np.ndarray:
     features = (np.random.default_rng(5).random((rows, width)) < 0.5).astype(np.uint8)
     cache.write_table(assignments, paths.stage_file(Stage.CLIENTS, Artifact.ASSIGNMENTS))
     cache.write_table(
-        identity.build_identities(assignments, features),
+        preparation.build_identities(assignments, features),
         paths.stage_file(Stage.IDENTITY, Artifact.COMPONENTS),
     )
     cache.save_features(paths.cache_file(Artifact.FEATURES), features)

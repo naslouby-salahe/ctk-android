@@ -1,7 +1,7 @@
 import numpy as np
 
 from ctk_android.enums import OperatingPointStatus
-from ctk_android.experiment.thresholds import calibrate
+from ctk_android.experiment.evaluation import calibrate
 
 MIN_EXCEEDANCES = 10
 ALPHA = 0.05

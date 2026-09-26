@@ -1,6 +1,6 @@
 import polars as pl
 
-from ctk_android.analysis.robustness import micro_ctk_by_seed, robustness_table
+from ctk_android.analysis.post_confirmatory import micro_ctk_by_seed, robustness_table
 from ctk_android.config import load_config
 from ctk_android.enums import (
     Column,

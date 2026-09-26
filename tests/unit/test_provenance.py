@@ -2,8 +2,9 @@ from datetime import UTC, datetime
 
 from ctk_android.enums import ResultsDirectory, ResultsFile
 from ctk_android.paths import Paths
+from ctk_android.provenance import revision_at_or_before, sources_are_clean
 from ctk_android.types import CodeProvenance, ProtocolProvenance
-from ctk_android.workflows.doctor import git_revision, revision_at_or_before, sources_are_clean
+from ctk_android.workflows.maintenance import git_revision
 from tests.architecture.source_index import REPO_ROOT
 
 PATHS = Paths(REPO_ROOT)

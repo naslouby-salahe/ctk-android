@@ -2,58 +2,119 @@ import numpy as np
 import polars as pl
 
 from ctk_android import logs
-from ctk_android.analysis import novelty
-from ctk_android.analysis.decomposition import decompose, family_effects, family_seed_effects
-from ctk_android.analysis.dose_response import dose_curve, dose_recall, effective_peer_dose
-from ctk_android.analysis.fairness import frozen_drift, select_hyperparameters
-from ctk_android.analysis.gates import evaluate_claims
-from ctk_android.analysis.heterogeneity import (
-    ctk_variance_components,
-    family_associations,
-    family_client_ctk,
+from ctk_android.analysis.decomposition import (
+    decompose,
+    dose_curve,
+    dose_recall,
+    effective_peer_dose,
+    family_effects,
+    family_seed_effects,
+)
+from ctk_android.analysis.diagnostic_synthesis import (
+    influence_tables,
+    synthesis_cells,
+    synthesis_diagnostics,
+    synthesis_experiments,
+)
+from ctk_android.analysis.diagnostics import (
+    control_cells,
+    control_diagnostics,
+    dose_diagnostics,
+    equal_fpr_effects,
+    labelled,
+    score_health,
+    scored_targets,
+)
+from ctk_android.analysis.extensions import (
+    controls_effects,
+    controls_experiments,
+    controls_verdicts,
+    descriptor_by_family,
+    dose_consistency,
+    dose_effects,
+    dose_experiments,
+    dose_family_curves,
+    dose_verdicts,
+    eligibility_stability_summary,
+    eligibility_stability_table,
+    eligibility_table,
+    large_family_summary,
+    large_family_table,
+    large_seed_effects,
+    novelty_association,
+    placebo_table,
+    representation_experiments,
+    representation_tables,
+    representation_verdicts,
+    stability_seed_table,
 )
 from ctk_android.analysis.post_confirmatory import (
+    aggregate_metric_masking,
     anchored_client_selection,
     anchored_worst_client,
     client_ctk_analysis,
+    ctk_heterogeneity_components,
     ctk_robustness_synthesis,
+    ctk_variance_components,
+    evaluate_claims,
+    family_associations,
+    family_client_ctk,
     family_mechanism_patterns,
     federated_arm_tradeoff,
+    frozen_drift,
+    hidden_cells,
     mechanism_headroom,
     natural_scarcity_comparison,
+    negative_transfer_decomposition,
     operating_point_fidelity,
     permutation_control_audit,
+    robustness_table,
+    select_hyperparameters,
 )
-from ctk_android.analysis.robustness import robustness_table
 from ctk_android.analysis.statistics import cluster_bootstrap_difference, paired_effect_table
 from ctk_android.config import Config
 from ctk_android.data import partitions
 from ctk_android.data.cache import read_record, records_to_frame, write_table
+from ctk_android.data.preparation import read_family_set
 from ctk_android.enums import (
     AnalysisStage,
     Artifact,
     ClientId,
     Column,
     ErrorMessage,
+    EvidenceClass,
     ExecutionMode,
     ExperimentName,
     ExposureCondition,
+    ExtensionStudy,
     FailureReason,
     FamilyLabelSource,
+    FamilySetName,
     Learner,
     LibraryOption,
     LogEvent,
     LogField,
     ReportFigure,
+    ReportTable,
+    ResultsFile,
     RunStatus,
     Separator,
     SplitRole,
+    Stage,
 )
+from ctk_android.experiment.planning import planned_targets
 from ctk_android.logs import Stopwatch
 from ctk_android.paths import Paths
+from ctk_android.reporting.artifacts import (
+    collect_evidence,
+    collect_placebo_pairs,
+    promote,
+    promote_diagnostics,
+    promote_extension_design,
+    promote_hidden_family,
+    promote_large_family,
+)
 from ctk_android.reporting.figures import build_figures
-from ctk_android.reporting.promotion import promote
-from ctk_android.reporting.records import collect_evidence
 from ctk_android.reporting.tables import build_tables
 from ctk_android.types import (
     Alpha,
@@ -64,16 +125,31 @@ from ctk_android.types import (
     ClusterRow,
     ClusterTable,
     CtkError,
+    DesignPromotion,
+    DiagnosticRow,
+    DiagnosticRows,
+    DiagnosticTable,
     FamilyEffectsTable,
     GateEvidence,
     GroupIds,
     HitVectors,
+    PartitionKey,
+    PlannedTargetsBySeed,
     Promote,
+    PromotedOutput,
     PromotionDecision,
+    RepresentationDiagnostics,
     RunEvidence,
+    RunIndexTable,
     RunKey,
     RunManifest,
+    ScoredRun,
+    SeedPairsTables,
     SelectionTable,
+    StudyCache,
+    StudyTable,
+    SupportCount,
+    TargetsTable,
 )
 
 
@@ -85,12 +161,12 @@ def _associations(
         gains = family_table.filter(
             (pl.col(Column.EXPERIMENT) == experiment) & (pl.col(Column.LEARNER) == Learner.FEDAVG)
         ).select(Column.FAMILY, Column.CTK_GAIN)
-        scores = novelty.descriptor_by_family(
+        scores = descriptor_by_family(
             evidence.novelty.filter(pl.col(Column.EXPERIMENT) == experiment),
             config.experiments.novelty.primary_descriptor,
         )
         joined = gains.join(scores, on=Column.FAMILY).sort(Column.FAMILY)
-        result[experiment] = novelty.novelty_association(
+        result[experiment] = novelty_association(
             joined[Column.CTK_GAIN].to_numpy(), joined[Column.NOVELTY].to_numpy(), config.statistics
         )
     return result
@@ -326,9 +402,7 @@ def run_analysis(paths: Paths, config: Config, mode: ExecutionMode) -> ClaimsTab
     write_table(decomposition, paths.analysis_file(mode, Artifact.COLLABORATION_DECOMPOSITION))
     write_table(
         family_table.join(
-            novelty.descriptor_by_family(
-                evidence.novelty, config.experiments.novelty.primary_descriptor
-            ),
+            descriptor_by_family(evidence.novelty, config.experiments.novelty.primary_descriptor),
             on=Column.FAMILY,
             how=LibraryOption.JOIN_LEFT,
         ),
@@ -413,3 +487,425 @@ def run_fairness(paths: Paths, config: Config, mode: ExecutionMode) -> Selection
         logs.warning(LogEvent.FREEZE_DRIFT, {LogField.PARAMETER: parameter})
     write_table(selection, paths.analysis_file(mode, Artifact.FAIRNESS_SELECTION))
     return selection
+
+
+def run_posthoc(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    evidence = collect_evidence(paths, config, mode, fairness=False)
+    if evidence.summary.height == 0:
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    cells = hidden_cells(evidence.families, config.experiments.operating.primary_alpha)
+    write_table(
+        ctk_heterogeneity_components(cells, config),
+        paths.analysis_file(mode, Artifact.HETEROGENEITY_COMPONENTS),
+    )
+    write_table(
+        aggregate_metric_masking(evidence.summary, config),
+        paths.analysis_file(mode, Artifact.AGGREGATE_MASKING),
+    )
+    write_table(
+        negative_transfer_decomposition(cells, config),
+        paths.analysis_file(mode, Artifact.NEGATIVE_TRANSFER),
+    )
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.HIDDEN_FAMILY, LogField.SECONDS: watch.seconds()},
+    )
+    return promote_hidden_family(paths, mode, evidence.index) if promote_evidence else None
+
+
+def _planned_families(paths: Paths, config: Config, mode: ExecutionMode) -> SupportCount:
+    return len(
+        {
+            pair.family
+            for experiment in config.experiments.extension_b_experiments
+            for seed in config.seeds_for(experiment, mode)
+            for pair in planned_targets(
+                paths, RunKey(mode=mode, experiment=experiment, seed=seed, salt=0)
+            ).targets
+        }
+    )
+
+
+def _fresh_seed_pairs(paths: Paths, config: Config, mode: ExecutionMode) -> SeedPairsTables:
+    # Controlled pairs per fresh seed, as built by the partition stage for the frozen universe.
+    pairs: SeedPairsTables = {}
+    for experiment in config.experiments.extension_b_experiments:
+        spec = config.experiments.experiments[experiment]
+        for seed in config.seeds_for(experiment, mode):
+            key = PartitionKey(seed=seed, salt=0, grouping=spec.grouping, profile=spec.eligibility)
+            pairs[seed] = pl.read_parquet(
+                paths.partition_file(key, Artifact.LARGE_CONTROLLED_PAIRS)
+            )
+    return pairs
+
+
+def run_large_family(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    evidence = collect_evidence(
+        paths, config, mode, fairness=False, only=config.experiments.extension_b_experiments
+    )
+    if evidence.summary.height == 0:
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    seed_effects = large_seed_effects(evidence.families, config)
+    table = large_family_table(seed_effects, evidence.novelty, config)
+    write_table(evidence.index, paths.analysis_file(mode, Artifact.RUN_INDEX))
+    write_table(seed_effects, paths.analysis_file(mode, Artifact.LARGE_FAMILY_SEED_CTK))
+    write_table(table, paths.analysis_file(mode, Artifact.LARGE_FAMILY_CTK))
+    write_table(
+        large_family_summary(table, _planned_families(paths, config, mode), config, seed_effects),
+        paths.analysis_file(mode, Artifact.LARGE_FAMILY_SUMMARY),
+    )
+    selection = pl.read_parquet(paths.stage_file(Stage.FAMILIES, Artifact.LARGE_SELECTION))
+    per_seed = stability_seed_table(_fresh_seed_pairs(paths, config, mode), selection)
+    stability = eligibility_stability_table(per_seed, selection, seed_effects)
+    write_table(per_seed, paths.analysis_file(mode, Artifact.LARGE_FAMILY_STABILITY_SEEDS))
+    write_table(stability, paths.analysis_file(mode, Artifact.LARGE_FAMILY_STABILITY))
+    write_table(
+        eligibility_stability_summary(stability, table, config),
+        paths.analysis_file(mode, Artifact.LARGE_FAMILY_STABILITY_SUMMARY),
+    )
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.LARGE_FAMILY, LogField.SECONDS: watch.seconds()},
+    )
+    return promote_large_family(paths, config, mode) if promote_evidence else None
+
+
+def run_dose_extension(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    experiments = dose_experiments(config, mode)
+    evidence = collect_evidence(paths, config, mode, fairness=False, only=experiments)
+    if evidence.summary.height == 0:
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    effects = dose_effects(evidence.families, config, experiments)
+    outputs = (
+        (Artifact.DOSE_RUN_INDEX, evidence.index),
+        (Artifact.DOSE_SEED_EFFECTS, effects.seeds),
+        (Artifact.DOSE_EFFECTS, records_to_frame(list(effects.rows))),
+        (Artifact.DOSE_FAMILY_CURVES, dose_family_curves(evidence.families, experiments)),
+        (
+            Artifact.DOSE_CONSISTENCY,
+            dose_consistency(evidence.exposure, evidence.families, experiments),
+        ),
+        (Artifact.DOSE_VERDICTS, dose_verdicts(effects.rows, config)),
+    )
+    for artifact, table in outputs:
+        write_table(table if table.height else pl.DataFrame(), paths.analysis_file(mode, artifact))
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.DOSE_EXTENSION, LogField.SECONDS: watch.seconds()},
+    )
+    if not promote_evidence:
+        return None
+    return promote_extension_design(
+        paths,
+        config,
+        mode,
+        DesignPromotion(
+            study=ExtensionStudy.DOSE,
+            experiments=experiments,
+            index_artifact=Artifact.DOSE_RUN_INDEX,
+            artifacts=tuple(artifact for artifact, _ in outputs[1:]),
+            code_file=ResultsFile.DOSE_CODE,
+        ),
+    )
+
+
+def run_controls_extension(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    experiments = controls_experiments(config, mode)
+    evidence = collect_evidence(paths, config, mode, fairness=False, only=experiments)
+    if evidence.summary.height == 0:
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    effects = controls_effects(evidence.families, config, experiments)
+    outputs = (
+        (Artifact.CONTROLS_RUN_INDEX, evidence.index),
+        (Artifact.CONTROLS_SEED_EFFECTS, effects.seeds),
+        (Artifact.CONTROLS_EFFECTS, records_to_frame(list(effects.rows))),
+        (
+            Artifact.CONTROLS_PLACEBO_PAIRS,
+            placebo_table(collect_placebo_pairs(paths, evidence.index, mode)),
+        ),
+        (Artifact.CONTROLS_VERDICTS, controls_verdicts(effects.rows, config)),
+    )
+    for artifact, table in outputs:
+        write_table(table if table.height else pl.DataFrame(), paths.analysis_file(mode, artifact))
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.CONTROLS_EXTENSION, LogField.SECONDS: watch.seconds()},
+    )
+    if not promote_evidence:
+        return None
+    return promote_extension_design(
+        paths,
+        config,
+        mode,
+        DesignPromotion(
+            study=ExtensionStudy.CONTROLS,
+            experiments=experiments,
+            index_artifact=Artifact.CONTROLS_RUN_INDEX,
+            artifacts=tuple(artifact for artifact, _ in outputs[1:]),
+            code_file=ResultsFile.CONTROLS_CODE,
+        ),
+    )
+
+
+def run_representation_extension(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    experiments = representation_experiments(config, mode)
+    evidence = collect_evidence(paths, config, mode, fairness=False, only=experiments)
+    if evidence.summary.height == 0:
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    reference = experiments[0]
+    planned: PlannedTargetsBySeed = {
+        seed: planned_targets(
+            paths, RunKey(mode=mode, experiment=reference, seed=seed, salt=0)
+        ).targets
+        for seed in config.seeds_for(reference, mode)
+    }
+    tables = representation_tables(evidence.families, config, experiments)
+    outputs = (
+        (Artifact.REPRESENTATION_RUN_INDEX, evidence.index),
+        (Artifact.REPRESENTATION_SEED_EFFECTS, tables.seeds),
+        (Artifact.REPRESENTATION_EFFECTS, records_to_frame(list(tables.effects))),
+        (Artifact.REPRESENTATION_LEVELS, records_to_frame(list(tables.levels))),
+        (Artifact.REPRESENTATION_VERDICTS, representation_verdicts(tables.effects, config)),
+        (
+            Artifact.REPRESENTATION_ELIGIBILITY,
+            eligibility_table(planned, read_family_set(paths, FamilySetName.PRIMARY)),
+        ),
+    )
+    for artifact, table in outputs:
+        write_table(table if table.height else pl.DataFrame(), paths.analysis_file(mode, artifact))
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.REPRESENTATION_EXTENSION, LogField.SECONDS: watch.seconds()},
+    )
+    if not promote_evidence:
+        return None
+    return promote_extension_design(
+        paths,
+        config,
+        mode,
+        DesignPromotion(
+            study=ExtensionStudy.REPRESENTATION,
+            experiments=experiments,
+            index_artifact=Artifact.REPRESENTATION_RUN_INDEX,
+            artifacts=tuple(artifact for artifact, _ in outputs[1:]),
+            code_file=ResultsFile.REPRESENTATION_CODE,
+        ),
+    )
+
+
+def _study(
+    paths: Paths, config: Config, experiment: ExperimentName, key: PartitionKey
+) -> StudyTable:
+    spec = config.experiments.experiments[experiment]
+    return partitions.study_table(
+        pl.read_parquet(paths.representation_file(Artifact.OVERLAP)),
+        pl.read_parquet(paths.representation_file(Artifact.COMPONENTS)),
+        pl.read_parquet(paths.representation_partition_file(key, Artifact.ASSIGNMENTS)),
+        key,
+        config.data,
+        spec.family_labels,
+        config.experiments.permutation_seed_offset,
+    )
+
+
+def _representation(
+    paths: Paths, config: Config, mode: ExecutionMode, experiments: tuple[ExperimentName, ...]
+) -> RepresentationDiagnostics:
+    # Re-reads the stored per-row test scores of every representation run; no retraining.
+    studies: StudyCache = {}
+    targets: DiagnosticRows = []
+    health: DiagnosticRows = []
+    for experiment in experiments:
+        spec = config.experiments.experiments[experiment]
+        representation = spec.representation
+        if representation is None:
+            continue
+        for seed in config.seeds_for(experiment, mode):
+            key = RunKey(mode=mode, experiment=experiment, seed=seed, salt=0)
+            partition = PartitionKey(
+                seed=seed, salt=0, grouping=spec.grouping, profile=spec.eligibility
+            )
+            if partition not in studies:
+                studies[partition] = _study(paths, config, experiment, partition)
+            manifest = read_record(paths.run_file(key, Artifact.MANIFEST), RunManifest)
+            run = ScoredRun(
+                representation=representation,
+                seed=seed,
+                targets=manifest.targets,
+                study=studies[partition],
+                thresholds=pl.read_parquet(paths.run_file(key, Artifact.THRESHOLDS)),
+                families=pl.read_parquet(paths.run_metric_file(key, Artifact.FAMILY_METRICS)),
+                operating=pl.read_parquet(paths.run_metric_file(key, Artifact.OPERATING_POINTS)),
+                scores={
+                    arm.label(): pl.read_parquet(paths.run_scores_file(key, arm))
+                    for arm in manifest.arms
+                },
+            )
+            targets += scored_targets(run, config)
+            health += score_health(run)
+    evidence = EvidenceClass.POST_HOC_DIAGNOSTIC
+    table = labelled(targets, evidence)
+    return RepresentationDiagnostics(
+        targets=table,
+        health=labelled(health, evidence),
+        effects=equal_fpr_effects(table, config),
+    )
+
+
+def _targets(paths: Paths, index: RunIndexTable) -> TargetsTable:
+    rows: DiagnosticRows = []
+    for row in index.filter(pl.col(Column.STATUS) == RunStatus.COMPLETED).iter_rows(named=True):
+        key = RunKey(
+            mode=ExecutionMode.CONFIRMATORY,
+            experiment=row[Column.EXPERIMENT],
+            seed=row[Column.SEED],
+            salt=row[Column.SALT],
+        )
+        manifest = read_record(paths.run_file(key, Artifact.MANIFEST), RunManifest)
+        for target in manifest.targets:
+            pair: DiagnosticRow = {
+                Column.EXPERIMENT: key.experiment,
+                Column.SEED: key.seed,
+                Column.CLIENT: target.client,
+                Column.FAMILY: target.family,
+            }
+            rows.append(pair)
+    return pl.DataFrame(rows)
+
+
+def run_diagnostics(
+    paths: Paths, config: Config, mode: ExecutionMode, promote_evidence: Promote
+) -> PromotionDecision | None:
+    dose = dose_experiments(config, mode)
+    controls = controls_experiments(config, mode)
+    representation = representation_experiments(config, mode)
+    experiments = (*config.experiments.extension_b_experiments, *dose, *controls, *representation)
+    evidence = collect_evidence(paths, config, mode, fairness=False, only=experiments)
+    if evidence.summary.height == 0 or not (dose and controls and representation):
+        raise CtkError(FailureReason.NO_COMPLETED_RUNS, ErrorMessage.NO_EVIDENCE.format(mode=mode))
+    watch = Stopwatch()
+    confirmatory = collect_evidence(
+        paths, config, ExecutionMode.CONFIRMATORY, fairness=False, only=synthesis_experiments()
+    )
+
+    def only(frame: DiagnosticTable, names: tuple[ExperimentName, ...]) -> DiagnosticTable:
+        return frame.filter(pl.col(Column.EXPERIMENT).is_in(list(names)))
+
+    large = (
+        pl.read_parquet(paths.analysis_file(mode, Artifact.LARGE_FAMILY_CTK)),
+        pl.read_parquet(paths.analysis_file(mode, Artifact.LARGE_FAMILY_SEED_CTK)),
+    )
+    influence = influence_tables(
+        large[0],
+        large[1],
+        pl.read_parquet(paths.analysis_file(mode, Artifact.LARGE_FAMILY_STABILITY)),
+        config,
+    )
+    doses = dose_diagnostics(
+        only(evidence.families, dose),
+        only(evidence.novelty, dose),
+        pl.read_csv(paths.report_table_file(ExecutionMode.CONFIRMATORY, ReportTable.FAMILY_LEVEL)),
+        config,
+        dose,
+    )
+    index = only(evidence.index, controls)
+    control = control_diagnostics(
+        control_cells(
+            only(evidence.families, controls),
+            only(evidence.exposure, controls),
+            only(evidence.novelty, controls),
+            collect_placebo_pairs(paths, index, mode),
+            config,
+            controls,
+        ),
+        config,
+        controls,
+    )
+    reps = _representation(paths, config, mode, representation)
+    synthesis = synthesis_diagnostics(
+        synthesis_cells(
+            confirmatory.families,
+            confirmatory.exposure,
+            confirmatory.novelty,
+            _targets(paths, confirmatory.index),
+            config,
+        ),
+        large[1],
+        large[0],
+        pl.read_parquet(paths.stage_file(Stage.FAMILIES, Artifact.LARGE_SELECTION)),
+        config,
+    )
+    diagnostic, confirmatory_class = (
+        EvidenceClass.POST_HOC_DIAGNOSTIC,
+        EvidenceClass.POST_CONFIRMATORY,
+    )
+    outputs = (
+        (Artifact.DIAGNOSTIC_REP_TARGETS, reps.targets, diagnostic),
+        (Artifact.DIAGNOSTIC_REP_HEALTH, reps.health, diagnostic),
+        (Artifact.DIAGNOSTIC_REP_EFFECTS, reps.effects, diagnostic),
+        (Artifact.DIAGNOSTIC_LFAM_INFLUENCE, influence.families, diagnostic),
+        (Artifact.DIAGNOSTIC_LFAM_STABILITY, influence.summary, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_CURVE, doses.curve, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_INCREMENTS, doses.increments, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_FAMILY_CURVES, doses.family_curves, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_FAMILY_SUMMARY, doses.family_summary, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_ASSOCIATIONS, doses.associations, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_CLIENT_CURVES, doses.client_curves, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_MODEL_FITS, doses.model_fits, diagnostic),
+        (Artifact.DIAGNOSTIC_DOSE_HETEROGENEITY, doses.heterogeneity, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_STRATA, control.strata, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_CLIENTS, control.clients, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_REALLOCATION, control.reallocation, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_SLOPES, control.slopes, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_ASSOCIATIONS, control.associations, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_PLACEBO_PAIRS, control.placebo_pairs, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_FAMILIES, control.families, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_SUPPORT_LEVELS, control.support_levels, diagnostic),
+        (Artifact.DIAGNOSTIC_CTRL_SUPPORT, control.support, diagnostic),
+        (Artifact.DIAGNOSTIC_SYNTH_CELLS, synthesis.cells, confirmatory_class),
+        (Artifact.DIAGNOSTIC_SYNTH_TAXONOMY, synthesis.taxonomy, confirmatory_class),
+        (Artifact.DIAGNOSTIC_SYNTH_FAMILY_CTK, synthesis.family_ctk, confirmatory_class),
+        (Artifact.DIAGNOSTIC_SYNTH_LARGE_CTK, synthesis.large_family_ctk, diagnostic),
+        (Artifact.DIAGNOSTIC_SYNTH_LARGE_TAXONOMY, synthesis.large_taxonomy, diagnostic),
+        (Artifact.DIAGNOSTIC_SYNTH_RANK, synthesis.rank_concordance, diagnostic),
+        (Artifact.DIAGNOSTIC_SYNTH_LARGE_ASSOCIATIONS, synthesis.large_associations, diagnostic),
+    )
+    write_table(evidence.index, paths.analysis_file(mode, Artifact.DIAGNOSTICS_RUN_INDEX))
+    for artifact, table, _ in outputs:
+        write_table(table, paths.analysis_file(mode, artifact))
+    logs.info(
+        LogEvent.ANALYSIS_STAGE_FINISHED,
+        {LogField.STAGE: AnalysisStage.DIAGNOSTICS, LogField.SECONDS: watch.seconds()},
+    )
+    if not promote_evidence:
+        return None
+    return promote_diagnostics(
+        paths,
+        config,
+        mode,
+        DesignPromotion(
+            study=ExtensionStudy.DIAGNOSTICS,
+            experiments=experiments,
+            index_artifact=Artifact.DIAGNOSTICS_RUN_INDEX,
+            outputs=tuple(
+                PromotedOutput(artifact=artifact, evidence_class=evidence_class)
+                for artifact, _, evidence_class in outputs
+            ),
+            code_file=ResultsFile.DIAGNOSTICS_CODE,
+        ),
+    )

@@ -8,12 +8,13 @@ import polars as pl
 import torch
 
 from ctk_android import logs
-from ctk_android.analysis.novelty import family_descriptors
+from ctk_android.analysis.extensions import family_descriptors
 from ctk_android.config import Config, FairnessGrids
-from ctk_android.data import representation
+from ctk_android.data import representations
 from ctk_android.data.cache import (
     fingerprint_model,
     is_reusable,
+    read_record,
     run_provenance,
     write_provenance,
     write_record,
@@ -44,8 +45,8 @@ from ctk_android.enums import (
     TunedParameter,
     ValidationCheck,
 )
-from ctk_android.experiment import evaluation, exposure, metrics, training
-from ctk_android.experiment.designs import DesignInputs, run_fields, train_design_arms
+from ctk_android.experiment import design, evaluation, planning, training
+from ctk_android.experiment.design import DesignInputs, run_fields, train_design_arms
 from ctk_android.experiment.models import resolve_device
 from ctk_android.experiment.training import learner_stream
 from ctk_android.logs import Stopwatch
@@ -91,7 +92,7 @@ from ctk_android.types import (
     ValidationDocument,
     ValidationRecord,
 )
-from ctk_android.workflows.plan import planned_targets
+from ctk_android.workflows.maintenance import run_plan
 from ctk_android.workflows.report import run_report
 
 
@@ -371,10 +372,10 @@ def _run_local(
     targets: tuple[TargetPair, ...],
     budget: SupportCount,
 ) -> LocalArm:
-    local_rows = exposure.select_training(
+    local_rows = design.select_training(
         orders,
         masks,
-        exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
+        design.exposure_spec(local_arm(), spec.exposure_mode, targets),
         {},
         budget,
     )
@@ -468,10 +469,10 @@ def _train_arms(
     results: ResultsByArm = {}
     trainings: TrainingByArm = {}
     if spec.fairness_grid:
-        grid_rows = exposure.select_training(
+        grid_rows = design.select_training(
             orders,
             masks,
-            exposure.exposure_spec(local_arm(), spec.exposure_mode, targets),
+            design.exposure_spec(local_arm(), spec.exposure_mode, targets),
             {},
             budget,
         )
@@ -488,9 +489,9 @@ def _train_arms(
             trainings[local_arm()] = local_rows
     for setting in settings_for(spec, config):
         base = ArmKey(learner=Learner.CENTRAL, condition=setting.condition, dose=setting.dose)
-        exposure_spec = exposure.exposure_spec(base, spec.exposure_mode, targets)
-        allowed = exposure.allowed_dose_rows(study, masks, exposure_spec, priorities)
-        rows = exposure.select_training(orders, masks, exposure_spec, allowed, budget)
+        exposure_spec = design.exposure_spec(base, spec.exposure_mode, targets)
+        allowed = design.allowed_dose_rows(study, masks, exposure_spec, priorities)
+        rows = design.select_training(orders, masks, exposure_spec, allowed, budget)
         logs.info(
             LogEvent.EXPOSURE_SELECTED,
             {
@@ -534,9 +535,9 @@ def _write_tables(
     write_table(
         operating.join(
             benign.select(
-                *metrics.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
+                *evaluation.arm_columns(), Column.CLIENT, Column.ALPHA, Column.HITS, Column.TRIALS
             ),
-            on=[*metrics.arm_columns(), Column.CLIENT, Column.ALPHA],
+            on=[*evaluation.arm_columns(), Column.CLIENT, Column.ALPHA],
             nulls_equal=True,
         ).with_columns((pl.col(Column.HITS) / pl.col(Column.TRIALS)).alias(Column.VALUE)),
         paths.run_metric_file(key, Artifact.OPERATING_POINTS),
@@ -587,7 +588,7 @@ def _evaluate_arms(
         [item.discrimination for item in evaluations if item.discrimination.height]
     )
     rule = config.data.eligibility[spec.eligibility]
-    summary = metrics.summarize(
+    summary = evaluation.summarize(
         clients, families, discrimination, operating, rule.own_domain_min_test
     )
     return EvaluatedArms(
@@ -640,7 +641,7 @@ def _log_validations(
 
 def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite) -> RunReport:
     directory = paths.run_dir(key)
-    planned = planned_targets(paths, key)
+    planned = planning.planned_targets(paths, key)
     planned_status, targets = planned.status, planned.targets
     provenance = run_provenance(paths, config, key, targets)
     if not overwrite and is_reusable(paths.provenance_file(directory), provenance):
@@ -653,9 +654,9 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
     partition_key = PartitionKey(
         seed=key.seed, salt=key.salt, grouping=spec.grouping, profile=spec.eligibility
     )
-    study = representation.load_study(paths, config, spec, partition_key)
+    study = representations.load_study(paths, config, spec, partition_key)
     families = tuple(dict.fromkeys(pair.family for pair in targets))
-    masks = exposure.family_masks(study, families)
+    masks = design.family_masks(study, families)
     attributes = evaluation.row_attributes(study, masks)
     pools = evaluation.build_pools(attributes, targets)
     device = resolve_device(config.project.device)
@@ -666,10 +667,10 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         family=spec.model_family,
         device=device,
         seed=training.derive_seed(key.seed, key.salt),
-        transform_rule=representation.transform_rule(spec.representation, config),
+        transform_rule=representations.transform_rule(spec.representation, config),
     )
-    orders = exposure.training_orders(study, key.seed, key.salt)
-    priorities = exposure.row_priorities(study, key.seed, key.salt)
+    orders = design.training_orders(study, key.seed, key.salt)
+    priorities = design.row_priorities(study, key.seed, key.salt)
     budget = config.experiments.budgets[spec.budget]
     watch = Stopwatch()
     logs.info(
@@ -703,10 +704,10 @@ def execute_run(paths: Paths, config: Config, key: RunKey, overwrite: Overwrite)
         },
     )
     exposure_table = pl.concat(
-        [exposure.exposure_counts(trainings[arm], masks, arm) for arm in trainings]
+        [design.exposure_counts(trainings[arm], masks, arm) for arm in trainings]
     )
     validations = [
-        *exposure.validate_exposure(
+        *design.validate_exposure(
             study, trainings, masks, targets, spec.exposure_mode, rule.peer_min_fit, fit_pool
         ),
         *_pool_validations(attributes, pools, evaluations),
@@ -824,3 +825,26 @@ def run_and_report(
     if experiment not in config.experiments.extension_b_experiments and not designed:
         run_report(paths, config, mode, promote_evidence=False)
     return reports
+
+
+def run_smoke(paths: Paths, config: Config, overwrite: Overwrite) -> RunReport:
+    run_plan(paths, config, ExecutionMode.SMOKE)
+    reports = run_and_report(
+        paths,
+        config,
+        ExperimentName.END_TO_END,
+        ExecutionMode.SMOKE,
+        config.project.seeds.smoke,
+        overwrite,
+    )
+    report = reports[0]
+    summary = pl.read_parquet(paths.run_metric_file(report.key, Artifact.SUMMARY))
+    if (
+        report.status is not RunStatus.COMPLETED
+        or summary.filter(pl.col(Column.VALUE).is_null()).height
+    ):
+        detail = read_record(paths.run_file(report.key, Artifact.VALIDATION), ValidationDocument)
+        raise CtkError(
+            FailureReason.NO_ELIGIBLE_TARGETS, ErrorMessage.SMOKE_INCOMPLETE.format(detail=detail)
+        )
+    return report

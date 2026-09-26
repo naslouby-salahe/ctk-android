@@ -1,6 +1,6 @@
 import polars as pl
 
-from ctk_android.analysis.gates import (
+from ctk_android.analysis.post_confirmatory import (
     collaboration_benefit,
     complementary_knowledge,
     dose_response,

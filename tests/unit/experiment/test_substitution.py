@@ -2,9 +2,9 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.data.identity import feature_identities
+from ctk_android.data.preparation import feature_identities
 from ctk_android.enums import ClientId, Column, EligibilityReason, SplitRole
-from ctk_android.experiment import exposure, substitution
+from ctk_android.experiment import design
 from ctk_android.types import CtkError, StudyData, TargetPair
 
 FAMILIES = ("alpha", "beta", "gamma", "delta", "epsilon")
@@ -41,9 +41,9 @@ TARGETS = (
     TargetPair(client=ClientId.ANZHI, family="alpha"),
     TargetPair(client=ClientId.APPCHINA, family="beta"),
 )
-MASKS = exposure.family_masks(STUDY, ("alpha", "beta"))
-ORDERS = exposure.training_orders(STUDY, SEED, 0)
-FIT = substitution.family_fit_rows(STUDY)
+MASKS = design.family_masks(STUDY, ("alpha", "beta"))
+ORDERS = design.training_orders(STUDY, SEED, 0)
+FIT = design.family_fit_rows(STUDY)
 
 
 def _absent() -> dict[ClientId, np.ndarray]:
@@ -78,15 +78,15 @@ def _peer_count(rows: dict[ClientId, np.ndarray], pair: TargetPair) -> int:
 def test_family_fit_rows_only_hold_named_malware_fit_rows_and_totals_cover_all_roles() -> None:
     roles = STUDY.table[Column.ROLE].to_numpy()
     assert all((roles[rows] == SplitRole.FIT).all() for by in FIT.values() for rows in by.values())
-    assert substitution.family_totals(STUDY)["alpha"] == 4 * 3 * PER_CELL // 5
+    assert design.family_totals(STUDY)["alpha"] == 4 * 3 * PER_CELL // 5
 
 
 @pytest.mark.parametrize("dose", [0, 10, 25, 60])
 def test_exact_dose_is_realised_at_peers_zero_at_target_and_volume_is_preserved(dose: int) -> None:
     absent = _absent()
-    draw = substitution.draw_dose(FIT, absent, TARGETS, _rng())
-    rows = substitution.substitute(
-        absent, substitution.dose_extras(draw, TARGETS, dose), draw.replacement_order
+    draw = design.draw_dose(FIT, absent, TARGETS, _rng())
+    rows = design.substitute(
+        absent, design.dose_extras(draw, TARGETS, dose), draw.replacement_order
     )
     for pair in TARGETS:
         assert _peer_count(rows, pair) == dose
@@ -101,20 +101,18 @@ def test_exact_dose_is_realised_at_peers_zero_at_target_and_volume_is_preserved(
 
 def test_dose_zero_reproduces_the_absent_rows_and_levels_are_nested() -> None:
     absent = _absent()
-    draw = substitution.draw_dose(FIT, absent, TARGETS, _rng())
-    zero = substitution.substitute(
-        absent, substitution.dose_extras(draw, TARGETS, 0), draw.replacement_order
-    )
+    draw = design.draw_dose(FIT, absent, TARGETS, _rng())
+    zero = design.substitute(absent, design.dose_extras(draw, TARGETS, 0), draw.replacement_order)
     assert all(np.array_equal(zero[client], absent[client]) for client in ClientId)
-    small = substitution.dose_extras(draw, TARGETS, 10)
-    large = substitution.dose_extras(draw, TARGETS, 25)
+    small = design.dose_extras(draw, TARGETS, 10)
+    large = design.dose_extras(draw, TARGETS, 25)
     assert all(np.isin(small[client], large[client]).all() for client in ClientId)
 
 
 def test_placebo_is_unhidden_unique_and_matches_the_hidden_family_counts() -> None:
     absent, peer = _absent(), _peer()
-    choices = substitution.choose_placebos(
-        FIT, substitution.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
+    choices = design.choose_placebos(
+        FIT, design.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
     )
     placebos = [choice.placebo for choice in choices]
     assert len(set(placebos)) == len(placebos)
@@ -131,9 +129,9 @@ def test_placebo_is_unhidden_unique_and_matches_the_hidden_family_counts() -> No
         }
         assert choice.allocated == choice.counts
         assert choice.reallocated == 0
-    rows = substitution.substitute(
+    rows = design.substitute(
         absent,
-        substitution.placebo_extras(FIT, absent, choices, _rng()),
+        design.placebo_extras(FIT, absent, choices, _rng()),
         {client: np.arange(chosen.size) for client, chosen in absent.items()},
     )
     for client in ClientId:
@@ -148,8 +146,8 @@ def test_placebo_is_unhidden_unique_and_matches_the_hidden_family_counts() -> No
 
 def test_placebo_prefers_the_family_with_the_closest_peer_fit_count() -> None:
     absent, peer = _absent(), _peer()
-    choices = substitution.choose_placebos(
-        FIT, substitution.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
+    choices = design.choose_placebos(
+        FIT, design.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
     )
     assert choices[0].hidden_peer_fit == choices[0].placebo_peer_fit
 
@@ -167,8 +165,8 @@ def test_placebo_rows_move_to_other_peers_when_a_peer_lacks_the_family() -> None
     pair = TARGETS[0]
     hidden_rows = FIT[pair.family][ClientId.PLAY_EARLY][:5]
     peer[ClientId.PLAY_EARLY] = np.concatenate([peer[ClientId.PLAY_EARLY][:-5], hidden_rows])
-    choices = substitution.choose_placebos(
-        scarce, substitution.family_totals(STUDY), MASKS, peer, absent, (pair,), 10
+    choices = design.choose_placebos(
+        scarce, design.family_totals(STUDY), MASKS, peer, absent, (pair,), 10
     )
     choice = choices[0]
     assert choice.counts[ClientId.PLAY_EARLY] == 5
@@ -179,8 +177,8 @@ def test_placebo_rows_move_to_other_peers_when_a_peer_lacks_the_family() -> None
 
 def test_placebo_pairs_are_processed_from_the_largest_hidden_family() -> None:
     absent, peer = _absent(), _peer()
-    choices = substitution.choose_placebos(
-        FIT, substitution.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
+    choices = design.choose_placebos(
+        FIT, design.family_totals(STUDY), MASKS, peer, absent, TARGETS, 10
     )
     fits = [choice.hidden_peer_fit for choice in choices]
     assert fits == sorted(fits, reverse=True)
@@ -188,6 +186,6 @@ def test_placebo_pairs_are_processed_from_the_largest_hidden_family() -> None:
 
 def test_placebo_choice_fails_when_no_family_reaches_the_row_minimum() -> None:
     with pytest.raises(CtkError):
-        substitution.choose_placebos(
-            FIT, substitution.family_totals(STUDY), MASKS, _peer(), _absent(), TARGETS, 10**6
+        design.choose_placebos(
+            FIT, design.family_totals(STUDY), MASKS, _peer(), _absent(), TARGETS, 10**6
         )

@@ -16,7 +16,7 @@ from ctk_android.enums import (
     RunStatus,
 )
 from ctk_android.paths import Paths
-from ctk_android.reporting.records import collect_evidence
+from ctk_android.reporting.artifacts import collect_evidence
 from ctk_android.types import CtkError
 from ctk_android.workflows.report import run_analysis, run_report
 from tests.architecture.source_index import REPO_ROOT

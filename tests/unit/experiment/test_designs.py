@@ -14,8 +14,8 @@ from ctk_android.enums import (
     TunedParameter,
     ValidationCheck,
 )
-from ctk_android.experiment import evaluation, exposure, training
-from ctk_android.experiment.designs import DesignInputs, run_fields, train_design_arms
+from ctk_android.experiment import design, evaluation, training
+from ctk_android.experiment.design import DesignInputs, run_fields, train_design_arms
 from ctk_android.paths import Paths
 from ctk_android.types import RunKey
 from tests.architecture.source_index import REPO_ROOT
@@ -26,7 +26,7 @@ SMALL = FULL.experiments.model_copy(
     update={"exact_dose_levels": (0, 10, 25), "placebo_min_malware_rows": 10}
 )
 CONFIG = FULL.model_copy(update={"experiments": SMALL})
-MASKS = exposure.family_masks(STUDY, ("alpha", "beta"))
+MASKS = design.family_masks(STUDY, ("alpha", "beta"))
 ATTRIBUTES = evaluation.row_attributes(STUDY, MASKS)
 POOLS = evaluation.build_pools(ATTRIBUTES, TARGETS)
 SEED = 310
@@ -50,7 +50,7 @@ def _inputs(name: ExperimentName) -> DesignInputs:
         study=STUDY,
         masks=MASKS,
         pools=POOLS,
-        orders=exposure.training_orders(STUDY, SEED, 0),
+        orders=design.training_orders(STUDY, SEED, 0),
         targets=TARGETS,
         budget=BUDGET,
     )

@@ -203,64 +203,46 @@ ctk-android/
 │       ├── enums.py
 │       ├── types.py
 │       ├── paths.py
+│       ├── logs.py
+│       ├── provenance.py
 │       │
 │       ├── data/
 │       │   ├── __init__.py
 │       │   ├── sources.py
-│       │   ├── joins.py
-│       │   ├── identity.py
-│       │   ├── clients.py
+│       │   ├── preparation.py
+│       │   ├── representations.py
 │       │   ├── partitions.py
-│       │   ├── families.py
 │       │   └── cache.py
 │       │
 │       ├── experiment/
 │       │   ├── __init__.py
-│       │   ├── exposure.py
+│       │   ├── planning.py
+│       │   ├── design.py
 │       │   ├── models.py
 │       │   ├── training.py
-│       │   ├── substitution.py
-│       │   ├── designs.py
-│       │   ├── thresholds.py
-│       │   ├── evaluation.py
-│       │   └── metrics.py
+│       │   └── evaluation.py
 │       │
 │       ├── analysis/
 │       │   ├── __init__.py
 │       │   ├── decomposition.py
-│       │   ├── dose_response.py
-│       │   ├── novelty.py
-│       │   ├── hidden_family.py
-│       │   ├── large_family.py
-│       │   ├── extension_effects.py
-│       │   ├── dose_extension.py
-│       │   ├── controls_extension.py
-│       │   ├── robustness.py
-│       │   ├── statistics.py
-│       │   └── gates.py
+│       │   ├── diagnostics.py
+│       │   ├── diagnostic_synthesis.py
+│       │   ├── extensions.py
+│       │   ├── post_confirmatory.py
+│       │   └── statistics.py
 │       │
 │       ├── reporting/
 │       │   ├── __init__.py
-│       │   ├── records.py
+│       │   ├── artifacts.py
 │       │   ├── tables.py
-│       │   ├── figures.py
-│       │   └── promotion.py
+│       │   └── figures.py
 │       │
 │       └── workflows/
 │           ├── __init__.py
-│           ├── doctor.py
+│           ├── maintenance.py
 │           ├── preprocess.py
-│           ├── plan.py
-│           ├── smoke.py
 │           ├── run.py
-│           ├── status.py
-│           ├── report.py
-│           ├── posthoc.py
-│           ├── largefamily.py
-│           ├── doseextension.py
-│           ├── controlsextension.py
-│           ├── representationprep.py
-│           └── representationextension.py
+│           └── report.py
 │
 ├── tests/
 │   ├── conftest.py
@@ -648,6 +630,8 @@ config.py
 enums.py
 types.py
 paths.py
+logs.py
+provenance.py
 ```
 
 Do not split these into many one-file packages without evidence that the separation materially improves maintainability.
@@ -702,32 +686,24 @@ Keep `src/` compact.
 
 `data/`
 
-- source adapters;
-- joins;
-- identity/component construction;
-- client construction;
-- deterministic partitions;
-- family support and eligibility;
-- deterministic preprocessing/cache ownership.
+- `sources.py` owns source scanning, fingerprints, and source loading;
+- `preparation.py` owns identity, client, family-set loading, and joined-table preparation;
+- `representations.py` owns representation alignment and feature preparation;
+- `partitions.py` and `cache.py` own deterministic splits and reusable preprocessing.
 
 `experiment/`
 
-- controlled exposure;
-- no-family and peer-family conditions;
-- models;
-- training;
-- calibration/thresholding;
-- evaluation;
-- metric computation.
+- `planning.py` owns planned runs and target resolution; `design.py` owns experiment arms, exposure, and substitution design;
+- `models.py` and `training.py` own fitting and training;
+- `evaluation.py` owns calibration, thresholding, and metric computation.
 
 `analysis/`
 
-- collaboration decomposition;
-- dose response;
-- feature novelty;
-- robustness/sensitivity;
-- statistics;
-- claim/promotion gates.
+- `decomposition.py` owns decomposition and dose estimands;
+- `diagnostics.py` owns scientific diagnostic tables and checks, while `diagnostic_synthesis.py` owns cross-diagnostic associations and synthesis;
+- `extensions.py` owns extension effects, novelty, and family-level extension analyses;
+- `post_confirmatory.py` owns post-confirmatory analyses, robustness/fairness selection, and scientific claim gates;
+- `statistics.py` owns shared statistical primitives.
 
 `reporting/`
 
@@ -736,27 +712,13 @@ Keep `src/` compact.
 - figures;
 - evidence promotion.
 
+The project-level `provenance.py` owns Git revision and source-cleanliness checks shared by doctor and evidence promotion.
+
 `workflows/`
 
 - CLI-facing orchestration only.
 
-Extension modules (`extension-b`, see 23.2):
-
-- `experiment/substitution.py`: row-count-preserving substitution (exact-dose draws, placebo family choice and row selection);
-- `experiment/designs.py`: trains the exact-dose and placebo-robust arms and their validation checks;
-- `analysis/hidden_family.py`: post-hoc heterogeneity components, aggregate-metric masking, negative-transfer decomposition;
-- `analysis/large_family.py`: large-family CTK tables, association and precision summary;
-- `analysis/extension_effects.py`: shared seed-paired contrasts, BCa/Wilcoxon/Holm helpers;
-- `analysis/dose_extension.py`, `analysis/controls_extension.py`: exact-dose and placebo/robust effects, curves, consistency, verdicts;
-- `workflows/{posthoc,largefamily,doseextension,controlsextension}.py`: one CLI command each.
-
-Representation-replication modules (EXT-REP, see 23.2):
-
-- `src/ctk_android/data/mcndroid.py`: scans, fingerprints and loads the McNdroid static, call-graph and report-JSON shards (`init_2013` processed data), aligned to LAMDA rows by sha256;
-- `src/ctk_android/data/representation.py`: builds the overlap namespace, feature caches and per-seed partitions; loads raw representation features at run time and names the transform rule per representation (`transform_rule`); every learned transform is fitted in `src/ctk_android/experiment/models.py` (`fit_transform`) from the training rows of the model being trained and carried by its `Scorer`;
-- `analysis/representation_extension.py`: recall and CTK contrasts per representation, verdicts, eligibility table;
-- `workflows/representationprep.py`: the `representation-preprocess` stage;
-- `workflows/representationextension.py`: the `representation-extension` command.
+Extension and representation behavior remains unchanged; those responsibilities now live in the shared modules above. Four workflow modules serve all 14 CLI commands: `maintenance.py` handles doctor, plan, and status; `preprocess.py` handles preprocessing commands; `run.py` handles run and smoke; and `report.py` handles report, posthoc, large-family, dose, controls, representation, and diagnostics commands. Tests remain grouped by behavior rather than mirroring the consolidated production modules.
 
 ### 5.2 Avoid package proliferation
 

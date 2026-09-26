@@ -1,7 +1,7 @@
 import polars as pl
 import pytest
 
-from ctk_android.analysis.dose_response import (
+from ctk_android.analysis.decomposition import (
     dose_curve,
     dose_levels,
     dose_recall,

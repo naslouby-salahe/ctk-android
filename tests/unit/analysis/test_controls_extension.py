@@ -2,7 +2,7 @@ import numpy as np
 import polars as pl
 import pytest
 
-from ctk_android.analysis.controls_extension import (
+from ctk_android.analysis.extensions import (
     controls_effects,
     controls_experiments,
     controls_verdicts,
