@@ -1,0 +1,336 @@
+import ast
+from collections import Counter
+from pathlib import Path
+
+from tests.architecture.source_index import (
+    CONFIG_MODULE,
+    ENUMS_MODULE,
+    REPO_ROOT,
+    TYPES_MODULE,
+    location,
+    parse,
+    source_files,
+)
+
+GENERIC_CONSTRAINED_ALIASES = {
+    "NonNegativeInt",
+    "PositiveInt",
+    "SignedInt",
+    "NonNegativeFloat",
+    "PositiveFloat",
+    "FiniteFloat",
+    "UnitInterval",
+    "OpenUnitInterval",
+}
+ENUM_BASES = {"Enum", "StrEnum", "IntEnum", "Flag"}
+PRIMITIVE_ALIAS_NAMES = {"int", "float", "str", "bool", "Any", "object", "dict"}
+
+
+def _semantic_alias_name(target: ast.expr) -> bool:
+    return isinstance(target, ast.Name) and target.id[:1].isupper() and not target.id.isupper()
+
+
+def _is_alias_target(node: ast.stmt) -> bool:
+    if isinstance(node, ast.Assign):
+        return (
+            len(node.targets) == 1
+            and _semantic_alias_name(node.targets[0])
+            and isinstance(
+                node.value,
+                ast.Subscript | ast.BinOp | ast.Name | ast.Attribute | ast.Call,
+            )
+        )
+    if isinstance(node, ast.AnnAssign):
+        return _semantic_alias_name(node.target) and (
+            (isinstance(node.annotation, ast.Name) and node.annotation.id == "TypeAlias")
+            or (isinstance(node.annotation, ast.Attribute) and node.annotation.attr == "TypeAlias")
+        )
+    if isinstance(node, ast.TypeAlias):
+        return _semantic_alias_name(node.name)
+    return False
+
+
+def _enum_classes(path: Path) -> list[ast.ClassDef]:
+    return [
+        node
+        for node in ast.walk(parse(path))
+        if isinstance(node, ast.ClassDef)
+        and any(isinstance(base, ast.Name) and base.id in ENUM_BASES for base in node.bases)
+    ]
+
+
+def _members(enum: ast.ClassDef) -> dict[str, str]:
+    return {
+        item.targets[0].id: item.value.value
+        for item in enum.body
+        if isinstance(item, ast.Assign)
+        and isinstance(item.targets[0], ast.Name)
+        and isinstance(item.value, ast.Constant)
+        and isinstance(item.value.value, str)
+    }
+
+
+def _primitive_aliases(tree: ast.Module) -> list[str]:
+    definitions: dict[str, ast.expr] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target, value = node.targets[0], node.value
+        elif isinstance(node, ast.AnnAssign):
+            target, value = node.target, node.value
+        elif isinstance(node, ast.TypeAlias):
+            target, value = node.name, node.value
+        else:
+            continue
+        if (
+            value is not None
+            and isinstance(target, ast.Name)
+            and target.id[:1].isupper()
+            and not target.id.isupper()
+        ):
+            definitions[target.id] = value
+
+    def primitive_names(expression: ast.expr, visited: frozenset[str] = frozenset()) -> set[str]:
+        names = {
+            candidate.id if isinstance(candidate, ast.Name) else candidate.attr
+            for candidate in ast.walk(expression)
+            if isinstance(candidate, ast.Name | ast.Attribute)
+        }
+        nested = {
+            alias
+            for alias in names & (definitions.keys() - visited)
+            for alias in primitive_names(definitions[alias], visited | {alias})
+        }
+        return names | nested
+
+    return [
+        name
+        for name, expression in definitions.items()
+        if primitive_names(expression, frozenset({name})) & PRIMITIVE_ALIAS_NAMES
+        and isinstance(expression, ast.Subscript | ast.BinOp | ast.Name | ast.Attribute | ast.Call)
+    ]
+
+
+def test_type_aliases_are_defined_only_in_types_py() -> None:
+    offenders = [
+        location(path, node.lineno)
+        for path in source_files(TYPES_MODULE)
+        for node in parse(path).body
+        if _is_alias_target(node)
+    ]
+    assert not offenders, offenders
+
+
+def test_primitive_alias_laundering_mutations_are_detected() -> None:
+    snippets = (
+        "PolicyLike = str\n",
+        "ClientLike = int\n",
+        "import builtins\nClientLike = builtins.int\n",
+        "Payload = dict[str, Any]\n",
+        "Payload = typing.Mapping[str, object]\n",
+        'PolicyLike = NewType("PolicyLike", str)\n',
+        "CountLike = typing.Annotated[int, Field(gt=0)]\n",
+        "from typing import TypeAlias\nClientLike: TypeAlias = int\n",
+        "type ClientLike = int\n",
+        "Primitive = int\nClientLike = Primitive\n",
+    )
+    for snippet in snippets:
+        assert _primitive_aliases(ast.parse(snippet))
+
+
+def test_type_alias_laundering_scanner_detects_qualified_and_modern_aliases() -> None:
+    snippets = (
+        "import builtins\nClientLike = builtins.int\n",
+        "from typing import TypeAlias\nClientLike: TypeAlias = int\n",
+        "type ClientLike = int\n",
+    )
+    for snippet in snippets:
+        tree = ast.parse(snippet)
+        assert any(_is_alias_target(node) for node in tree.body)
+
+
+def test_semantic_alias_to_a_named_domain_type_is_valid() -> None:
+    assert not _primitive_aliases(ast.parse("ClientSelection = ClientCount\n"))
+
+
+def _is_torch_state_dict_alias(tree: ast.Module) -> bool:
+    return any(
+        isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "StateDict"
+        and ast.unparse(node.value) == "dict[str, torch.Tensor]"
+        for node in tree.body
+    )
+
+
+def test_torch_state_dict_external_mapping_exception_is_exact_and_tested() -> None:
+    assert _is_torch_state_dict_alias(parse(TYPES_MODULE))
+    assert not _is_torch_state_dict_alias(ast.parse("StateDict = dict[str, object]\n"))
+
+    modules = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in source_files()
+        if any(
+            isinstance(node, ast.Name) and node.id == "StateDict" for node in ast.walk(parse(path))
+        )
+    }
+    assert modules == {
+        "src/ctk_android/types.py",
+        "src/ctk_android/experiment/models.py",
+        "src/ctk_android/experiment/training.py",
+    }
+
+
+def test_constrained_scalars_and_newtypes_only_in_types_py() -> None:
+    offenders: list[str] = []
+    for path in source_files(TYPES_MODULE):
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                keywords = {keyword.arg for keyword in node.keywords}
+                if node.func.id == "NewType" or (
+                    node.func.id == "Field" and keywords & {"ge", "gt", "le", "lt"}
+                ):
+                    offenders.append(location(path, node.lineno))
+    assert not offenders, offenders
+
+
+def test_generic_constrained_aliases_are_not_referenced_outside_types_py() -> None:
+    offenders: list[str] = []
+    for path in source_files(TYPES_MODULE):
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.Name):
+                names = (node.id,)
+            elif isinstance(node, ast.Attribute):
+                names = (node.attr,)
+            elif isinstance(node, ast.ImportFrom):
+                names = tuple(alias.name for alias in node.names)
+            else:
+                continue
+            for name in names:
+                if name in GENERIC_CONSTRAINED_ALIASES:
+                    offenders.append(f"{location(path, node.lineno)} references {name}")
+    assert not offenders, offenders
+
+
+def test_qualified_and_renamed_constrained_alias_mutations_are_detected() -> None:
+    snippets = (
+        "import ctk_android.types\nvalue: ctk_android.types.NonNegativeInt\n",
+        "from ctk_android.types import NonNegativeInt as Count\nvalue: Count\n",
+        "from ctk_android.types import PositiveFloat as Magnitude\nvalue: Magnitude\n",
+    )
+    for snippet in snippets:
+        tree = ast.parse(snippet)
+        names = {
+            node.id if isinstance(node, ast.Name) else node.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name | ast.Attribute)
+        }
+        imported = {
+            alias.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
+        }
+        assert names & GENERIC_CONSTRAINED_ALIASES or imported & GENERIC_CONSTRAINED_ALIASES
+
+
+def test_aliases_in_types_py_are_unique() -> None:
+    names = Counter(
+        node.targets[0].id
+        for node in parse(TYPES_MODULE).body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and _is_alias_target(node)
+    )
+    duplicated = [name for name, count in names.items() if count > 1]
+    assert not duplicated, duplicated
+
+
+def test_enums_are_defined_only_in_enums_py() -> None:
+    offenders = [
+        f"{location(path, enum.lineno)} {enum.name}"
+        for path in source_files(ENUMS_MODULE)
+        for enum in _enum_classes(path)
+    ]
+    assert not offenders, offenders
+
+
+def test_no_duplicate_enums_for_one_concept() -> None:
+    enums = _enum_classes(ENUMS_MODULE)
+    names = Counter(enum.name for enum in enums)
+    assert not [name for name, count in names.items() if count > 1]
+    value_sets: dict[frozenset[str], str] = {}
+    duplicates: list[str] = []
+    for enum in enums:
+        values = frozenset(_members(enum).values())
+        if not values:
+            continue
+        if values in value_sets:
+            duplicates.append(f"{enum.name} duplicates {value_sets[values]}")
+        value_sets[values] = enum.name
+    assert not duplicates, duplicates
+
+
+def _used_enum_members() -> tuple[set[tuple[str, str]], set[str]]:
+    members: set[tuple[str, str]] = set()
+    iterated: set[str] = set()
+    for path in source_files(ENUMS_MODULE):
+        for node in ast.walk(parse(path)):
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                members.add((node.value.id, node.attr))
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                iterated.add(node.id)
+    return members, iterated
+
+
+def test_every_enum_member_is_used_by_code_or_configuration() -> None:
+    configuration = " ".join(
+        path.read_text(encoding="utf-8") for path in (REPO_ROOT / "configs").glob("*.yaml")
+    )
+    used, referenced = _used_enum_members()
+    selectable = {node.id for node in ast.walk(parse(CONFIG_MODULE)) if isinstance(node, ast.Name)}
+    unused = [
+        f"{enum.name}.{member}"
+        for enum in _enum_classes(ENUMS_MODULE)
+        for member, value in _members(enum).items()
+        if (enum.name, member) not in used
+        and enum.name not in selectable
+        and not (
+            enum.name in referenced and (enum.name, member) not in used and _iterated(enum.name)
+        )
+        and value not in configuration
+    ]
+    assert not unused, unused
+
+
+def _iterated(name: str) -> bool:
+    for path in source_files(ENUMS_MODULE):
+        for node in ast.walk(parse(path)):
+            if (
+                isinstance(node, ast.For)
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == name
+            ):
+                return True
+            if (
+                isinstance(node, ast.comprehension)
+                and isinstance(node.iter, ast.Name)
+                and node.iter.id == name
+            ):
+                return True
+            if (
+                isinstance(node, ast.Subscript)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == name
+            ):
+                return True
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"list", "set", "tuple", "sorted"}
+                and node.args
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id == name
+            ):
+                return True
+    return False

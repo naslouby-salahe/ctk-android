@@ -1,0 +1,27 @@
+lamda_release: var_thresh_0.01
+expected_rows: 1008381
+expected_features: 925
+malware_min_vt: 4
+benign_vt: 0
+singleton_prefix: "singleton:"
+unknown_labels: [unknown, benign]
+play_era_boundary: "2019-06"
+partition:
+  fit: 0.6
+  calibration: 0.2
+  test: 0.2
+  attempts: 16
+family_selection:
+  candidate_min_total_support: 600
+  set_size: 8
+eligibility:
+  primary: {peer_min_fit: 150, federation_min_test: 50, own_domain_min_test: 15, target_min_remaining_fit: 500, target_min_fit: 20}
+  low: {peer_min_fit: 100, federation_min_test: 30, own_domain_min_test: 15, target_min_remaining_fit: 500, target_min_fit: 20}
+  high: {peer_min_fit: 300, federation_min_test: 100, own_domain_min_test: 15, target_min_remaining_fit: 500, target_min_fit: 20}
+  dose: {peer_min_fit: 200, federation_min_test: 50, own_domain_min_test: 15, target_min_remaining_fit: 500, target_min_fit: 20}
+  smoke: {peer_min_fit: 20, federation_min_test: 5, own_domain_min_test: 2, target_min_remaining_fit: 50, target_min_fit: 3}
+natural_scarcity:
+  max_target_share: 0.05
+  peer_min_fit: 150
+  own_domain_min_test: 15
+smoke_family_set_size: 2
