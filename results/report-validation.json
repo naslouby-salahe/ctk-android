@@ -1,0 +1,29 @@
+{
+  "validations": [
+    {
+      "check": "results-digests-match",
+      "passed": true,
+      "detail": "215 manifest entries, 0 missing or changed"
+    },
+    {
+      "check": "results-files-all-in-a-manifest",
+      "passed": true,
+      "detail": "0 files under results/ are not listed in any manifest"
+    },
+    {
+      "check": "results-every-study-recorded",
+      "passed": true,
+      "detail": "6 of 6 studies recorded in extension provenance"
+    },
+    {
+      "check": "results-confirmatory-evidence-complete",
+      "passed": true,
+      "detail": "0 expected confirmatory evidence files are absent"
+    },
+    {
+      "check": "results-analysis-sources-clean",
+      "passed": true,
+      "detail": "analysis revision f6302f7906824945731dadbbeb44357f3d025aaf, sources clean True"
+    }
+  ]
+}

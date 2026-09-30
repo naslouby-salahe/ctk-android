@@ -1,0 +1,30 @@
+{
+  "mode": "extension",
+  "files": [
+    {
+      "name": "extension/run-index.parquet",
+      "digest": "7081f23d09478300cede21aae6d383889a17c794381b763c75e57864a3e8e5de",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "extension/permutation-control-audit.parquet",
+      "digest": "fdb2fdcddf5ce5d7b202b6ed4ce8536c4364d671e503f1e6522ba2d9209eed3a",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "extension/paired-effects.parquet",
+      "digest": "71db575711490a51ec3e1e3df1877a9bd9cf79f17392f198963000bc524b432f",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "extension/permutation-control-audit.csv",
+      "digest": "6464533f1a630d0bfe0e31d83691c2b6c76b8b0623fb44edc45edba46ffd72fa",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "extension/code.json",
+      "digest": "82d3b599636c771d0120fe05b55d1e43b9a89992b36af5407f3015c08880bfe6",
+      "evidence_class": "D-prospective-extension"
+    }
+  ]
+}

@@ -1,0 +1,455 @@
+{
+  "mode": "confirmatory",
+  "files": [
+    {
+      "name": "evidence/run-index.parquet",
+      "digest": "50bb36ba947ebfab7c205dabefbaa0ed7e38009feea1ad217c5a709ed3ce65b9",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/arm-metrics.parquet",
+      "digest": "6e51430e165e44329285c277ff8cb45e41a106eb9ff58fb5acf7f1e22ea468ed",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/collaboration-decomposition.parquet",
+      "digest": "ef00899d40a4727b2de95b70cb7235b97f114169b74470aac219a65d4d2ccef1",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/family-rescue.parquet",
+      "digest": "6f23dcc4e6db3fd5506ba2f20d12969d83fbe0fea5022dc7c66faae6bd4c7a99",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/peer-dose-response.parquet",
+      "digest": "686935f391b6e1e4460f82337e1a68e38b56dfa15ad29d8baaa17ba318bb7e24",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/feature-novelty.parquet",
+      "digest": "c7d7b7d2655cf1965b85f52b0532e1d860504b29a3b7f0a79b9539e4aac3c11f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/robustness.parquet",
+      "digest": "43c7d96fa5be3ce2b086d3463d38c7a8a4509005e28a968767d0b30c92122f4c",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/client-ctk-analysis.parquet",
+      "digest": "6314959ea51c65e06a2d9da467362b9b071304a4cb8c878abc09d0513ac42627",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/family-client-ctk.parquet",
+      "digest": "3da2a29377a922b4a5fd1e13d9a505a44de44f25a03e5154b10599770c5ef710",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/ctk-variance-components.parquet",
+      "digest": "46c77cb515ed85f526afa6c4cab2e5fb2624ce6108c5d26a529b2264264cd960",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/family-associations.parquet",
+      "digest": "4c08277244b7d4181aad879515f698c74afcc0774416b27cf0b58935b6526f37",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/anchored-worst-client.parquet",
+      "digest": "72ee1793e9c53e8f60aa7eab25db13ebb1b233706ae975230c44b5aae1f73fa0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/anchored-client-selection.parquet",
+      "digest": "0faf8922be3d13d4359158c0805f05292d4f007e20e963db7437127bdb2edd99",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/federated-arm-tradeoff.parquet",
+      "digest": "b5b165b362fb43d07b693be166a18dfccbed9bc49001df63e9a3ccd12bcef21b",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/ctk-robustness-synthesis.parquet",
+      "digest": "7e1632d74af2497973ae38c45007c394259b4cfe8a37742623defbc9ef52390e",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/family-mechanism-patterns.parquet",
+      "digest": "efa049453e06bac7557724647dcb4afb12080654a4c54fc1fc0780059b26b071",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/natural-scarcity-comparison.parquet",
+      "digest": "e8ca4fb26b4fae3605525883b74d72b5e53f96684ed3f086dc4b082bb8dc038f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/permutation-control-audit.parquet",
+      "digest": "4bdc274f5939aec08343bf8594dbe6dc6223769b7b27190a1f24e3e8a770710c",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/mechanism-headroom.parquet",
+      "digest": "598f461e5de09e32072b18f96f77d85d8782294ad62f077d6ffac533b007c4b0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/operating-point-fidelity.parquet",
+      "digest": "fca5bee59d3e5f37b064a6ffecdce97570789eccb41dbca51802ef95ed9ad724",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/operating-calibration.parquet",
+      "digest": "ca5b9e054e3dbf5cfc8154051f7a71087b83b59a2db0f1cf4ca91c15737b8459",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/operating-client-summary.parquet",
+      "digest": "0d35d05054cff9494ab15852968fefc4285e17022916bb5b53dde4f2f2a79eac",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/training-convergence.parquet",
+      "digest": "6267788243fcdcc27009fe015dc8b5dcc25775503075e06543bd33f35e1e0d1f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "statistics/paired-effects.parquet",
+      "digest": "19311f5f932a6e9103f034c41f823055df9d2c281e2c8e803d7ffef40cd47b7d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "statistics/cluster-bootstrap.parquet",
+      "digest": "c183e9d33c8d704ac2c8a661d3efcddccd909897b06579bab94741b054ff665e",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "gates/seed-status.csv",
+      "digest": "0f5fd19a466ec4007c68d3455fbcc5e267e628aae75ca06cecff699dd12cc814",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/family-client-ctk.csv",
+      "digest": "1fbabbe840752e25a2f07b70c1baa0591113d078a59c4a2f0695169dbbcb25ef",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/ctk-variance-components.csv",
+      "digest": "cbe78499b9c34d24d66213b928abe4585f69ff674009c60282d2179d08f3a8a4",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/family-associations.csv",
+      "digest": "17af779625cb06f09b9fb5bea7307bdf042840f3aaf7146e70eceb8e984beda8",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/client-ctk-analysis.csv",
+      "digest": "bb6701553120c67d27a101c8ad601db6fcad84236a9304ec99cd4e21e6aeca12",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/anchored-worst-client.csv",
+      "digest": "ae1532b8bb800b208feb61757d74d82c10909ce911456c818894a64f9df75721",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/anchored-client-selection.csv",
+      "digest": "dff7444e372d13728e755e44f39bf0c7f7a18cf5a460b01878f38b83dc8e8b32",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/federated-arm-tradeoff.csv",
+      "digest": "987f47fc2f21d832c877f20ea381ccf28dbc27f54a6978930f92d39bfaa6f73f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/ctk-robustness-synthesis.csv",
+      "digest": "d40e113bc5e63a922de87cd7b1bcbd35300873387e45e7ce32c885af0bdb05ba",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/family-mechanism-patterns.csv",
+      "digest": "8a830f830cf0e67223328c5d3fc7f8fd8edb2bde636c6b6a7950ecf34127c7d7",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/natural-scarcity-comparison.csv",
+      "digest": "2c1e4d81ac3d357a8fe440c2aa7566feb44b1bc2a197b006b1e23cfd839ec415",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/permutation-control-audit.csv",
+      "digest": "5aaccfedf8eec5ff20d250f2c68541cd84653daaa684040b764291cf4d8a5c99",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/mechanism-headroom.csv",
+      "digest": "d2005e9ae377be10f364fc186f4c30a331b146bc89312f4cc566fa6a62146886",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/operating-point-fidelity.csv",
+      "digest": "5c789c9011190b39cb67013f656aaa45bedd4d42f12080e040c974a5145ca835",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/dataset-client-audit.csv",
+      "digest": "0aaf14a51f612805a4ed66a48261261d8c07f5f6b5090a6426d03383828d65e0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/primary-arm-comparison.csv",
+      "digest": "50dc7cc089ae3e9bbe96d8ba6802bc4abe2ab48956c60560dc780ac72c2e1633",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/collaboration-decomposition.csv",
+      "digest": "6da28f3bd46c701aa91bba5f7f7ce9c8e157b987b04e19f723eaa8ff643b1f58",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/peer-dose-response.csv",
+      "digest": "1f9d08c6cdb4ea5781152b3b3063bbf9c36ed64bc18f4d1b0fea147d519377ba",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/family-level.csv",
+      "digest": "065bf9b9823b27451cd9356882faae11c702428310e271f6c060fa93a22ab418",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "tables/robustness.csv",
+      "digest": "38d4e097af86a1e533865325c7a4c442a9ef25ef5fa2942d0944a3aebbb873c2",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/collaboration-decomposition.pdf",
+      "digest": "ac64a1f063e0c75578353ae9f357f9a5dd17321e41c4ee057a8ff61cc4b93a6c",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/collaboration-decomposition.png",
+      "digest": "0e9abfd7c491d74fd501fd72088625c559c043e8768522919aba3cf70f61efde",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/mean-versus-worst-client.pdf",
+      "digest": "9ee22b21f26a240078e57ba1da61f00016fb0ac0b1b5d6e7a6b0042700e11eb0",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/mean-versus-worst-client.png",
+      "digest": "e73a966063dc68167446a3d8eb2a55c8cbb438537e07b66e72b772e371d32574",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/own-domain-versus-federation-wide.pdf",
+      "digest": "ab8d8f82b8daa4cf81c49ccad7fc74eeb6574d45b27a43a3ffbc6eb678c80a80",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/own-domain-versus-federation-wide.png",
+      "digest": "e5ec0a4680627ce9b16406d3aa0466b558a37fd326ecc15743e9ee981e32ae7e",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/peer-dose-response.pdf",
+      "digest": "88c56ab88cbe7d209f90f7733dcc5637bc9efbc220c8283184410574982b9d3d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/peer-dose-response.png",
+      "digest": "97be6ac2289e0dba3aa394902e92929f58242f3a8036ab5801a7122f5ad95d82",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/family-rescue-map.pdf",
+      "digest": "4e0e03af34507327cf7435a8bca8a2d73d0f0187778a30b863fd6df469c8e163",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/family-rescue-map.png",
+      "digest": "c2b0995bb8572f9dc1cece9fa286c544f0fb33357843c6c32190c2d1a3938037",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/feature-novelty-versus-ctk-gain.pdf",
+      "digest": "01dd3a76f510afe1de415a5bb78bb43dfa11c47dd5a7a4abab416120682d6881",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/feature-novelty-versus-ctk-gain.png",
+      "digest": "4fb41bd1aea9d70715481c34e0a0637ed898e4fabdb5ba2e22d3054aeb0f6a43",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/known-versus-unseen-tradeoff.pdf",
+      "digest": "c836e46a16f62946427b1af57a062d09538daaf544a3f5bd226efe626d1b823e",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/known-versus-unseen-tradeoff.png",
+      "digest": "8077d7a6a1ee687222c2aacae14d365c56f3f20f17bbc15284cf1b0dc1fc52cd",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/client-ctk-analysis.pdf",
+      "digest": "75983a35f2fe7e88139bb1568e660e4679a6e20bf250830c3c2c90ddbc1e2792",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/client-ctk-analysis.png",
+      "digest": "34955d3558d62298700788f8d9a1e6af8387744bdf4e5fa263802b5b3a709d7f",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/ctk-robustness-forest.pdf",
+      "digest": "e5e4928fe193f1a20b57d32231fd7fdc45d7ec7d21ac12c79ba24fd6fee3c859",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/ctk-robustness-forest.png",
+      "digest": "aa70256acadc14f17797651a160614869f1b60d1411328aa1a995f404507b39a",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/federated-arm-tradeoff.pdf",
+      "digest": "8ecdc9c47d349f40f9e9d3315fffe25d224986c72c353e6d30288de349455143",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/federated-arm-tradeoff.png",
+      "digest": "657efedf2678ba8053a117b2f43c14e8e780fc8b6311431afde3eb9d845d2603",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/natural-versus-controlled.pdf",
+      "digest": "3467c3d86d11f31db3944f63b36c31e6218425282eadf22495b091a51a05475d",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "figures/natural-versus-controlled.png",
+      "digest": "03f43c3bd392d983c7f025ef88e8ecf0c836a10c00c895b6f9c7407fe601b96e",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "provenance/source-data.json",
+      "digest": "f73ae9b5bc916b1a8b8c0ae5497eeda0d98866379f8bee46788475a60615b67a",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "provenance/protocol.json",
+      "digest": "eec255c775f99ef08d49fcc3003562602b9a7aaafba95e13a354e2857c1215c1",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "provenance/environment.json",
+      "digest": "900c271ded901e82f3155d475553d9f499f40b5e54b8b21b5328eba35e0c4db2",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "provenance/code.json",
+      "digest": "82d3b599636c771d0120fe05b55d1e43b9a89992b36af5407f3015c08880bfe6",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "provenance/run-provenance.json",
+      "digest": "e781bdbf1c77845ae1eb6f20a1eec10f1ee52deab519fd8d3102db8d62825d5b",
+      "evidence_class": "A-B-C-confirmatory-seeds-row-labelled"
+    },
+    {
+      "name": "evidence/ctk-heterogeneity-components.parquet",
+      "digest": "d75fcb0030dc6418d871745adccf96dc355ac2246be5ab42b3b379dc17442f52",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/ctk-heterogeneity-components.csv",
+      "digest": "430772bcb4063d522f9a86675ed025ecb5d4810081e60e9f005abb2506ff0d39",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "evidence/aggregate-metric-masking.parquet",
+      "digest": "5a716620856f2677c90818060ecf8f2f81e3db1db8043c5749672c87ef1cc54f",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/aggregate-metric-masking.csv",
+      "digest": "e592c0930972a0ff0fdb3559c41d26a5808dd916373438e3ab3c39186f41ff9f",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "evidence/negative-transfer-decomposition.parquet",
+      "digest": "07d292f53690d94ddc59d6fe681ce2076eaf53e031a2fa7087e87620337338f0",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "tables/negative-transfer-decomposition.csv",
+      "digest": "746d804cc63cd69f085d1e9b6cdfae78921575bbd4b1088ca9093c40754330db",
+      "evidence_class": "C-post-confirmatory-evidence-preserving"
+    },
+    {
+      "name": "figures/exact-dose-response.pdf",
+      "digest": "3ff530b41120e2e1b6cc502d86dc60fb6c83ecfe5c0f171aa06c0b31b7c2db4d",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/exact-dose-response.png",
+      "digest": "d6f66a0c2ef9b891552bbb63ec6c0ed26b7cb3e0de26f8a222b7585383d3abd1",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/placebo-negative-controls.pdf",
+      "digest": "f6f1d1fc469e2b588a03894fb5b0aa9c8c80cc49b5bb0a5bb01d46a548247a29",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/placebo-negative-controls.png",
+      "digest": "e11bb2ba96073681685805367a8fe78beebcb189f8eae63375560949b6945026",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/robust-aggregation-controls.pdf",
+      "digest": "9fd68939777362415a51a49cf3e079cc4a9154da1dbdb05171c56ff511681762",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/robust-aggregation-controls.png",
+      "digest": "01ecdffe090b8f7111c933168590b5132a56b074ae285d19dd2ecd26137d872e",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/large-family-ctk-heterogeneity.pdf",
+      "digest": "520adbf3939e508e23d4a03fe8de3dcc0b839262b423df01e398022182b8713e",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/large-family-ctk-heterogeneity.png",
+      "digest": "782ac821662da4cba4946062eef8619462386f7546d7dd826c798ce05435e1ef",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/representation-comparison.pdf",
+      "digest": "a4a6d13e95192008850a5d15c8329f707b2e7b804873b2c898ed0df23319a2f5",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/representation-comparison.png",
+      "digest": "234ba3261af5822e02fa7ceac8a76d38587a666d3e94f4a6c71af6005771b898",
+      "evidence_class": "D-prospective-extension"
+    },
+    {
+      "name": "figures/fpr-client-diagnostics.pdf",
+      "digest": "7bae3062b0fadd755090751f3de9bcfe04b3d79796c88f622a071012ebeb1f47",
+      "evidence_class": "D-post-hoc-diagnostic"
+    },
+    {
+      "name": "figures/fpr-client-diagnostics.png",
+      "digest": "5d37a906a8726b89bcfa745188dd1028d76cf2d2be1e35576012a41a9152ee4f",
+      "evidence_class": "D-post-hoc-diagnostic"
+    }
+  ]
+}

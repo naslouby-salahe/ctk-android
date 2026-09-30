@@ -1,0 +1,9 @@
+experiment,population,families,spearman_rho,ci_low,ci_high,evidence_class
+controlled-exposure,own-domain,7,0.9285714285714288,0.411764705882353,1.0,D-post-hoc-diagnostic
+controlled-exposure,federation-wide,7,1.0,0.9999999999999999,1.0,D-post-hoc-diagnostic
+model-family-replication-linear,own-domain,7,0.42857142857142866,-0.7647058823529412,0.9230769230769231,D-post-hoc-diagnostic
+model-family-replication-linear,federation-wide,7,0.8214285714285715,-0.08695652173913043,1.0,D-post-hoc-diagnostic
+natural-scarcity,own-domain,7,0.8928571428571429,0.411764705882353,1.0,D-post-hoc-diagnostic
+natural-scarcity,federation-wide,7,0.8928571428571429,0.411764705882353,1.0,D-post-hoc-diagnostic
+replication-family-set,own-domain,7,0.42857142857142866,-0.6470588235294117,1.0,D-post-hoc-diagnostic
+replication-family-set,federation-wide,7,0.4642857142857144,-0.6470588235294117,1.0,D-post-hoc-diagnostic

@@ -1,0 +1,9 @@
+evidence_class,experiment,predictor,outcome_measure,rho,p_value,families
+C-post-confirmatory-evidence-preserving,controlled-exposure,local-recall,ctk-gain,-0.25,0.5887244480896832,7
+C-post-confirmatory-evidence-preserving,controlled-exposure,local-recall,total-gain,-0.14285714285714288,0.7599453002180927,7
+C-post-confirmatory-evidence-preserving,controlled-exposure,pooling-gain,ctk-gain,-0.5,0.2531699951003227,7
+C-post-confirmatory-evidence-preserving,controlled-exposure,pooling-gain,total-gain,0.25,0.5887244480896832,7
+C-post-confirmatory-evidence-preserving,replication-family-set,local-recall,ctk-gain,-0.28571428571428575,0.49272624501695717,8
+C-post-confirmatory-evidence-preserving,replication-family-set,local-recall,total-gain,-0.5476190476190477,0.16002564253889653,8
+C-post-confirmatory-evidence-preserving,replication-family-set,pooling-gain,ctk-gain,0.14285714285714288,0.735764859879812,8
+C-post-confirmatory-evidence-preserving,replication-family-set,pooling-gain,total-gain,0.5476190476190477,0.16002564253889653,8
