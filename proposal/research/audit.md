@@ -1,0 +1,31 @@
+# Final proposal audit
+
+## Scientific and implementation check
+
+The proposal was checked against current code and result artifacts, not just the early protocol prose. `src/ctk_android/analysis/decomposition.py` computes local, absent-everywhere and peer-present comparisons, with total, pooling and CTK gains for federation-wide, own-domain, family-macro and worst-client unseen recall. `src/ctk_android/experiment/evaluation.py` contains the evaluation/population logic. `src/ctk_android/enums.py` defines the exposure conditions and exact-dose/placebo validations. `configs/experiments.yaml` contains the controlled-exposure, natural-scarcity, dose, placebo, model-replication and representation experiments. The corresponding final files exist under `results/evidence/`, `results/extension-b/` and `results/tables/`; `results/report-validation.json` reports all five final artifact checks passed. `docs/results.md` is the latest self-contained numerical report. This proposal intentionally gives no private execution status or final effect size, avoiding a mismatch between earlier `docs/Roadmap.md` narrative values and later report artifacts.
+
+Specific proposal statements checked: clients are simulated market/era domains; detector outcome is binary; AVClass2 family is the evaluation stratum; target-client family removal is matched against peer-present and all-client-absent training; non-hidden rows replenish training counts; fit/calibration/test identity grouping covers package and identical feature vector; fixed client-calibrated FPR, own-domain/worst-client, exact peer dose, natural scarcity, permutation and wrong-family placebo are represented in code/config/result files. All are chapter-presentable. The proposal does not promise a new optimizer, deployed clients, secure aggregation, poisoning resistance, differential privacy, external validation, global zero-day testing, or dynamic execution traces.
+
+## Literature and novelty
+
+The strongest accessible prior contrast is CyberForce's unmatched absent-everywhere endpoint and peer-holder sweep in IoT mitigation. CELEST and FLEKD-IDS already demonstrate transfer on locally missing threats/classes. Recent Android FL papers and FID-SPA were checked again on 30 September 2026 (details in `format-and-call.md`). The proposal claims only a bounded attribution design in Android with a volume-matched no-family control and target-domain interpretation; it does not use priority words.
+
+## Call fit and proposal structure
+
+The chapter directly addresses Android malware detection, federated learning security/privacy, mobile benchmarking and reproducible evaluation, all named in the call. The narrative answers the chapter's problem, closest literature, research gap, concrete comparison, evidence, limitations, audience and chapter direction. The live IGI proposal form accepts proposal text; `.txt` and `.md` exports carry that text in copyable form. Word's manuscript requirement and LaTeX exclusion concern the eventual full chapter, not the local PDF or this text-field proposal.
+
+## Originality, language, references, hygiene
+
+Distinctive draft sentences were queried online; no matching source passage was identified. The phrasing was compared with `README.md`, `docs/Roadmap.md` and `docs/results.md`, retaining technical terminology while avoiding copied prose. Seven cited works were checked against primary publisher, proceedings, author or arXiv records; the full-text limitations of FID-SPA and FEDroid remain research boundaries, so they are not used as evidence for an absolute absence claim. The final prose avoids result-status claims and boilerplate. OpenAI Codex assistance is disclosed in the proposal; author verification and publisher policy remain required before submission.
+
+The fresh official `watermarks-remover` checkout at `/home/naslouby/Projects/watermarks-remover` was used through its local HTTP service. Source and PDF inspection found zero suspicious Unicode carriers and no detected AI/C2PA metadata. The TeX `pdfauthor` field was informational and intentionally retained. PDF metadata inspection is best-effort because the service lacks `exiftool` and `c2patool`; no visible-content-changing clean was justified. The text exports were inspected separately after generation. Hygiene does not establish human authorship or defeat publisher checks.
+
+## Typesetting and consistency
+
+The clean-directory build script succeeds; its final LaTeX log has no warnings or overfull/underfull boxes. The final three A4 pages were rendered and inspected individually for margins, headers, title, paragraph flow, page break, reference links and glyphs. Text extraction was checked for author-year citations and disclosure. `.tex` is the single content source for PDF, Markdown and text exports; the build script regenerates all three formats. No Git commit, branch, tag or PR was created.
+
+## Final APA and publication-metadata pass (30 September 2026)
+
+The seven in-text citation keys match the seven unnumbered APA references one-to-one. The narrative contains 1,160 words, excluding title, subtitle, disclosure and references. The 41-character subtitle meets IGI's 50-character guidance. No numbered citation or numbered reference remains in the Markdown export. The three-page PDF compiles without LaTeX warnings or box defects, and every page was rendered and visually inspected.
+
+Publisher-deposited Crossref DOI records confirm AndroZoo's four authors and pp. 468–471; CyberForce's eight authors and *IEEE TDSC* 22(4), 4398–4411; AVclass2's two authors and pp. 42–53; and FLEKD-IDS's six authors and IEEE ICC 2024, pp. 2034–2039, DOI [10.1109/ICC51166.2024.10622262](https://doi.org/10.1109/ICC51166.2024.10622262). The [ICLR 2026 paper](https://openreview.net/pdf?id=1FnCrZtBNQ) confirms LAMDA's seven authors and conference status. The [PMLR record](https://proceedings.mlr.press/v54/mcmahan17a.html) confirms the FedAvg paper's five authors, volume 54 and pp. 1273–1282. [arXiv](https://arxiv.org/abs/2205.11459) confirms CELEST's six authors and preprint status. The literature comparison remains bounded to the accessible work reviewed, and the controlled, volume-matched attribution gap remains defensible.
