@@ -26,8 +26,6 @@ This is an empirical measurement chapter with a defined threat and inference bou
 
 For *Advances in Mobile Application Privacy and Security*, the chapter joins two topics that are often discussed separately: mobile malware benchmarking and federated security analysis. Readers will receive a concrete evaluation design for deciding when peer threat evidence matters, together with family-aware, operating-point-aware evidence about its benefits and failures. The chapter will proceed from the attribution problem and closest prior contrasts to the exposure protocol, results by family and client, robustness checks, and implications for mobile threat-sharing practice. Its practical conclusion will be conditional: collaboration is valuable when it supplies evidence a client lacks and when the tested detector can use that evidence; total federated gain alone cannot establish either condition.
 
-**AI assistance disclosure.** OpenAI Codex assisted with organizing literature and drafting and editing this proposal. It did not generate or validate the scientific findings. The author retains responsibility for the submitted content.
-
 ## References
 
 Allix, K., Bissyandé, T. F., Klein, J., & Le Traon, Y. (2016). AndroZoo: Collecting millions of Android apps for the research community. In *Proceedings of the 13th International Conference on Mining Software Repositories* (pp. 468-471). ACM. https://doi.org/10.1145/2901739.2903508

@@ -26,20 +26,18 @@ This is an empirical measurement chapter with a defined threat and inference bou
 
 For Advances in Mobile Application Privacy and Security, the chapter joins two topics that are often discussed separately: mobile malware benchmarking and federated security analysis. Readers will receive a concrete evaluation design for deciding when peer threat evidence matters, together with family-aware, operating-point-aware evidence about its benefits and failures. The chapter will proceed from the attribution problem and closest prior contrasts to the exposure protocol, results by family and client, robustness checks, and implications for mobile threat-sharing practice. Its practical conclusion will be conditional: collaboration is valuable when it supplies evidence a client lacks and when the tested detector can use that evidence; total federated gain alone cannot establish either condition.
 
-AI assistance disclosure. OpenAI Codex assisted with organizing literature and drafting and editing this proposal. It did not generate or validate the scientific findings. The author retains responsibility for the submitted content.
-
 References
 
-Allix, K., Bissyandé, T. F., Klein, J., & Le Traon, Y. (2016). AndroZoo: Collecting millions of Android apps for the research community. In Proceedings of the 13th International Conference on Mining Software Repositories (pp. 468-471). ACM. https://doi.org/10.1145/2901739.2903508
+Allix, K., Bissyandé, T. F., Klein, J., & Le Traon, Y. (2016). AndroZoo: Collecting millions of Android apps for the research community. In Proceedings of the 13th International Conference on Mining Software Repositories (pp. 468–471). ACM. https://doi.org/10.1145/2901739.2903508
 
-Feng, C., Huertas Celdrán, A., Sánchez Sánchez, P. M., Kreischer, J., von der Assen, J., Bovet, G., Martínez Pérez, G., & Stiller, B. (2025). CyberForce: A federated reinforcement learning framework for malware mitigation. IEEE Transactions on Dependable and Secure Computing, 22(4), 4398-4411. https://doi.org/10.1109/TDSC.2025.3547005
+Feng, C., Huertas Celdrán, A., Sánchez Sánchez, P. M., Kreischer, J., von der Assen, J., Bovet, G., Martínez Pérez, G., & Stiller, B. (2025). CyberForce: A federated reinforcement learning framework for malware mitigation. IEEE Transactions on Dependable and Secure Computing, 22(4), 4398–4411. https://doi.org/10.1109/TDSC.2025.3547005
 
 Haque, M. A., Hossain, I., Kamol, M. M., Alam, M. J., Amalapuram, S. K., Talukder, S., & Rahman, M. S. (2026). LAMDA: A longitudinal Android malware benchmark for concept drift analysis. In The Fourteenth International Conference on Learning Representations. https://openreview.net/forum?id=1FnCrZtBNQ
 
-McMahan, H. B., Moore, E., Ramage, D., Hampson, S., & Agüera y Arcas, B. (2017). Communication-efficient learning of deep networks from decentralized data. In Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (Vol. 54, pp. 1273-1282). PMLR. https://proceedings.mlr.press/v54/mcmahan17a.html
+McMahan, H. B., Moore, E., Ramage, D., Hampson, S., & Agüera y Arcas, B. (2017). Communication-efficient learning of deep networks from decentralized data. In Proceedings of the 20th International Conference on Artificial Intelligence and Statistics (Vol. 54, pp. 1273–1282). PMLR. https://proceedings.mlr.press/v54/mcmahan17a.html
 
 Ongun, T., Boboila, S., Oprea, A., Eliassi-Rad, T., Hiser, J., & Davidson, J. (2022). CELEST: Federated learning for globally coordinated threat detection [Preprint]. arXiv. https://arxiv.org/abs/2205.11459
 
-Sebastián, S., & Caballero, J. (2020). AVclass2: Massive malware tag extraction from AV labels. In Proceedings of the 36th Annual Computer Security Applications Conference (pp. 42-53). ACM. https://doi.org/10.1145/3427228.3427261
+Sebastián, S., & Caballero, J. (2020). AVclass2: Massive malware tag extraction from AV labels. In Proceedings of the 36th Annual Computer Security Applications Conference (pp. 42–53). ACM. https://doi.org/10.1145/3427228.3427261
 
-Shen, J., Yang, W., Chu, Z., Fan, J., Niyato, D., & Lam, K.-Y. (2024). Effective intrusion detection in heterogeneous Internet-of-Things networks via ensemble knowledge distillation-based federated learning. In ICC 2024 - IEEE International Conference on Communications (pp. 2034-2039). IEEE. https://doi.org/10.1109/ICC51166.2024.10622262
+Shen, J., Yang, W., Chu, Z., Fan, J., Niyato, D., & Lam, K.-Y. (2024). Effective intrusion detection in heterogeneous Internet-of-Things networks via ensemble knowledge distillation-based federated learning. In ICC 2024 – IEEE International Conference on Communications (pp. 2034–2039). IEEE. https://doi.org/10.1109/ICC51166.2024.10622262

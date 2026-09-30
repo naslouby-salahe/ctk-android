@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Export the reader-facing proposal from its LaTeX source."""
+"""Export the Markdown proposal from its LaTeX source."""
 
 from __future__ import annotations
 
@@ -79,14 +79,8 @@ for line in lines:
         continue
     if line.startswith(r"\section*{"):
         parts.append("## " + latex_text(line[len(r"\section*{"):-1]))
-    elif line.startswith(r"{\small\textbf{AI assistance disclosure."):
-        parts.append(latex_text(line))
     elif line and not line.startswith("\\") and not line.startswith("{"):
         parts.append(latex_text(re.sub(r"\\cite([pt])\{([^}]+)\}", replace_citation, line)))
 
 markdown = "\n\n".join(parts) + "\n"
-plain = re.sub(r"\*\*([^*]+)\*\*", r"\1", markdown)
-plain = re.sub(r"\*([^*]+)\*", r"\1", plain)
-plain = re.sub(r"(?m)^##? ", "", plain)
 (ROOT / f"{NAME}.md").write_text(markdown, encoding="utf-8")
-(ROOT / f"{NAME}.txt").write_text(plain, encoding="utf-8")
