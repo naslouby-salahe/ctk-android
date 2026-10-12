@@ -1,5 +1,15 @@
 # Chapter verification
 
+## Current revision: 12 October 2026
+
+The revised `CTK-Android_Chapter.docx` contains **11,808 words and 49 pages**, as measured and rendered by Microsoft Word. All rendered pages were visually checked. The five tables remain editable and are kept together; table contents, three equations, and five embedded figures are unchanged. No AI-use statement was added.
+
+The independent audit reproduced the primary means, BCa intervals, and signed-rank/Holm results from stored seed differences and verified all 215 manifest-listed artifact digests. All 257 source/result files in the protection snapshot remained unchanged. No training campaign was rerun. Tests: **497 passed and one failed** across architecture and behavioral runs. The test-isolation failure and a secondary tied-rank Wilcoxon issue are documented in [audit.md](audit.md), along with the revisions and assessment of **84/100 before revision and 90/100 afterward**. These are editorial judgments, not acceptance guarantees.
+
+The current document supersedes the counts and no-inference-rerun statement in the historical report below. That report records the earlier preparation pass; its broader literature and file-baseline checks were not all repeated during this revision. The current audit is the authoritative account of this revision's scope and remaining issues.
+
+## Historical verification: 11 October 2026
+
 Verified 11 October 2026.
 
 - Manuscript: `CTK-Android_Chapter.docx`; Microsoft Word reports **11,949 words**, including references, captions, table text, and definitions; **49 rendered pages**. Text inside raster figures is not relied upon for the minimum.
