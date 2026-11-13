@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.10.10)  13 NOV 2026 21:18
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.10.10)  13 NOV 2026 22:24
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -842,49 +842,60 @@ Overfull \hbox (67.45793pt too wide) in paragraph at lines 276--277
 [14]
 LaTeX Font Info:    Font shape `T1/ntxtlf/b/it' will be
 (Font)              scaled to size 10.95pt on input line 289.
- [15] [16]
-<figures/Figure_4.png, id=103, 461.62462pt x 239.57504pt>
+<figures/Figure_2.png, id=90, 425.12828pt x 204.34343pt>
+File: figures/Figure_2.png Graphic file (type png)
+<use figures/Figure_2.png>
+Package pdftex.def Info: figures/Figure_2.png  used on input line 302.
+(pdftex.def)             Requested size: 469.75502pt x 225.79492pt.
+ [15] [16 <./figures/Figure_2.png>]
+<figures/Figure_3.png, id=106, 491.79735pt x 232.16737pt>
+File: figures/Figure_3.png Graphic file (type png)
+<use figures/Figure_3.png>
+Package pdftex.def Info: figures/Figure_3.png  used on input line 337.
+(pdftex.def)             Requested size: 469.75502pt x 221.76576pt.
+ [17]
+<figures/Figure_4.png, id=114, 461.62462pt x 239.57504pt>
 File: figures/Figure_4.png Graphic file (type png)
 <use figures/Figure_4.png>
-Package pdftex.def Info: figures/Figure_4.png  used on input line 338.
+Package pdftex.def Info: figures/Figure_4.png  used on input line 352.
 (pdftex.def)             Requested size: 469.75502pt x 243.80765pt.
- [17] [18 <./figures/Figure_4.png (PNG copy)>]
-<figures/Figure_5.png, id=114, 439.58228pt x 248.78947pt>
+ [18 <./figures/Figure_3.png (PNG copy)>] [19 <./figures/Figure_4.png (PNG copy
+)>]
+<figures/Figure_5.png, id=126, 439.58228pt x 248.78947pt>
 File: figures/Figure_5.png Graphic file (type png)
 <use figures/Figure_5.png>
-Package pdftex.def Info: figures/Figure_5.png  used on input line 357.
+Package pdftex.def Info: figures/Figure_5.png  used on input line 371.
 (pdftex.def)             Requested size: 469.75502pt x 265.87561pt.
- [19] [20 <./figures/Figure_5.png>] [21] [22] [23] [24] [25] [26
+ [20] [21 <./figures/Figure_5.png>] [22] [23] [24] [25] [26] [27
 
-] [27] [28] [29
+] [28] [29] [30
 
-]
-(./CTK-Android_Chapter.aux)
+] (./CTK-Android_Chapter.aux)
  ***********
 LaTeX2e <2023-11-01> patch level 1
 L3 programming layer <2020/03/25>
  ***********
 Package rerunfilecheck Info: File `CTK-Android_Chapter.out' has not changed.
-(rerunfilecheck)             Checksum: D3FED2E5F0E52696EA13293C1C8D8398;99.
+(rerunfilecheck)             Checksum: D3D99DB88837BBE8A75B26749961696B;100.
  ) 
 Here is how much of TeX's memory you used:
- 18405 strings out of 476071
- 284002 string characters out of 5792443
- 1938975 words of memory out of 5000000
- 39996 multiletter control sequences out of 15000+600000
- 632247 words of font info for 197 fonts, out of 8000000 for 9000
+ 18428 strings out of 476071
+ 284515 string characters out of 5792443
+ 1940975 words of memory out of 5000000
+ 40012 multiletter control sequences out of 15000+600000
+ 632475 words of font info for 199 fonts, out of 8000000 for 9000
  59 hyphenation exceptions out of 8191
- 80i,15n,117p,1374b,602s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 80i,15n,117p,1374b,604s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/newtx/NewTXMI.pfb></usr/sha
 re/texlive/texmf-dist/fonts/type1/public/newtx/txmiaX.pfb></usr/share/texlive/t
 exmf-dist/fonts/type1/public/newtx/txsys.pfb></usr/share/texlive/texmf-dist/fon
 ts/type1/public/newtx/ztmb.pfb></usr/share/texlive/texmf-dist/fonts/type1/publi
 c/newtx/ztmbi.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/newtx/ztmr.
 pfb></usr/share/texlive/texmf-dist/fonts/type1/public/newtx/ztmri.pfb>
-Output written on CTK-Android_Chapter.pdf (29 pages, 680293 bytes).
+Output written on CTK-Android_Chapter.pdf (30 pages, 793554 bytes).
 PDF statistics:
- 234 PDF objects out of 1000 (max. 8388607)
- 181 compressed objects within 2 object streams
- 38 named destinations out of 1000 (max. 500000)
- 23064 words of extra memory for PDF output out of 24883 (max. 10000000)
+ 243 PDF objects out of 1000 (max. 8388607)
+ 186 compressed objects within 2 object streams
+ 41 named destinations out of 1000 (max. 500000)
+ 23074 words of extra memory for PDF output out of 24883 (max. 10000000)
 

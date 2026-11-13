@@ -98,7 +98,7 @@ Hamid Hrimech: \href{mailto:hamid.hrimech@uhp.ac.ma}{hamid.hrimech@uhp.ac.ma}
 
 \section*{Abstract}
 
-\noindent Training collaboratively allows detecting malware families that weren't seen during local training. However when looking at federated vs local training it also factors in the benefits of pooling data. Complementary threat knowledge (CTK) was defined as the amount of recall when peers contain the hidden families compared to training without any clients having those families with the same budget. When testing with 4 android market/era clients from LAMDA and AndroZoo. With leakage aware partitioning, per client calibration and 10 confirmation seeds. FedAvg gave a CTK of 11.96% (95% BCa [9.15, 15.21]) when set to 5% FPR. There was still some effects from just pooling data which accounted for 1.51% (CI contained 0). Recall could be increased on unseen families in the client's own domain by 3.26%. Recall on other types of malware decreased by 3.61%. Controls using family permutation and wrong families showed minimal increase. CTK increased as peers had more of the hidden families.
+\noindent Training collaboratively allows detecting malware families that weren't seen during local training. However when looking at federated vs local training it also factors in the benefits of pooling data. Complementary threat knowledge (CTK) was defined as the amount of recall when peers contain the hidden families compared to training without any clients having those families with the same budget. When testing with 4 android market/era clients from LAMDA and AndroZoo. With leakage aware partitioning, per client calibration and 10 confirmation seeds. FedAvg gave a CTK of 11.96% (95% BCa [9.15, 15.21]). There was some effects from just pooling data which accounted for 1.51% (CI contained 0). Recall could be increased on unseen families in the client's own domain by 3.26%. Recall on other types of malware decreased by 3.61%. Controls using family permutation and wrong families showed minimal increase. CTK increased as peers had more of the hidden families.
 
 \clearpage
 
@@ -245,7 +245,7 @@ Primary inference & Seeds 100–109; paired effects; 9,999 BCa resamples; exact 
 
 There are also two other model classes used to see if the difference relies on the MLP. One being a linear classifier trained locally, centrally and with FedAvg. And the other a histogram gradient boosted tree learner trained with up to 100 estimators and depth of 6 trained locally and centrally.
 
-\subsection*{Calibration and Metrics} 
+\subsection*{Calibration and Metric Definitions} 
 
 The threshold for a given client and arm is calculated by the $(1-\alpha)$ empirical quantile of their benign calibration scores. Using the upper order statistic any application above the threshold is alerted. The primary cut-off is $\alpha = .05$. And the study explores sensitivities of .01 and .10. If there is not enough support in the client the study will have insufficient calibration if $n_{\mathrm{benign}} \times \alpha < 10$. There may be ties in scores and test/calibration population mismatch will lead to different FPRs that hover around the nominal value. So on the primary cut off the study requires the test FPR to be within 2 percentage points of the nominal value on the run level for client macro. Note that this does not restrict an individual clients FPR.
 
@@ -257,7 +257,7 @@ The AUROC and AP will be averaged over the clients. Taking the mean of each clie
 
 When the study states difference in recall it means the percentage point difference. All recall and false positives rates will be presented in percentages. Nominal False positives will refer to the rate aimed for when calibrating on the clients benign applications. Achieved FPR will be the rate on there benign test applications. All intervals will be reported as 95\% confidence intervals for the mean using BCa.
 
-\subsection*{Statistics} 
+\subsection*{Statistical Inference and Evidence Status} 
 
 The seeds for the confirmatory questions are 100-109. Each seed will have its partitions and targets fixed for each arm. So when looking at a difference the study will report on the mean, median, amount of positive seeds and standardized effect size. Calculating the 95\% CI using BCa and bootstrapping the seed differences 9,999 times. Since there are no zeros or ties in the absolute difference between arms for the primary questions the study is able to perform a 2-sided Wilcoxon Signed Rank Test. To determine if the distribution is centered around 0 or not. It does not tell if the mean difference is 0. The study corrects for multiple comparisons using Holms (Holm, 1979) on the three FedAvg questions of federation wide CTK, pooling and total at $\alpha$ = .05. All other learners and estimands are not corrected for as well as the family questions and diagnostics.
 
@@ -275,11 +275,11 @@ Extensions were done with new seeds. Seeds 200-209 used to calculate the p-value
 
 All code used to reproduce this paper and fingerprint of the data is available at \url{https://github.com/naslouby-salahe/ctk-android}. This paper is reporting on run rev. f6302f7906824945731dadbbeb44357f3d025aaf. This paper reports results from the last run that was completely deterministic with drop out fixed to a seed and kernels deterministic. Previous runs were also set up deterministically but could not reproduce results exactly bit for bit. Which produced FedAvg CTK numbers \textasciitilde{}11.7 points. These will not be discussed further and the current run will not pool these previous results. Source Data must be obtained from its provider.
 
-\section*{Results} 
+\section*{Experimental Results} 
 
-\subsection*{Controlled Exposure} 
+\subsection*{Primary Controlled-Exposure Results} 
 
-Having access to malware from peers increases unseen family recall as seen in table ~\ref{tab:3}. On average the fedavg model increased its federation-wide recall of unseen families when they were absent in every client from 52.41\% to 64.36\% when they were available through its peers. When the clients had local knowledge of these families it improved its unseen family recall to 50.90\%. Having all families represented resulted in 67.64\% unseen family recall. False positives stayed around the same level in each condition. Average FPR of 5.04\%, 5.09\%, 5.04\% respectively for the absent in all clients, present in peers, and present in all clients. There can be some clients that exceed the nominal value as one can see in Table 3 the mean worst client FPR when the peers knew the hidden families was 6.60\%. And the highest false positive was 9.89\%. 
+Having access to malware from peers increases unseen family recall as seen in table ~\ref{tab:3} and Figure~\ref{fig:2}. On average the fedavg model increased its federation-wide recall of unseen families when they were absent in every client from 52.41\% to 64.36\% when they were available through its peers. When the clients had local knowledge of these families it improved its unseen family recall to 50.90\%. Having all families represented resulted in 67.64\% unseen family recall. False positives stayed around the same level in each condition. Average FPR of 5.04\%, 5.09\%, 5.04\% respectively for the absent in all clients, present in peers, and present in all clients. There can be some clients that exceed the nominal value as one can see in Table 3 the mean worst client FPR when the peers knew the hidden families was 6.60\%. And the highest false positive was 9.89\%. 
 
 \begin{table}[!htbp]
 \caption{Primary Paired FedAvg Decomposition at Nominal 5\% FPR}\label{tab:3}
@@ -296,6 +296,13 @@ Total & +13.46 & [+8.82, +17.04] & 0.00586 & 10/10 \\
 \notes{Ten confirmatory seeds, 100–109. CTK = peer present − absent everywhere; pooling = absent everywhere − local; total = peer present − local. Realized FPR: local 4.99\%, absent 5.04\%, peer 5.09\%, full exposure 5.04\%. Intervals summarize seed-paired mean differences; \textit{p} values are exact two-sided signed-rank results adjusted across these three contrasts. pp = percentage points.}
 \end{table}
 
+\begin{figure}[!htbp]
+\caption{Complementary Exposure and Generic Pooling in the Primary FedAvg Comparison}\label{fig:2}
+\centering
+\includegraphics[width=\linewidth]{figures/Figure_2.png}
+\notes{Point estimates and 95\% BCa intervals in percentage points. Federation-wide client-macro unseen recall, nominal 5\% FPR, seeds 100–109.}
+\end{figure}
+
 All seeds had a positive value for CTK and total gain. Pooling interval showed a mix of small negatives and positives. An average of 2,073 out of 24000 samples varied between the arms of peer present everywhere and none.
 
 The results for own domain unseen show a positive effect for fedavg ctk at 10.85 (6.97--15.25), pooling was -7.60 (-11.81, -4.03) with a total gain of 3.26 (1.26, 5.63) compared to local learning alone. In other words the estimates for own-domain CTK make up for most of what was lost with pooling. Note these values are only estimates for the secondary endpoints and have not been adjusted by Holm correction.
@@ -304,7 +311,7 @@ Similar patterns can be seen when pooling differently. If one takes the macro av
 
 \subsection*{Learning-Strategy Comparisons} 
 
-The study compares the various learners under peer-present conditions in Table~\ref{tab:4}. All learners had positive CTK in all ten seeds. Central training was 13.10 points higher then FedAvg. FedProx had an increase of 13.20 points while the fine tuned version of FedAvg increased by 8.20 and blending increased by 7.60 points. The study cannot differentiate between FedProx and FedAvg since their difference for unseen recall was only 0.19 points (-1.12, 2.94). Descriptively central training has a larger federation-wide average recall but FedAvg had a larger average for worst client.
+The study compares the various learners under peer-present conditions in Table~\ref{tab:4}. All learners had positive CTK in all ten seeds. Central training had a CTK of 13.10 points. FedProx had a CTK of 13.20 points while the fine tuned version of FedAvg had 8.20 and blending had 7.60 points. The study cannot differentiate between FedProx and FedAvg since their difference for unseen recall was only 0.19 points (-1.12, 2.94). Descriptively central training has a larger federation-wide average recall but FedAvg had a larger average for worst client (Figure~\ref{fig:3}).
 
 \begin{table}[!htbp]
 \caption{Peer-Present Learner Performance at Nominal 5\% FPR}\label{tab:4}
@@ -323,6 +330,13 @@ Blend & 63.66 & 57.21 & 37.63 & 74.77 & 5.12 \\
 \end{tabular*}
 \notes{All entries are percentages averaged over ten confirmatory seeds. Worst client is the within-seed minimum federation-wide unseen recall. Other recall and FPR columns follow the macro definitions in the protocol. Arm rankings are descriptive; table levels are not confidence intervals or adjusted pairwise superiority tests.}
 \end{table}
+
+\begin{figure}[!htbp]
+\caption{Mean and Worst-Client Unseen Recall Across Learners}\label{fig:3}
+\centering
+\includegraphics[width=\linewidth]{figures/Figure_3.png}
+\notes{Peer-present condition, nominal 5\% FPR, seeds 100–109. Points show means across seeds; no uncertainty interval is implied. Worst-client identity can change across arms.}
+\end{figure}
 
 For Nonhidden-malware Recall there was a change in ordering. FedAvg had a drop of 3.61 (−4.50, −2.85) when compared to local learning and the fine tuned fedavg dropped 3.74 (−5.31, −2.82). Both drops were above the threshold of 2 points decided on. FedProx decreased 0.93 and the centralized training dropped 0.14 while the combination increased by 1.70. As these are means being compared to each other with a certain threshold the study can not make claims about equivalence. FedProx and the combination kept a higher mean for nonhidden malware but a lower min client.
 
@@ -343,13 +357,13 @@ The effect varied between families. For dowgin the study saw improvements from p
 
 For the replication data the study found CTK to be -8.24 points for dnotua and -2.06 for zdtad. And 13.63 for inmobi and 12.04 for domob. utchi and zdtad had 6 seeds that met this criteria. Overall the aggregate showed improvement from exposure. Some families will see an increase others will not.
 
-Per Client(Class C) the study found federation wide CTK using Federated Average to be 8.35 points at Anzhi. 7.58 points at AppChina. 9.18 points at play-early. And 32.03 points at play-late. With seed counts of 8,10,10 and 6 respectively. Play-late has a higher number due to it having a smaller amount of seeds and around 107 hidden test apps that are in it's own domain. Overall Anzhi only increased it's recall by 1.34 points and dropped it's recall on nonhidden-malware by 6.93 points. The overall domain results for these clients were -2.80 points at Anzhi. -0.40 points at AppChina. 6.48 points at play-early. And 13.61 points at play-late. All with confidence intervals that cross zero. Showing that not all clients will increase there own domain recall.
+Per Client(Class C) the study found federation wide CTK using Federated Average to be 8.35 points at Anzhi. 7.58 points at AppChina. 9.18 points at play-early. And 32.03 points at play-late. With seed counts of 8,10,10 and 6 respectively. Play-late has a higher number due to it having a smaller amount of seeds and around 107 hidden test apps that are in it's own domain. Overall Anzhi only increased it's recall by 1.34 points and dropped it's recall on nonhidden-malware by 6.93 points. The overall domain results for these clients were -2.80 points at Anzhi. -0.40 points at AppChina. 6.48 points at play-early. And 13.61 points at play-late. Only the intervals for Anzhi and AppChina cross zero. Showing that not all clients will increase there own domain recall.
 
 \subsection*{Peer Exposure and Dose Response} 
 
 When requesting peers from the cap the study did not reach the expected dose. When the caps were set to 100 and 1,000 the average dose using Federated Average was 9.03 fitted peers and 79.39. Because the study caps the number of peers before sampling them. The study got 296.19 fitted peers with the all dose and achieved a CTK of 12.44 points for family macro. Only when using all peers did the study exceed 100 fitted peers per family.
 
-The study also looked at the extended dataset to get a fixed dose response. The family macro federation wide CTK using Federated Average was 2.92 points. 4.90 points. 7.83 points. 12.48 points. And 14.49 points when using 10, 25, 50, 100 and 200 effective doses of peer information (Figure~\ref{fig:5}). These CTK's were all positive over the 10 seeds. Using a dose of 10 the study has a CI that falls under the 3 point cutoff. With 25 it reaches above the cutoff. 
+The study also looked at the extended dataset to get a fixed dose response. The family macro federation wide CTK using Federated Average was 2.92 points. 4.90 points. 7.83 points. 12.48 points. And 14.49 points when using 10, 25, 50, 100 and 200 effective doses of peer information (Figure~\ref{fig:5}). These CTK's were all positive over the 10 seeds. Using a dose of 10 the study has a CI that crosses the 3 point cutoff. With 25 it reaches above the cutoff. 
 
 \begin{figure}[!htbp]
 \caption{Exact Peer Dose and Complementary Gain}\label{fig:5}
@@ -360,7 +374,7 @@ The study also looked at the extended dataset to get a fixed dose response. The 
 
 It never seems to plateau. When the study looked at the pooled CTK it went up by 4.65 points from 50 to 100 (2.43-7.09) and 2.01 points from 100 to 200 (−0.06-4.06). The main group continued to increase by 4.23 points from 100 to 200 (2.53-6.55) but the replication group did not change by 0.03 points (−3.91-2.54). There does not appear to be a dose where families plateau or reach a minimal effective dose. Dowgin was around zero or less for all doses including the highest. The zero dose group is equivalent to none by design.
 
-\subsection*{Negative Controls, Replication and Sensitivity} 
+\subsection*{Negative Controls, Replication, and Robustness} 
 
 The family placebo shuffled the associations between the families and application while holding the malwaredomian association constant. The study found that when using the original FedAvg the federation wide CTK was 0.30 points (−0.36-1.02). This is considered to be zero under the criteria of being within 3 points. The own domain CTK had a 3.04 upper bound that is undetermined. Using the extension both federation and own domain CTKs were below the threshold at -0.21 and -0.07 respectively.
 
@@ -392,27 +406,27 @@ Disjoint replication family set was positive for 8/10 seeds with a mean of 5.08 
 
 When using robust aggregation the pooled ctk is 9.50 points when using the mean. When the study trims off the largest and smallest score from each of the 4 clients and takes the mean of those scores it gets 9.16. Using a coordinate wise median taking the lowest median score yielded 13.76 points. All of these methods are assuming the clients are being honest and do not look into defenses against malicious clients.
 
-\subsection*{Representations and Extensions to More Families} 
+\subsection*{Representation and Expanded-Family Analyses} 
 
 By looking at representations the study can tease out if an increase in full exposure recall and CTK are happening simultaneously or not. With the priority family macro the McNdroid static features give an increase in central full exposure recall of 7.57 (2.76-12.85) points and an increase in fedavg CTK of 8.01 (3.56-10.54) when compared to aligned lamda. Call graph features increased ctk by 9.03 (5.53-12.35) points and full exposure recall by only 2.52 (-.86-7.77). So increasing CTK does not increase full exposure recall because CTK is relying on the recall of the missing families. Using the report json features the study decreased the full exposure recall by 14.54 (-18.63 - -8.66) points and CTK by 6.12 (-9.91 - -3.87). Some families benefited more then others with the addition of representations. Static features gave an increase in full exposure recall of 16.93 points for the family gappusin and 33.60 for adwo. For hiddad the study estimated a -6.21 (-18.02 - 6.29) which was inconclusive.
 
-All of the extensions looked at nominal calibrations not equalized fpr's. The study failed to satisfy a macro-fpr tolerance when looking at exact dose for the primary seed 317. The lamda static representation and McN static representation seeds 333 and the call graph seed 334 had one central client that was able to detect 15.32\% of benign packages that had the peer present. As a diagnostic the study equalized fpr on the test set by calibrating to the benign scores on test. Full exposure was increased by 7.28 points when using the static features and decreased by 14.27 with report json. The interval included 0 for the call graph full exposure. This is just a diagnostic not something one could use.
+All of the extensions looked at nominal calibrations not equalized fpr's. The study failed to satisfy a macro-fpr tolerance when looking at exact dose for the primary seed 317. The lamda static representation and McN static representation seeds 333 and the call graph seed 334 had one central client that was able to detect up to 15.32\% of benign packages. As a diagnostic the study equalized fpr on the test set by calibrating to the benign scores on test. Full exposure was increased by 7.28 points when using the static features and decreased by 14.27 with report json. The interval included 0 for the call graph full exposure. This is just a diagnostic not something one could use.
 
 The expanded set of 32 families had a mean family ctk of 6.51 points. Five families were negative including feiwo -5.89 and baiduprotect -4.41. The distance to the nearest family the study has enough support for is correlated to CTK spearman .408 (family bootstrapped .088-.662 perm p-value .0214). When restricting to families that are eligible on all fresh seeds n=27 the study sees a weaker relationship .294 (-.076-.589 p-value .136). It is not directly related to new families but could tell what types of partners will be helpful. There are 14 families that overlap with the primary or replication families. The remaining 18 families give 3.47 points (2.45-4.45) of family macro ctk for each fresh seed. All fresh seeds were positive. Mean of 10.67 when overlapping families. Not a second replication but supports the findings.
 
-\section*{Discussion and Real World Considerations} 
+\section*{Discussion and Practical Implications} 
 
-\subsection*{What Can Be Said About the Contrast} 
+\subsection*{What the Controlled Contrast Establishes} 
 
 The amount of budget given to both arms allows comparing the found families with replaced samples and calibration that is unique to the arm. With the same training amount and number of samples from clients the study cannot make that distinction with a local versus federated method. Complementary exposure made up the majority of the federation wide improvement. For the client's own domain pooling is hurting recall and ctk helps recover from that. Clients will want to know if they are doing better or worse then their own model and why. Some families have properties that allow them to be found better with others some don't. Adwo can recover from a drop in pooling, revmob and leadbolt can find families that are locally detectable. Dowgin helped without seeing any of the target family and hiddad was difficult to find. Disjoint families and new families help as well. There could be different effects when changing corpora or representations.
 
-\subsection*{Looking at the Different Metrics as a Package}
+\subsection*{Evaluating Collaboration as a Set of Tradeoffs}
 
 Depending on the goal there are different populations one may want to evaluate. If one cares about finding families on a federation wide level then recall over different source domains is important. How many apps is the client going to benefit from the learned model? Does one want to weight all the families the same or how many attacks can one prevent? Which learner gives the most recall on the hidden families and how much is lost on non-hidden malware. What is the fpr and recall on the worst client? The study saw fedavg had the highest mean on the worst client recall and lost the most on non-hidden. Fedprox had a smaller drop in non-hidden recall but did not help on the mean unseen recall. Fine tuning and blending changed these trade offs even more. Decide what one can live without and evaluate on the populations.
 
 Make sure to evaluate the FPR one may have clients that surpass the tolerance. Or that 5\% of benign packages are being classified as malware. How much does that affect the triage process? Metrics such as AUROC and Avg Precision will miss families that one may care about. Recall over the hidden families may cause one to miss other metrics as well. Be clear what the population is and how calibration is done.
 
-\subsection*{Seeing Others Help Detect} 
+\subsection*{Exposure, Representation, and Remaining Questions} 
 
 One can measure the peers after exclusion and selecting the best budget. Knowing the nominal cap will lead one to think one is exposed to more families. Exact dose gives the ability to see how many examples will be needed when encountering a new domain or using a new representation. As shown above representations can play a role in if one is able to find the families to detect. Higher CTK does not always lead to an increase in full exposure recall. Since the study used the aligned representations these families overlap with the corpus and will only give information on the family labeling.
 
@@ -424,7 +438,7 @@ The study is not looking at privacy the clients are not being protected. Positiv
 
 The study is comparing the findings to the family's they label. These may include different families that act similarly or combine multiple families into one. The family selections skew towards adware and may not represent all of Android's malware. Locally unseen families are unseen by that clients fit set. The study may not be able to distinguish between not having enough support for that family, not representing them well or the learned rule not capturing what is being looked for. When the study leaves out families it is leaving out more then one at a time. The arms may affect one another due to the sample replacement. The groups allow removing duplicates of a package name and top level features. But may not protect from similar package names or duplicate values in other features. Some providers share the same labeling scheme and had those dimensions removed from the partitioning. Best supported families of the 16 salt options was chosen. Creating 4 market era clients and using a modality intersection defines the population of interest. The study is testing the models on these clients not predicting what will happen for a company.
 
-\subsection*{Statistics and Data Validity} 
+\subsection*{Statistical and Dataset Validity} 
 
 Using pairs of seeds one can see variations in the partitions and allocation. Training can vary as well on the same corpus. The study has many repeated families and clients in the set of seeds. When the study creates smaller subsets of the clients it loses seed power. By dropping each of the seeds individually the ctk varied from 11.06 to 12.65 points. This gives further evidence to support that CTK is above 3 points but does not replace the BCA interval. The study only holm corrected the three planned comparisons. Worst client changes based on who the worst client is on each arm. Not telling much about new companies. Lamda's database and labelers along with the markets may not be found in the wild today. The labels for benign packages are based on no AV flagging that file. Other labeling may give different families. The study was unable to test externally because McN is used in the dataset. Finger prints tell what was used and not that it is representative.
 
@@ -442,8 +456,6 @@ There are many considerations when looking at the families. Fedavg can improve u
 \section*{References}
 \addcontentsline{toc}{section}{References}
 \begin{references}
-
-\item Allix, K., Bissyandé, T. F., Klein, J., \& Le Traon, Y. (2016). AndroZoo: Collecting millions of Android apps for the research community. In \textit{Proceedings of the 13th International Conference on Mining Software Repositories} (pp. 468–471). ACM. \url{https://doi.org/10.1145/2901739.2903508}
 
 \item Arp, D., Quiring, E., Pendlebury, F., Warnecke, A., Pierazzi, F., Wressnegger, C., Cavallaro, L., \& Rieck, K. (2022). Dos and don'ts of machine learning in computer security. In \textit{31st USENIX Security Symposium} (pp. 3971–3988). USENIX Association. \url{https://www.usenix.org/conference/usenixsecurity22/presentation/arp}
 
@@ -466,8 +478,6 @@ There are many considerations when looking at the families. Fedavg can improve u
 \item Li, T., Sahu, A. K., Zaheer, M., Sanjabi, M., Talwalkar, A., \& Smith, V. (2020). Federated optimization in heterogeneous networks. In I. Dhillon, D. Papailiopoulos, \& V. Sze (Eds.), \textit{Proceedings of Machine Learning and Systems} (Vol. 2, pp. 429–450). \url{https://proceedings.mlsys.org/paper_files/paper/2020/hash/1f5fe83998a09396ebe6477d9475ba0c-Abstract.html}
 
 \item Mariconti, E., Onwuzurike, L., Andriotis, P., De Cristofaro, E., Ross, G., \& Stringhini, G. (2017). MaMaDroid: Detecting Android malware by building Markov chains of behavioral models. In \textit{Proceedings of the Network and Distributed System Security Symposium}. Internet Society. \url{https://doi.org/10.14722/ndss.2017.23353}
-
-\item McMahan, B., Moore, E., Ramage, D., Hampson, S., \& Agüera y Arcas, B. (2017). Communication-efficient learning of deep networks from decentralized data. In A. Singh \& J. Zhu (Eds.), \textit{Proceedings of the 20th International Conference on Artificial Intelligence and Statistics} (Vol. 54, pp. 1273–1282). PMLR. \url{https://proceedings.mlr.press/v54/mcmahan17a.html}
 
 \item Ongun, T., Boboila, S., Oprea, A., Eliassi-Rad, T., Hiser, J., \& Davidson, J. (2025). CELEST: Federated learning for globally coordinated threat detection. \textit{IEEE Transactions on Information Forensics and Security, 20}, 10434–10448. \url{https://doi.org/10.1109/TIFS.2025.3614442}
 
