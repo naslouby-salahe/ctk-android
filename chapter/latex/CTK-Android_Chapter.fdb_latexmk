@@ -1,5 +1,5 @@
 # Fdb version 4
-["pdflatex"] 1794243606.04418 "CTK-Android_Chapter.tex" "CTK-Android_Chapter.pdf" "CTK-Android_Chapter" 1794243606.92847 0
+["pdflatex"] 1794603765.9998 "CTK-Android_Chapter.tex" "CTK-Android_Chapter.pdf" "CTK-Android_Chapter" 1794603767.19733 0
   "/etc/texmf/web2c/texmf.cnf" 1774378604 475 c0e671620eb5563b2130f56340a5fde8 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/newtx/ntx-ec-tlf.enc" 1698694482 2914 fdbc4a54b9bc76f4551b5303f2737d33 ""
   "/usr/share/texlive/texmf-dist/fonts/enc/dvips/newtx/ntx-ot1-tlf.enc" 1422827479 2083 60e36f8eac802fcaf19eabe2633b406e ""
@@ -139,9 +139,9 @@
   "/usr/share/texmf/web2c/texmf.cnf" 1707919699 40399 f2c302f7d2af602abb742093540a5834 ""
   "/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map" 1793890063.72271 5352814 f8d5605ce96e65e8364420ddc51e4ddb ""
   "/var/lib/texmf/web2c/pdftex/pdflatex.fmt" 1791663528 6837932 ad87ee9b48a4c5ff567333d370fd2a9e ""
-  "CTK-Android_Chapter.aux" 1794243606.86357 2449 e2df6e9c45fae85f89363d8a6c31f601 "pdflatex"
-  "CTK-Android_Chapter.out" 1794243606.86357 99 d3fed2e5f0e52696ea13293c1c8d8398 "pdflatex"
-  "CTK-Android_Chapter.tex" 1794243602.07819 58613 ddfe99680f8936f89b5f106766817c33 ""
+  "CTK-Android_Chapter.aux" 1794603767.11263 2449 bfdd508b0085ed9903e2bac58827f119 "pdflatex"
+  "CTK-Android_Chapter.out" 1794603767.11263 99 d3fed2e5f0e52696ea13293c1c8d8398 "pdflatex"
+  "CTK-Android_Chapter.tex" 1794603765.92663 63948 49f95d6be4b766fc69656e4b8170fead ""
   "figures/Figure_1.png" 1794238166.86401 130715 fcf0fe2f388410bf693a41d839f63f8a ""
   "figures/Figure_4.png" 1794238166.86424 188409 2e5130d8ff4ad5e98eb7872db3b06f70 ""
   "figures/Figure_5.png" 1794238166.86428 148868 4d78312567d87fd562a5562ddfa00c47 ""
